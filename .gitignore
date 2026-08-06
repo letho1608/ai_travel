@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+
+backend/.venv/
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+.pnpm-store/
+tmp/
+output/
+__pycache__/
+.pytest_cache/

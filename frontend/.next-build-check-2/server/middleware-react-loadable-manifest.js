@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST='{"app\\\\roadtrip\\\\page.tsx -> @/components/RoadTripMap":{"id":4777,"files":["static/chunks/ed48eaa7.43f9dc39981a8ca9.js","static/chunks/777.f1a00eaba78cc356.js"]},"components\\\\PlanView.tsx -> ./MapView":{"id":599,"files":["static/chunks/ed48eaa7.43f9dc39981a8ca9.js","static/chunks/599.4cd5ab0417e0bd21.js"]}}';

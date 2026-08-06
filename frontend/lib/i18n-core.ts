@@ -1,0 +1,27 @@
+export const supportedLocales=["vi","en","ar","bg","de","es","fr","he","hi","it","ja","nl","pl","pt","ru","tr","zh","ko","th"] as const;
+
+export type Locale=(typeof supportedLocales)[number];
+
+export const baseTranslationKeys=["roadtrip","inventory","trips","settings","login","historyTitle","loading","noTrips","notifications","markRead","loadFailed","notificationsFailed","markReadFailed","tripTomorrow"] as const;
+export const loginTranslationKeys=["accountEyebrow","loginTitle","loginLead","consentBefore","termsLabel","consentBetween","privacyLabel","consentAfter","consentRequired","continueGoogle","loginNotConfigured","loginFailed"] as const;
+export const settingsTranslationKeys=["personalOptions","settingsTitle","languageLabel","currencyLabel","unitsLabel","metricLabel","imperialLabel","saveOptions","settingsSaved","deleteData","deleteDescription","deleteAccount","deletePrompt","deleteLoginRequired","deleteFailed","preferencesLoadFailed","preferencesSaveFailed","cancel"] as const;
+export const plannerTranslationKeys=["heroEyebrow","heroTitleFirst","heroTitleSecond","heroLead","ideaCoffee","ideaFood","ideaCulture","dayPrompt","durationLabel","fewHours","halfDay","fullDay","multiDay","peopleLabel","createPlan","creatingPlan","sendingRequest","findingPlaces","routingPlan","working","generateFailed","generateTimeout","retryCreate","dataNotice","disclaimer"] as const;
+export const workspaceTranslationKeys=["mapLoading","assistantWelcome","companion","workspaceEyebrow","share","downloadPdf","addCalendar","downloadJson","comments","feedback","versions","regenerate","tripSummary","perPerson","places","copied","copyFailed","offlineSaveFailed","actionFailed","swipeSuccess","refineFailed","versionsFailed","restoreSuccess","commentsFailed","commentAdded","feedbackThanks","regenerateFailed","versionHistory","version","scheduleUpdate","restore","groupDiscussion","noComments","displayName","commentPlaceholder","sendComment","tripReview","rating","feedbackPlaceholder","sendFeedback","tripAssistant","chatPlaceholder","send","itinerary","source","swapPlace","mapLegend","estimateDisclaimer","busy","resolved","reopen"] as const;
+export const inventoryTranslationKeys=["inventoryEyebrow","inventoryTitleFirst","inventoryTitleSecond","inventoryLead","inventoryTabs","flightsTab","hotelsTab","activitiesTab","transfersTab","origin","destination","departureDate","returnDate","checkIn","checkOut","rooms","radiusKm","minPrice","maxPrice","starRating","amenities","wifi","parking","airConditioning","restaurant","fitnessCenter","airportShuttle","activityRadius","pickupAirport","pickupTime","destinationName","address","city","country","latitude","longitude","vehicleType","privateVehicle","sharedVehicle","taxi","airportExpress","passengers","adults","searchLive","searchingLive","searchFailed","searchTimeout","invalidResponse","invalidFlightDates","invalidHotelDates","invalidPriceRange","invalidCoordinates","invalidPreferences","sourceFetchedExpires","priceAnalysisTitle","noPriceAnalysis","directOption","seatCount","stars","remainingSeats","providerConfirmation","openProvider","requestBookingHelp","requestingBookingHelp","bookingHelpSuccess","bookingHelpFailed","noResults","offersLabel"] as const;
+export const roadtripTranslationKeys=["roadtripEyebrow","titleFirst","titleSecond","roadtripLead","stopName","latitude","longitude","iataCode","arrivalDate","departureDate","removeStop","addStop","newStop","roundTrip","includeInventory","buildLivePlan","buildRoute","building","routeError","routeTimeout","invalidResponse","invalidCoordinates","invalidIata","invalidDates","invalidPreferences","inventorySummary","livePart","providerUnavailable","missingIataOrDate","incompleteDisclaimer","distanceDuration","legSummary","routeProvenance","mapLabel","drivingTimeDisclaimer","routeResults","inventoryResults","adults","rooms","currencyLabel","kilometers","miles","hours","minutes"] as const;
+export type BaseTranslationKey=(typeof baseTranslationKeys)[number];
+export type LoginTranslationKey=(typeof loginTranslationKeys)[number];
+export type SettingsTranslationKey=(typeof settingsTranslationKeys)[number];
+export type PlannerTranslationKey=(typeof plannerTranslationKeys)[number];
+export type WorkspaceTranslationKey=(typeof workspaceTranslationKeys)[number];
+export type InventoryTranslationKey=(typeof inventoryTranslationKeys)[number];
+export type RoadtripTranslationKey=(typeof roadtripTranslationKeys)[number];
+export type TranslationKey=BaseTranslationKey|LoginTranslationKey|SettingsTranslationKey|PlannerTranslationKey|WorkspaceTranslationKey|InventoryTranslationKey|RoadtripTranslationKey;
+
+export function normalizeLocale(value:unknown):Locale{
+  return typeof value==="string"&&(supportedLocales as readonly string[]).includes(value)?value as Locale:"vi";
+}
+
+export function interpolate(template:string,values:Record<string,string|number>={}):string{
+  return template.replace(/\{([^}]+)\}/g,(token,name)=>Object.prototype.hasOwnProperty.call(values,name)?String(values[name]):token);
+}

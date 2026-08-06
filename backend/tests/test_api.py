@@ -1,0 +1,711 @@
+import json
+from datetime import UTC, datetime, timedelta
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.pipeline.planner import AI_FALLBACK_NOTE
+from app.routers.auth import DEMO_USERS
+from app.services.rate_limit import limiter
+from app.services.store import store
+
+client = TestClient(app)
+PAYLOAD = {"context": "đi chơi chill", "location": {"lat": 21.0285, "lng": 105.8542}, "thoi_luong": "ca_ngay", "so_nguoi": 2, "ngan_sach": 1000000, "ma_phien": "api-session"}
+
+
+def setup_function():
+    store.plans.clear()
+    store.versions.clear()
+    store.users.clear()
+    store.events.clear()
+    store.comments.clear()
+    store.feedback.clear()
+    store.preferences.clear()
+    store.notifications.clear()
+    store.inventory_snapshots.clear()
+    store.booking_requests.clear()
+    store.reminders_sent.clear()
+    DEMO_USERS.clear()
+    store.available = True
+    limiter.hits.clear()
+    limiter.available = True
+
+
+def test_global_request_body_limit_rejects_oversized_json_before_route_parsing():
+    oversized_payload = {
+        "latitude": 21.0,
+        "longitude": 105.0,
+        "ma_phien": "body-limit-session",
+        "notes": "x" * (300 * 1024),
+    }
+    response = client.post("/api/inventory/activities/search", json=oversized_payload)
+    assert response.status_code == 413
+    assert response.json()["detail"] == "Request body too large"
+
+
+def test_all_inventory_search_routes_enforce_ip_and_session_limit(monkeypatch):
+    from app.routers import inventory as inventory_router
+
+    monkeypatch.setattr(inventory_router, "SEARCH_SESSION_LIMIT", 0)
+    cases = [
+        ("/api/inventory/flights/search", {
+            "origin": "HAN", "destination": "SGN", "departure_date": "2030-01-01",
+            "adults": 1, "currency": "VND", "ma_phien": "rate-session",
+        }),
+        ("/api/inventory/hotels/search", {
+            "latitude": 21.0, "longitude": 105.0, "check_in": "2030-01-01",
+            "check_out": "2030-01-02", "ma_phien": "rate-session",
+        }),
+        ("/api/inventory/activities/search", {
+            "latitude": 21.0, "longitude": 105.0, "ma_phien": "rate-session",
+        }),
+        ("/api/inventory/transfers/search", {
+            "start_location_code": "HAN", "end_address_line": "1 Trang Tien",
+            "end_city_name": "Ha Noi", "end_country_code": "VN", "end_name": "Hoan Kiem",
+            "end_latitude": 21.0, "end_longitude": 105.0,
+            "start_datetime": "2030-01-01T10:00:00+07:00",
+            "ma_phien": "rate-session",
+        }),
+    ]
+    for path, payload in cases:
+        assert client.post(path, json=payload).status_code == 429
+
+
+def test_inventory_rate_limiter_failure_is_closed(monkeypatch):
+    from app.routers import inventory as inventory_router
+
+    monkeypatch.setattr(inventory_router, "SEARCH_SESSION_LIMIT", 30)
+    limiter.available = False
+    response = client.post("/api/inventory/activities/search", json={
+        "latitude": 21.0, "longitude": 105.0, "ma_phien": "rate-session",
+    })
+    assert response.status_code == 429
+
+
+def test_roadtrip_routes_enforce_ip_and_session_limit(monkeypatch):
+    from dataclasses import replace
+
+    from app.routers import roadtrip as roadtrip_router
+
+    monkeypatch.setattr(roadtrip_router, "settings", replace(
+        roadtrip_router.settings,
+        max_roadtrip_route_per_hour=0,
+        max_roadtrip_plan_per_hour=0,
+    ))
+    stops = [
+        {"name": "A", "location": {"lat": 21.0, "lng": 105.0}},
+        {"name": "B", "location": {"lat": 20.0, "lng": 106.0}},
+    ]
+    assert client.post("/api/roadtrip/route", json={"stops": stops}).status_code == 429
+    assert client.post("/api/roadtrip/plan", json={
+        "stops": stops, "ma_phien": "rate-session",
+    }).status_code == 429
+
+
+def test_roadtrip_rate_limiter_failure_is_closed():
+    limiter.available = False
+    response = client.post("/api/roadtrip/route", json={"stops": [
+        {"name": "A", "location": {"lat": 21.0, "lng": 105.0}},
+        {"name": "B", "location": {"lat": 20.0, "lng": 106.0}},
+    ]})
+    assert response.status_code == 429
+
+
+def test_generate_sse_and_shared_read_only():
+    response = client.post("/api/plan/generate", json=PAYLOAD)
+    assert response.status_code == 200
+    result_line = next(line for line in response.text.splitlines() if line.startswith("data: {\"type\""))
+    import json
+    result = json.loads(result_line[6:])
+    shared = client.get(f"/api/plans/{result['token']}")
+    assert shared.status_code == 200
+    denied = client.patch(f"/api/plans/{result['token']}/swipe", json={"diem_bi_loai": result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"], "phien_ban": 1, "ma_phien": "wrong"})
+    assert denied.status_code == 403
+
+
+def test_plan_locale_is_persisted_and_reused_by_swipe_and_regenerate():
+    payload = PAYLOAD | {"ngon_ngu": "en", "ma_phien": "locale-session"}
+    generated = client.post("/api/plan/generate", json=payload)
+    result = json.loads(next(
+        line for line in generated.text.splitlines() if line.startswith('data: {"type"')
+    )[6:])
+    assert result["plan"]["ngay"][0]["nhan_de"] == "Day 1"
+    assert "optimized itinerary" in result["plan"]["tom_tat"]
+    stored = store.get(result["token"])
+    assert stored.request["ngon_ngu"] == "en"
+
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+    swiped = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": payload["ma_phien"]},
+        json={"diem_bi_loai": target, "phien_ban": 1, "ma_phien": payload["ma_phien"]},
+    )
+    assert swiped.status_code == 200
+    replacement = next(
+        slot for day in swiped.json()["ke_hoach_moi"]["ngay"]
+        for slot in day["khoang_gio"] if slot["dia_diem_id"] != target
+    )
+    assert replacement["ghi_chu"] == "Check opening hours before visiting."
+
+    regenerated = client.post(
+        f"/api/plans/{result['token']}/regenerate",
+        json={"ma_phien": payload["ma_phien"], "nonce": "locale-regenerate"},
+    )
+    assert regenerated.status_code == 200
+    assert regenerated.json()["ke_hoach"]["ngay"][0]["nhan_de"] == "Day 1"
+
+    refined = client.post(
+        f"/api/plans/{result['token']}/refine",
+        json={"message": "budget 900000", "phien_ban": 2,
+              "ma_phien": payload["ma_phien"]},
+    )
+    assert refined.status_code == 200
+    assert refined.json()["ke_hoach"]["ngay"][0]["nhan_de"] == "Day 1"
+    assert store.get(result["token"]).request["ngon_ngu"] == "en"
+
+
+def test_swipe_supports_a_slot_on_the_second_day():
+    import json
+
+    payload = PAYLOAD | {"thoi_luong": "nhieu_ngay"}
+    generated = client.post("/api/plan/generate", json=payload)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    target = result["plan"]["ngay"][1]["khoang_gio"][0]["dia_diem_id"]
+    response = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+        json={"diem_bi_loai": target, "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert response.status_code == 200
+    ids = {
+        slot["dia_diem_id"]
+        for day in response.json()["ke_hoach_moi"]["ngay"]
+        for slot in day["khoang_gio"]
+    }
+    assert target not in ids
+
+
+def test_budget_counter_fails_closed():
+    store.available = False
+    assert client.post("/api/plan/generate", json=PAYLOAD).status_code == 503
+
+
+def test_invalid_html_is_sanitized():
+    payload = PAYLOAD | {"context": "<script>alert(1)</script> chill"}
+    response = client.post("/api/plan/generate", json=payload)
+    assert response.status_code == 200
+    assert "<script>" not in response.text
+
+
+def test_regenerate_nonce_is_idempotent():
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    import json
+    result = json.loads(next(line for line in generated.text.splitlines() if line.startswith("data: {\"type\""))[6:])
+    body = {"ma_phien": PAYLOAD["ma_phien"], "nonce": "same-nonce"}
+    first = client.post(f"/api/plans/{result['token']}/regenerate", json=body).json()
+    second = client.post(f"/api/plans/{result['token']}/regenerate", json=body).json()
+    assert first["token"] == second["token"]
+    regenerate_bucket = next(
+        values for key, values in limiter.hits.items() if key.startswith("regenerate:api-session:")
+    )
+    assert len(regenerate_bucket) == 1
+
+
+def test_generate_nonce_replays_existing_plan_without_extra_quota():
+    payload = PAYLOAD | {"ma_phien": "generate-nonce-session", "nonce": "same-generate-nonce"}
+    first = client.post("/api/plan/generate", json=payload)
+    second = client.post("/api/plan/generate", json=payload)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_result = json.loads(
+        next(line for line in first.text.splitlines() if line.startswith("data: {\"type\""))[6:]
+    )
+    second_result = json.loads(
+        next(line for line in second.text.splitlines() if line.startswith("data: {\"type\""))[6:]
+    )
+    assert first_result["token"] == second_result["token"]
+    generate_bucket = next(
+        values for key, values in limiter.hits.items()
+        if key.startswith("generate:testclient:generate-nonce-session")
+    )
+    assert len(generate_bucket) == 1
+
+
+def test_generate_nonce_is_scoped_to_session():
+    first_payload = PAYLOAD | {"ma_phien": "generate-scope-a", "nonce": "shared-generate-nonce"}
+    second_payload = PAYLOAD | {"ma_phien": "generate-scope-b", "nonce": "shared-generate-nonce"}
+    first = client.post("/api/plan/generate", json=first_payload)
+    second = client.post("/api/plan/generate", json=second_payload)
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_result = json.loads(
+        next(line for line in first.text.splitlines() if line.startswith("data: {\"type\""))[6:]
+    )
+    second_result = json.loads(
+        next(line for line in second.text.splitlines() if line.startswith("data: {\"type\""))[6:]
+    )
+    assert first_result["token"] != second_result["token"]
+
+
+def test_chat_refine_creates_version_and_restore_is_optimistic():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    token = result["token"]
+    refined = client.post(
+        f"/api/plans/{token}/refine",
+        json={
+            "message": "đi 3 người, ngân sách tối đa 500k và ưu tiên yên tĩnh",
+            "phien_ban": 1,
+            "ma_phien": PAYLOAD["ma_phien"],
+        },
+    )
+    assert refined.status_code == 200
+    assert refined.json()["phien_ban"] == 2
+    versions = client.get(
+        f"/api/plans/{token}/versions",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+    ).json()["ds_phien_ban"]
+    assert [entry["phien_ban"] for entry in versions] == [2, 1]
+
+    restored = client.post(
+        f"/api/plans/{token}/versions/1/restore",
+        json={"phien_ban_hien_tai": 2, "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["phien_ban"] == 3
+    stale = client.post(
+        f"/api/plans/{token}/versions/1/restore",
+        json={"phien_ban_hien_tai": 2, "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert stale.status_code == 409
+
+
+def test_quick_refine_cheaper_reduces_saved_budget():
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.post(
+        f"/api/plans/{result['token']}/refine",
+        json={"message": "Re hon", "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert response.status_code == 200
+    assert store.get(result["token"]).request["ngan_sach"] == 800000
+
+
+def test_google_login_claims_anonymous_plans_and_issues_session():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    login = client.post(
+        "/api/auth/oauth",
+        json={"provider": "google", "token": "mock-google-user-123",
+              "ma_phien": PAYLOAD["ma_phien"], "consent": True},
+    )
+    assert login.status_code == 200
+    token = login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    plans = client.get("/api/plans", headers=headers).json()["ds_ke_hoach"]
+    assert [plan["token"] for plan in plans] == [result["token"]]
+
+
+def test_shared_plan_comments_are_sanitized_and_only_owner_can_resolve():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    token = result["token"]
+    added = client.post(
+        f"/api/plans/{token}/comments",
+        json={"noi_dung": "<b>Nên đi sớm</b>", "ten_hien_thi": "Bạn đồng hành",
+              "ma_phien": "collaborator-session"},
+    )
+    assert added.status_code == 201
+    comment = added.json()["binh_luan"]
+    assert "<" not in comment["noi_dung"]
+    assert client.get(f"/api/plans/{token}/comments").json()["ds_binh_luan"][0]["id"] == comment["id"]
+    denied = client.patch(
+        f"/api/plans/{token}/comments/{comment['id']}",
+        json={"da_giai_quyet": True, "ma_phien": "collaborator-session"},
+    )
+    assert denied.status_code == 403
+    resolved = client.patch(
+        f"/api/plans/{token}/comments/{comment['id']}",
+        json={"da_giai_quyet": True, "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["binh_luan"]["da_giai_quyet"] is True
+
+
+def test_calendar_export_contains_each_stop_without_html():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.get(f"/api/plans/{result['token']}/calendar.ics")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/calendar")
+    assert response.text.count("BEGIN:VEVENT") == len(result["plan"]["ngay"][0]["khoang_gio"])
+    assert response.text.count("DTSTAMP:") == response.text.count("BEGIN:VEVENT")
+    assert all(len(line.encode("utf-8")) <= 75 for line in response.text.splitlines())
+    assert "<script>" not in response.text
+
+
+def test_calendar_export_includes_every_day_of_a_multiday_plan():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD | {"thoi_luong": "nhieu_ngay"})
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.get(f"/api/plans/{result['token']}/calendar.ics")
+    expected = sum(len(day["khoang_gio"]) for day in result["plan"]["ngay"])
+    assert response.status_code == 200
+    assert response.text.count("BEGIN:VEVENT") == expected
+
+
+def test_calendar_export_uses_saved_plan_language_metadata():
+    import json
+
+    generated = client.post(
+        "/api/plan/generate", json=PAYLOAD | {"ngon_ngu": "en", "ma_phien": "ics-en"}
+    )
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.get(f"/api/plans/{result['token']}/calendar.ics")
+    assert response.status_code == 200
+    assert response.headers["content-language"] == "en"
+    assert "PRODID:-//Minh Di Dau The//EN" in response.text
+    assert "SUMMARY;LANGUAGE=en:" in response.text
+    assert "DESCRIPTION;LANGUAGE=en:" in response.text
+    assert "CALSCALE:GREGORIAN" in response.text
+
+
+def test_pdf_export_is_valid_and_contains_itinerary_text():
+    import json
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.get(f"/api/plans/{result['token']}/itinerary.pdf")
+    assert response.status_code == 200
+    assert response.content.startswith(b"%PDF")
+    reader = PdfReader(BytesIO(response.content))
+    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+    assert result["plan"]["tieu_de"] in text
+    assert result["plan"]["ngay"][0]["khoang_gio"][0]["ten_dia_diem"] in text
+
+
+def test_pdf_export_uses_saved_plan_language_and_preserves_proper_names():
+    import json
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    generated = client.post(
+        "/api/plan/generate", json=PAYLOAD | {"ngon_ngu": "en", "ma_phien": "pdf-en"}
+    )
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    response = client.get(f"/api/plans/{result['token']}/itinerary.pdf")
+    text = "\n".join(
+        page.extract_text() or "" for page in PdfReader(BytesIO(response.content)).pages
+    )
+    slot = result["plan"]["ngay"][0]["khoang_gio"][0]
+    assert response.headers["content-language"] == "en"
+    assert "Departure date" in text
+    assert "Weather source" in text
+    assert "Page 1" in text
+    assert slot["ten_dia_diem"] in text
+    assert slot["nguon"] in text
+
+
+def test_post_trip_feedback_is_owner_only_sanitized_and_unique():
+    import json
+
+    payload = PAYLOAD | {
+        "ngay_di": (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+    }
+    generated = client.post("/api/plan/generate", json=payload)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    token = result["token"]
+    body = {"diem": 5, "noi_dung": "<b>Rất vui</b>", "ma_phien": PAYLOAD["ma_phien"]}
+    response = client.post(f"/api/plans/{token}/feedback", json=body)
+    assert response.status_code == 201
+    assert "<" not in response.json()["phan_hoi"]["noi_dung"]
+    assert client.post(f"/api/plans/{token}/feedback", json=body).status_code == 409
+
+
+def test_preferences_persist_by_session_and_validate_currency():
+    body = {"ngon_ngu": "en", "tien_te": "USD", "don_vi": "imperial",
+            "ma_phien": "preferences-session"}
+    assert client.put("/api/auth/preferences", json=body).status_code == 200
+    loaded = client.get(
+        "/api/auth/preferences", headers={"X-Session-Id": "preferences-session"}
+    ).json()
+    assert loaded == {"ngon_ngu": "en", "tien_te": "USD", "don_vi": "imperial"}
+    assert client.put(
+        "/api/auth/preferences", json=body | {"tien_te": "BTC"}
+    ).status_code == 422
+
+
+def test_invalid_bearer_never_falls_back_to_anonymous_preferences():
+    headers = {"Authorization": "Bearer expired-or-invalid-token",
+               "X-Session-Id": "preferences-session"}
+    assert client.get("/api/auth/preferences", headers=headers).status_code == 401
+    body = {"ngon_ngu": "en", "tien_te": "USD", "don_vi": "metric",
+            "ma_phien": "preferences-session"}
+    assert client.put(
+        "/api/auth/preferences", headers=headers, json=body
+    ).status_code == 401
+
+
+def test_account_deletion_removes_owned_data_and_revokes_session():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    login = client.post(
+        "/api/auth/oauth",
+        json={"provider": "google", "token": "mock-google-delete-user",
+              "ma_phien": PAYLOAD["ma_phien"], "consent": True},
+    )
+    token = login.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    deleted = client.request(
+        "DELETE", "/api/auth/account", headers=headers,
+        json={"confirmation": "XOA TAI KHOAN"},
+    )
+    assert deleted.status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    assert client.get(f"/api/plans/{result['token']}").status_code == 404
+    assert store.users == {}
+
+
+def test_api_security_headers_and_request_trace_are_always_present():
+    response = client.get("/health", headers={"X-Request-ID": "trace-123"})
+    assert response.headers["x-request-id"] == "trace-123"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'"
+    api_response = client.get("/api/plans/00000000-0000-0000-0000-000000000000")
+    assert api_response.headers["cache-control"] == "no-store"
+
+
+def test_admin_dashboard_requires_token_and_reports_operational_state():
+    store.log("admin-session", "tao_ke_hoach", {"token": "demo"})
+    store.save(
+        "admin-session",
+        {"tieu_de": "fallback", "tom_tat": "fallback", "ngay": [], "luu_y": [AI_FALLBACK_NOTE["en"]]},
+        {"context": "fallback"},
+    )
+    denied = client.get("/api/admin/dashboard")
+    assert denied.status_code == 401
+
+    response = client.get(
+        "/api/admin/dashboard", headers={"X-Admin-Token": "local-support-demo"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["environment"] == "local"
+    assert body["providers"][0]["name"] == "AI"
+    assert body["providers"][0]["status"] == "mock"
+    assert body["provider_diagnostics"]["ai"]["api_key_configured"] is False
+    assert body["provider_diagnostics"]["ai"]["circuit_breaker"]["state"] == "closed"
+    assert "API_KEY_DEEPSEEK" in body["provider_diagnostics"]["ai"]["required_env"]
+    assert body["summary"]["events"] == 1
+    assert body["limits"]["daily_ai_budget_usd"] == 10.0
+    assert body["limits"]["max_request_body_bytes"] == 256 * 1024
+    assert body["ai_quality"]["mode"] == "mock"
+    assert body["ai_quality"]["deterministic_mode"] is True
+    assert body["ai_quality"]["fallback_plan_count"] == 1
+    assert body["ai_quality"]["fallback_rate_percent"] == 100.0
+    assert body["ai_quality"]["deterministic_plan_count"] == 1
+    assert body["ai_quality"]["deterministic_rate_percent"] == 100.0
+    assert body["recent_events"][0]["su_kien"] == "tao_ke_hoach"
+    assert body["catalog_quality"]["place_count"] > 0
+    assert body["catalog_quality"]["distance_matrix"]["loaded"] is True
+    assert body["catalog_quality"]["sample_places"][0]["id"]
+
+    diagnostics = client.get(
+        "/api/admin/providers/diagnostics", headers={"X-Admin-Token": "local-support-demo"}
+    )
+    assert diagnostics.status_code == 200
+    assert diagnostics.json()["ai"]["ready"] is False
+
+    quality = client.get(
+        "/api/admin/ai-quality", headers={"X-Admin-Token": "local-support-demo"}
+    )
+    assert quality.status_code == 200
+    assert quality.json()["fallback_plan_count"] == 1
+    assert quality.json()["deterministic_plan_count"] == 1
+
+    catalog_quality = client.get(
+        "/api/admin/catalog/quality", headers={"X-Admin-Token": "local-support-demo"}
+    )
+    assert catalog_quality.status_code == 200
+    assert catalog_quality.json()["place_count"] > 0
+    assert catalog_quality.json()["distance_matrix"]["loaded"] is True
+
+
+def test_admin_catalog_search_is_authenticated_and_filterable():
+    denied = client.get("/api/admin/catalog?q=ho")
+    assert denied.status_code == 401
+    assert client.get("/api/admin/catalog/export.csv?q=ho").status_code == 401
+    assert client.get("/api/admin/catalog/quality").status_code == 401
+    response = client.get(
+        "/api/admin/catalog?q=ho&limit=5",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert 0 < len(body["items"]) <= 5
+    assert body["total"] >= len(body["items"])
+    assert {"id", "name", "source_url", "tags"}.issubset(body["items"][0])
+    exported = client.get(
+        "/api/admin/catalog/export.csv?q=ho",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert exported.status_code == 200
+    assert exported.headers["content-type"].startswith("text/csv")
+    assert "id,name,kind,area,lat,lng" in exported.text.splitlines()[0]
+    assert body["items"][0]["id"] in exported.text
+
+
+def test_admin_recent_plans_is_authenticated_and_links_created_plans():
+    import json
+
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    assert client.get("/api/admin/plans").status_code == 401
+    response = client.get(
+        "/api/admin/plans?q=api-session",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["token"] == result["token"]
+    assert body["items"][0]["version"] == 1
+
+
+def test_admin_users_is_authenticated_filterable_and_counts_owned_records():
+    user = store.upsert_user_and_claim(
+        "google", "admin-user@example.com", "Admin User", PAYLOAD["ma_phien"], "2026-08-05"
+    )
+    store.save(PAYLOAD["ma_phien"], {"tieu_de": "Demo", "tom_tat": "", "ngay": []}, PAYLOAD)
+    store.claim_session(PAYLOAD["ma_phien"], user["id"])
+
+    denied = client.get("/api/admin/users")
+    assert denied.status_code == 401
+    response = client.get(
+        "/api/admin/users?q=admin-user&limit=5",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["email"] == "admin-user@example.com"
+    assert body["items"][0]["plans"] == 1
+    assert {"comments", "booking_requests", "feedback", "notifications"}.issubset(body["items"][0])
+
+
+def test_admin_ai_usage_is_authenticated_and_reports_recent_calls():
+    store.record_ai_usage("deepseek", "test-model", 123, 45, 0.001, 10, 300)
+    denied = client.get("/api/admin/ai-usage")
+    assert denied.status_code == 401
+    response = client.get(
+        "/api/admin/ai-usage?limit=5",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["provider"] == "deepseek"
+    assert body["items"][0]["input_tokens"] == 123
+    assert body["items"][0]["cost_usd"] == 0.001
+
+
+def test_admin_events_is_authenticated_and_searchable():
+    store.log("audit-session", "custom_audit_event", {"token": "audit-token"})
+    store.log("other-session", "other_event", {"token": "other"})
+    denied = client.get("/api/admin/events")
+    assert denied.status_code == 401
+    response = client.get(
+        "/api/admin/events?q=audit-token&limit=5",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["su_kien"] == "custom_audit_event"
+    assert body["items"][0]["ma_phien"] == "audit-session"
+
+
+def test_admin_cleanup_expired_is_authenticated_and_logs_removed_count():
+    expired = store.save("expired-admin-session", {"tieu_de": "Old", "tom_tat": "", "ngay": []}, PAYLOAD)
+    active = store.save("active-admin-session", {"tieu_de": "Active", "tom_tat": "", "ngay": []}, PAYLOAD)
+    expired.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+
+    denied = client.post("/api/admin/maintenance/cleanup-expired")
+    assert denied.status_code == 401
+    response = client.post(
+        "/api/admin/maintenance/cleanup-expired",
+        headers={"X-Admin-Token": "local-support-demo"},
+    )
+    assert response.status_code == 200
+    assert response.json()["removed_plans"] == 1
+    assert store.get(expired.token) is None
+    assert store.get(active.token) is not None
+    assert store.events[-1]["su_kien"] == "admin_cleanup_expired"
+
+
+def test_due_trip_notification_is_durable_owner_scoped_and_readable():
+    payload = PAYLOAD | {
+        "ngay_di": (datetime.now(UTC).date() + timedelta(days=1)).isoformat()
+    }
+    generated = client.post("/api/plan/generate", json=payload)
+    assert generated.status_code == 200
+    notifications = client.get(
+        "/api/notifications", headers={"X-Session-Id": PAYLOAD["ma_phien"]}
+    ).json()["items"]
+    assert len(notifications) == 1
+    assert notifications[0]["loai"] == "trip_24h"
+    assert notifications[0]["plan_title"]
+    assert notifications[0]["da_doc"] is False
+    assert client.patch(
+        f"/api/notifications/{notifications[0]['id']}",
+        json={"ma_phien": "wrong-session"},
+    ).status_code == 404
+    read = client.patch(
+        f"/api/notifications/{notifications[0]['id']}",
+        json={"ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert read.status_code == 200
+    assert read.json()["thong_bao"]["da_doc"] is True
