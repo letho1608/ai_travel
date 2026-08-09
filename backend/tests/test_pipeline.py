@@ -295,6 +295,8 @@ def test_all_supported_locales_localize_copy_without_translating_names_or_source
         assert slot["ten_dia_diem"] == place.name
         assert slot["nguon"] == place.source
         assert slot["nguon_url"] == place.source_url
+        assert "anh" in slot
+        assert "anh_nguon" in slot
         assert place.name in slot["mo_ta"]
         assert place.area in slot["mo_ta"]
 

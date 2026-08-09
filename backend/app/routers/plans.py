@@ -1,6 +1,5 @@
 ﻿import json
 import re
-import unicodedata
 from asyncio import to_thread
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -9,7 +8,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
-from app.data import PLACES
+from app.data import PLACES, image_for
 from app.pipeline.planner import COPY, PipelineUnavailable, build_plan, validate_plan
 from app.routers.auth import resolve_user
 from app.schemas import (
@@ -26,16 +25,17 @@ from app.schemas import (
 from app.services.pdf_export import build_itinerary_pdf
 from app.services.rate_limit import limiter
 from app.services.store import store
+from app.text_utils import ascii_fold
 
 SWAP_INTENT = re.compile(
-    r"\b(Ä‘á»•i|thay|replace|swap|cambiar|remplacer|ersetzen|sostituire|substituir|"
-    r"vervangen|zamieÅ„|Ð·Ð°Ð¼ÐµÐ½Ð¸Ñ‚ÑŒ|deÄŸiÅŸtir|æ›¿æ¢|æ›´æ¢|äº¤æ›|ç½®ãæ›ãˆ|êµì²´|à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™|"
-    r"Ø§Ø³ØªØ¨Ø¯Ø§Ù„|×”×—×œ×£|à¤¬à¤¦à¤²à¥‡à¤‚|ÑÐ¼ÐµÐ½Ð¸)\b",
+    r"\b(đổi|thay|replace|swap|cambiar|remplacer|ersetzen|sostituire|substituir|"
+    r"vervangen|zamień|заменить|değiştir|替换|更换|交換|置き換え|교체|เปลี่ยน|"
+    r"استبدال|החלף|बदलें|смени)\b",
     re.IGNORECASE,
 )
 PEOPLE_INTENT = re.compile(
-    r"\b(\d{1,2})\s*(ngÆ°á»i|people|persons?|personas?|personnes?|personen|persone|"
-    r"pessoas?|osÃ³b|Ñ‡ÐµÐ»Ð¾Ð²ÐµÐº|kiÅŸi|äºº|ëª…|à¸„à¸™|Ø£Ø´Ø®Ø§Øµ|×× ×©×™×|à¤²à¥‹à¤—|Ð´ÑƒÑˆÐ¸)\b",
+    r"\b(\d{1,2})\s*(người|people|persons?|personas?|personnes?|personen|persone|"
+    r"pessoas?|osób|человек|kişi|人|명|คน|أشخاص|אנשים|लोग|души)\b",
     re.IGNORECASE,
 )
 
@@ -47,12 +47,33 @@ def _generate_nonce_key(session_id: str, nonce: str) -> str:
     return f"{session_id}:{nonce}"
 
 
+def _conversation(plan: dict) -> list[dict]:
+    history = plan.get("hoi_thoai")
+    return history if isinstance(history, list) else []
+
+
+def _append_turn(plan: dict, role: str, text: str) -> None:
+    history = _conversation(plan)
+    history.append({"vai_tro": role, "noi_dung": text, "thoi_gian": datetime.now(UTC).isoformat()})
+    plan["hoi_thoai"] = history[-50:]
+
+
+def _constraint_echo(request: PlanRequest) -> dict:
+    return {
+        "ngan_sach": request.ngan_sach,
+        "so_nguoi": request.so_nguoi,
+        "thoi_luong": request.thoi_luong,
+        "ngon_ngu": request.ngon_ngu,
+        "ngay_di": request.ngay_di.isoformat() if request.ngay_di else None,
+    }
+
+
 def owner(item, session_id: str | None, authorization: str | None = None) -> None:
     user = resolve_user(authorization)
     if item.user_id and user and item.user_id == user["id"]:
         return
     if not session_id or item.session_id != session_id:
-        raise HTTPException(403, "Link chia sáº» chá»‰ cÃ³ quyá»n xem")
+        raise HTTPException(403, "Link chia sẻ chỉ có quyền xem")
 
 
 def sse(event: str, payload: dict) -> str:
@@ -66,7 +87,7 @@ def notifications(
 ):
     user = resolve_user(authorization)
     if not user and not x_session_id:
-        raise HTTPException(401, "Thiáº¿u phiÃªn hoáº·c Ä‘Äƒng nháº­p")
+        raise HTTPException(401, "Thiếu phiên hoặc đăng nhập")
     store.materialize_due_reminders()
     return {"items": store.list_notifications(x_session_id or "", user["id"] if user else None)}
 
@@ -82,7 +103,7 @@ def read_notification(
             notification_id, payload.ma_phien, user["id"] if user else None
         )
     except (ValueError, TypeError) as exc:
-        raise HTTPException(404, "KhÃ´ng tÃ¬m tháº¥y thÃ´ng bÃ¡o") from exc
+        raise HTTPException(404, "Không tìm thấy thông báo") from exc
     return {"thong_bao": item}
 
 
@@ -120,6 +141,7 @@ async def generate(payload: PlanRequest, request: Request):
         yield sse("status", {"status": "routing_plan"})
         try:
             plan = await to_thread(build_plan, payload)
+            _append_turn(plan, "user", payload.context)
             item = store.save(session_id, plan, payload.model_dump(mode="json"))
             if generate_nonce:
                 store.set_nonce(GENERATE_NONCE_SCOPE, generate_nonce, item.token)
@@ -135,8 +157,13 @@ async def generate(payload: PlanRequest, request: Request):
 def get_plan(token: str):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i hoáº·c Ä‘Ã£ háº¿t háº¡n")
-    return {"ke_hoach": item.plan, "phien_ban": item.version, "token": item.token}
+        raise HTTPException(404, "Kế hoạch không tồn tại hoặc đã hết hạn")
+    return {
+        "ke_hoach": item.plan,
+        "phien_ban": item.version,
+        "token": item.token,
+        "tham_so": _constraint_echo(PlanRequest.model_validate(item.request)),
+    }
 
 
 def _ics_escape(value: str) -> str:
@@ -164,7 +191,7 @@ def _ics_fold(line: str) -> list[str]:
 def export_calendar(token: str):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     request = PlanRequest.model_validate(item.request)
     locale = request.ngon_ngu
     start_date = request.ngay_di or datetime.now(UTC).date()
@@ -173,7 +200,7 @@ def export_calendar(token: str):
     lines = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "CALSCALE:GREGORIAN",
         f"PRODID:-//Minh Di Dau The//{language.upper()}",
-        f"X-WR-CALNAME;LANGUAGE={language}:MÃ¬nh Äi ÄÃ¢u Tháº¿",
+        f"X-WR-CALNAME;LANGUAGE={language}:Mình Đi Đâu Thế",
     ]
     for day_index, day in enumerate(item.plan.get("ngay", [])):
         event_date = start_date + timedelta(days=day_index)
@@ -211,7 +238,7 @@ def export_calendar(token: str):
 def export_pdf(token: str):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     request = PlanRequest.model_validate(item.request)
     content = build_itinerary_pdf(item.plan, request.ngon_ngu)
     return Response(
@@ -231,11 +258,11 @@ def submit_feedback(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, payload.ma_phien, authorization)
     trip_date = PlanRequest.model_validate(item.request).ngay_di
     if not trip_date or trip_date >= datetime.now(UTC).date():
-        raise HTTPException(409, "Chá»‰ cÃ³ thá»ƒ gá»­i pháº£n há»“i sau chuyáº¿n Ä‘i")
+        raise HTTPException(409, "Chỉ có thể gửi phản hồi sau chuyến đi")
     user = resolve_user(authorization)
     try:
         feedback = store.save_feedback(
@@ -243,7 +270,7 @@ def submit_feedback(
             payload.diem, payload.noi_dung,
         )
     except ValueError as exc:
-        raise HTTPException(409, "Báº¡n Ä‘Ã£ gá»­i pháº£n há»“i cho chuyáº¿n Ä‘i nÃ y") from exc
+        raise HTTPException(409, "Bạn đã gửi phản hồi cho chuyến đi này") from exc
     store.log(payload.ma_phien, "phan_hoi_sau_chuyen", {"diem": payload.diem})
     return {"phan_hoi": feedback}
 
@@ -251,7 +278,7 @@ def submit_feedback(
 @router.get("/plans/{token}/comments")
 def list_comments(token: str):
     if not store.get(token):
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     return {"ds_binh_luan": store.list_comments(token)}
 
 
@@ -262,9 +289,9 @@ def add_comment(
     authorization: str | None = Header(default=None),
 ):
     if not store.get(token):
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     if not limiter.check(f"comment:{token}:{payload.ma_phien}", 10, 3600):
-        raise HTTPException(429, "Báº¡n Ä‘Ã£ gá»­i quÃ¡ nhiá»u bÃ¬nh luáº­n")
+        raise HTTPException(429, "Bạn đã gửi quá nhiều bình luận")
     user = resolve_user(authorization)
     comment = store.add_comment(
         token, payload.ma_phien, user["id"] if user else None,
@@ -284,11 +311,11 @@ def resolve_comment(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, payload.ma_phien, authorization)
     comment = store.resolve_comment(token, comment_id, payload.da_giai_quyet)
     if not comment:
-        raise HTTPException(404, "BÃ¬nh luáº­n khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Bình luận không tồn tại")
     return {"binh_luan": comment}
 
 
@@ -299,7 +326,7 @@ def list_plans(
 ):
     user = resolve_user(authorization)
     if not x_session_id and not user:
-        raise HTTPException(401, "Thiáº¿u phiÃªn hoáº·c thÃ´ng tin Ä‘Äƒng nháº­p")
+        raise HTTPException(401, "Thiếu phiên hoặc thông tin đăng nhập")
     items = [
         {"token": item.token, "ke_hoach": item.plan, "phien_ban": item.version}
         for item in store.list_for_owner(x_session_id, user["id"] if user else None)
@@ -313,23 +340,24 @@ def swipe(
     payload: SwipeRequest,
     x_session_id: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
+    message: str | None = None,
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, x_session_id or payload.ma_phien, authorization)
     if not limiter.check(f"swipe:{item.session_id}", 20):
-        raise HTTPException(429, "Báº¡n Ä‘Ã£ Ä‘á»•i Ä‘iá»ƒm quÃ¡ nhiá»u láº§n")
+        raise HTTPException(429, "Bạn đã đổi điểm quá nhiều lần")
     slots = [slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
     matching_slots = [slot for slot in slots if slot["dia_diem_id"] == payload.diem_bi_loai]
     if not matching_slots:
-        raise HTTPException(404, "Äá»‹a Ä‘iá»ƒm khÃ´ng náº±m trong káº¿ hoáº¡ch")
+        raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
     if len(matching_slots) != 1:
-        raise HTTPException(409, "Lá»‹ch trÃ¬nh chá»©a Ä‘á»‹a Ä‘iá»ƒm trÃ¹ng láº·p, vui lÃ²ng lÃ m láº¡i")
+        raise HTTPException(409, "Lịch trình chứa địa điểm trùng lặp, vui lòng làm lại")
     used = {s["dia_diem_id"] for s in slots}
     rejected = next((p for p in PLACES if p.id == payload.diem_bi_loai), None)
     if not rejected:
-        raise HTTPException(404, "Äá»‹a Ä‘iá»ƒm khÃ´ng cÃ²n trong danh má»¥c")
+        raise HTTPException(404, "Địa điểm không còn trong danh mục")
     target = matching_slots[0]
     candidates = [
         p
@@ -340,7 +368,7 @@ def swipe(
         and int(target["ket_thuc"][:2]) <= p.close_hour
     ]
     if not candidates:
-        raise HTTPException(404, "KhÃ´ng cÃ³ Ä‘á»‹a Ä‘iá»ƒm thay tháº¿ phÃ¹ há»£p")
+        raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
     replacement = min(
         candidates,
         key=lambda p: (p.lat - rejected.lat) ** 2 + (p.lng - rejected.lng) ** 2,
@@ -368,15 +396,21 @@ def swipe(
             "nguon_url": replacement.source_url,
         }
     )
+    swap_image_url, swap_image_credit = image_for(replacement)
+    new_target["anh"] = swap_image_url
+    new_target["anh_nguon"] = swap_image_credit
     plan["tong_chi_phi"] += new_target["chi_phi"] - old_cost
     plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
     try:
         errors = validate_plan(plan, {p.id for p in PLACES}, plan_request)
         if errors:
             raise PipelineUnavailable("; ".join(errors))
-        store.update(item, payload.phien_ban, plan)
+        if message:
+            _append_turn(plan, "user", message)
+            _append_turn(plan, "assistant", "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.")
+        store.update(item, payload.phien_ban, plan, item.request, f"Tinh chỉnh: {message or 'Đổi điểm'}")
     except ValueError as exc:
-        raise HTTPException(409, "Lá»‹ch trÃ¬nh vá»«a Ä‘Æ°á»£c cáº­p nháº­t, vui lÃ²ng táº£i láº¡i") from exc
+        raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
     except PipelineUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
     store.penalize_tags(item.session_id, rejected.tags)
@@ -393,7 +427,7 @@ def regenerate(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, payload.ma_phien, authorization)
     existing_token = store.get_nonce(token, payload.nonce)
     if existing_token:
@@ -402,7 +436,7 @@ def regenerate(
             return {"ke_hoach": existing.plan, "token": existing.token, "phien_ban": existing.version}
     ip = request.client.host if request.client else "unknown"
     if not limiter.check_many([(f"regenerate:{payload.ma_phien}:{ip}", 5, 3600)]):
-        raise HTTPException(429, "Báº¡n Ä‘Ã£ lÃ m láº¡i quÃ¡ nhiá»u láº§n")
+        raise HTTPException(429, "Bạn đã làm lại quá nhiều lần")
     try:
         store.reserve_cost(0.0, settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd)
         first_slot = next(
@@ -411,33 +445,37 @@ def regenerate(
         )
         excluded = {first_slot["dia_diem_id"]} if first_slot else set()
         plan = build_plan(PlanRequest.model_validate(item.request), excluded)
+        _append_turn(plan, "user", "Làm lại từ đầu")
+        _append_turn(plan, "assistant", "Đã tạo lại lịch trình mới từ đầu với cùng yêu cầu ban đầu.")
+        store.update(item, item.version, plan, item.request, "Làm lại")
+    except ValueError as exc:
+        raise HTTPException(409, "Kế hoạch vừa được cập nhật, vui lòng tải lại") from exc
     except (PipelineUnavailable, RuntimeError) as exc:
         raise HTTPException(503, str(exc)) from exc
-    new_item = store.save(item.session_id, plan, item.request)
-    persisted_token = store.set_nonce(token, payload.nonce, new_item.token)
-    if persisted_token != new_item.token:
+    persisted_token = store.set_nonce(token, payload.nonce, token)
+    if persisted_token != token:
         existing = store.get(persisted_token)
         if existing:
             return {"ke_hoach": existing.plan, "token": existing.token, "phien_ban": existing.version}
-    store.log(item.session_id, "lam_lai_tu_dau", {"id_ke_hoach_cu": token})
-    return {"ke_hoach": plan, "token": new_item.token, "phien_ban": 1}
+    store.log(item.session_id, "lam_lai_tu_dau", {"id_ke_hoach": token})
+    return {"ke_hoach": plan, "token": token, "phien_ban": item.version}
 
 
 def _refined_request(item, message: str) -> PlanRequest:
     current = PlanRequest.model_validate(item.request)
     updates: dict = {"context": f"{current.context}; {message}"[-500:]}
-    normalized = unicodedata.normalize("NFKD", message).encode("ascii", "ignore").decode("ascii").lower()
+    normalized = ascii_fold(message)
     people = PEOPLE_INTENT.search(message)
     if people:
         updates["so_nguoi"] = int(people.group(1))
     budget = re.search(
-        r"(?:ngÃ¢n sÃ¡ch|budget|dÆ°á»›i|tá»‘i Ä‘a)\s*(\d+(?:[.,]\d+)?)\s*(k|nghÃ¬n|triá»‡u|tr)?",
+        r"(?:ngân sách|budget|dưới|tối đa)\s*(\d+(?:[.,]\d+)?)\s*(k|nghìn|triệu|tr)?",
         message, re.IGNORECASE,
     )
     if budget:
         amount = float(budget.group(1).replace(",", "."))
         unit = (budget.group(2) or "").lower()
-        multiplier = 1_000_000 if unit in {"triá»‡u", "tr"} else 1_000 if unit in {"k", "nghÃ¬n"} else 1
+        multiplier = 1_000_000 if unit in {"triệu", "tr"} else 1_000 if unit in {"k", "nghìn"} else 1
         updates["ngan_sach"] = round(amount * multiplier)
     if re.search(r"\b(cheaper|lower cost|save money|re hon|tiet kiem|gia re|it tien)\b", normalized):
         updates["ngan_sach"] = max(100_000, round((updates.get("ngan_sach") or current.ngan_sach) * 0.8))
@@ -457,13 +495,13 @@ def refine(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, payload.ma_phien, authorization)
     if not limiter.check(f"refine:{item.session_id}", 20):
-        raise HTTPException(429, "Báº¡n Ä‘Ã£ tinh chá»‰nh quÃ¡ nhiá»u láº§n")
+        raise HTTPException(429, "Bạn đã tinh chỉnh quá nhiều lần")
     if SWAP_INTENT.search(payload.message):
         if not payload.dia_diem_dang_chon:
-            raise HTTPException(422, "HÃ£y chá»n má»™t Ä‘á»‹a Ä‘iá»ƒm cáº§n Ä‘á»•i")
+            raise HTTPException(422, "Hãy chọn một địa điểm cần đổi")
         result = swipe(
             token,
             SwipeRequest(
@@ -473,28 +511,40 @@ def refine(
             ),
             payload.ma_phien,
             authorization,
+            message=payload.message,
         )
         return {
             "ke_hoach": result["ke_hoach_moi"], "phien_ban": result["phien_ban"],
-            "tra_loi": "ÄÃ£ Ä‘á»•i Ä‘á»‹a Ä‘iá»ƒm Ä‘Æ°á»£c chá»n vÃ  kiá»ƒm tra láº¡i rÃ ng buá»™c.",
+            "tra_loi": "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.",
             "tra_loi_key": "swipeSuccess",
+            "hoi_thoai": _conversation(result["ke_hoach_moi"]),
         }
     refined = _refined_request(item, payload.message)
+    previous = _conversation(item.plan)
     try:
         plan = build_plan(refined)
+        plan["hoi_thoai"] = [*previous, *plan.get("hoi_thoai", [])][-50:]
+        _append_turn(plan, "user", payload.message)
+        _append_turn(
+            plan, "assistant",
+            f"Đã áp dụng yêu cầu: ngân sách {refined.ngan_sach} VND, {refined.so_nguoi} người, "
+            f"{refined.thoi_luong}. Lịch trình mới đã sẵn sàng.",
+        )
         store.update(
             item, payload.phien_ban, plan, refined.model_dump(mode="json"),
-            f"Tinh chá»‰nh: {payload.message}",
+            f"Tinh chỉnh: {payload.message}",
         )
     except ValueError as exc:
-        raise HTTPException(409, "Káº¿ hoáº¡ch vá»«a Ä‘Æ°á»£c cáº­p nháº­t, vui lÃ²ng táº£i láº¡i") from exc
+        raise HTTPException(409, "Kế hoạch vừa được cập nhật, vui lòng tải lại") from exc
     except (PipelineUnavailable, RuntimeError) as exc:
         raise HTTPException(503, str(exc)) from exc
     store.log(item.session_id, "tinh_chinh_bang_chat", {"message": payload.message})
     return {
         "ke_hoach": plan, "phien_ban": item.version,
-        "tra_loi": "ÄÃ£ Ã¡p dá»¥ng yÃªu cáº§u vÃ  táº¡o phiÃªn báº£n lá»‹ch trÃ¬nh má»›i.",
+        "tra_loi": "Đã áp dụng yêu cầu và tạo phiên bản lịch trình mới.",
         "tra_loi_key": "assistantWelcome",
+        "tham_so": _constraint_echo(refined),
+        "hoi_thoai": plan.get("hoi_thoai", previous),
     }
 
 
@@ -506,7 +556,7 @@ def versions(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, x_session_id, authorization)
     return {"ds_phien_ban": store.list_versions(token)}
 
@@ -520,17 +570,17 @@ def restore_version(
 ):
     item = store.get(token)
     if not item:
-        raise HTTPException(404, "Káº¿ hoáº¡ch khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Kế hoạch không tồn tại")
     owner(item, payload.ma_phien, authorization)
     historical = store.get_version(token, version)
     if not historical:
-        raise HTTPException(404, "PhiÃªn báº£n khÃ´ng tá»“n táº¡i")
+        raise HTTPException(404, "Phiên bản không tồn tại")
     try:
         store.update(
             item, payload.phien_ban_hien_tai, historical["du_lieu"],
-            historical["yeu_cau"], f"KhÃ´i phá»¥c phiÃªn báº£n {version}",
+            historical["yeu_cau"], f"Khôi phục phiên bản {version}",
         )
     except ValueError as exc:
-        raise HTTPException(409, "Káº¿ hoáº¡ch vá»«a Ä‘Æ°á»£c cáº­p nháº­t, vui lÃ²ng táº£i láº¡i") from exc
+        raise HTTPException(409, "Kế hoạch vừa được cập nhật, vui lòng tải lại") from exc
     return {"ke_hoach": item.plan, "phien_ban": item.version}
 

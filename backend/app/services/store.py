@@ -61,11 +61,13 @@ class MemoryStore:
         )
 
     def save(self, session_id: str, plan: dict, request: dict) -> StoredPlan:
+        now = datetime.now(UTC).isoformat()
+        plan["ngay_cap_nhat"] = now
         item = StoredPlan(str(uuid4()), session_id, plan, request, 1, datetime.now(UTC) + timedelta(days=30))
         with self._lock:
             self.plans[item.token] = item
             self.versions[item.token] = [
-                {"phien_ban": 1, "du_lieu": plan, "yeu_cau": request, "ly_do": "Tạo mới"}
+                {"phien_ban": 1, "du_lieu": plan, "yeu_cau": request, "ly_do": "Tạo mới", "ngay_tao": now}
             ]
         return item
 
@@ -79,6 +81,8 @@ class MemoryStore:
         self, item: StoredPlan, expected_version: int, plan: dict,
         request: dict | None = None, reason: str | None = None,
     ) -> None:
+        now = datetime.now(UTC).isoformat()
+        plan["ngay_cap_nhat"] = now
         with self._lock:
             if item.version != expected_version:
                 raise ValueError("VERSION_CONFLICT")
@@ -87,7 +91,7 @@ class MemoryStore:
                 item.request = request
             self.versions.setdefault(item.token, []).append(
                 {"phien_ban": item.version, "du_lieu": plan,
-                 "yeu_cau": item.request, "ly_do": reason}
+                 "yeu_cau": item.request, "ly_do": reason, "ngay_tao": now}
             )
 
     def list_versions(self, token: str) -> list[dict]:

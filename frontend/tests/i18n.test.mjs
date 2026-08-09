@@ -143,7 +143,8 @@ test("roadtrip requests and route data fail safely",()=>{
 test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/if\(busyRef\.current\)return false/);
   assert.match(planViewSource,/async function copyShareLink/);
-  assert.match(planViewSource,/navigator\.clipboard\?\.writeText/);
+  assert.match(planViewSource,/navigator\.clipboard&&window\.isSecureContext/);
+  assert.match(planViewSource,/navigator\.clipboard\.writeText\(value\)/);
   assert.match(planViewSource,/document\.execCommand\("copy"\)/);
   assert.match(planViewSource,/type BusyAction="copy"\|"download"/);
   assert.match(planViewSource,/function downloadJson\(\)\{if\(!start\("download"\)\)return/);
@@ -251,7 +252,9 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/clearNonce\(\);\s*setSession/);
   assert.match(plannerSource,/function inferDuration\(value: string\)/);
   assert.match(plannerSource,/setNeedsDuration\(true\)/);
-  assert.match(plannerSource,/Bạn muốn đi trong bao lâu\?/);
+  assert.match(plannerSource,/needsDuration &&/);
+  assert.match(plannerSource,/t\("durationLabel"\)/);
+  assert.doesNotMatch(plannerSource,/Bạn muốn đi trong bao lâu/);
   assert.doesNotMatch(plannerSource,/id="planner-duration"/);
   assert.match(plannerSource,/cause instanceof DOMException && cause\.name === "AbortError" \? "generateTimeout" : "generateFailed"/);
   assert.match(plannerSource,/thoi_luong: duration/);

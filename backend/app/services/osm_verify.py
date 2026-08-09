@@ -1,12 +1,12 @@
 import json
 import re
-import unicodedata
 from pathlib import Path
 
 import httpx
 
 from app.data import DATA_DIR, PLACES, Place
 from app.pipeline.routing import haversine_km
+from app.text_utils import ascii_fold
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 CACHE_PATH = DATA_DIR / "osm_verify_cache.json"
@@ -61,12 +61,7 @@ NON_TRAVEL_RAW_HINTS = {
 
 
 def _fold(value: str) -> str:
-    return (
-        unicodedata.normalize("NFKD", value)
-        .encode("ascii", "ignore")
-        .decode("ascii")
-        .casefold()
-    )
+    return ascii_fold(value).casefold()
 
 
 def _tokens(value: str) -> set[str]:

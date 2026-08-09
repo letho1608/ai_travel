@@ -3,6 +3,11 @@
 import argparse
 import json
 import urllib.request
+
+import datetime as _dt
+
+if not hasattr(_dt, "UTC"):
+    _dt.UTC = _dt.timezone.utc
 from datetime import UTC, datetime
 from pathlib import Path
 

@@ -14,7 +14,7 @@ where node >nul 2>nul && set "NODE_EXE=node"
 if not defined NODE_EXE if exist "C:\Users\1212a\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe" set "NODE_EXE=C:\Users\1212a\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
 
 if not defined PYTHON_EXE (
-  echo [ERROR] Khong tim thay Python 3.11+.
+  echo [ERROR] Khong tim thay Python 3.10+.
   echo Hay cai Python, sau do chay lai run.bat.
   pause
   exit /b 1
@@ -117,7 +117,7 @@ exit /b 1
 :FRONTEND_PORT_READY
 if defined RUN_BAT_CHECK_ONLY goto CHECK_ONLY_DONE
 echo Starting Frontend: http://localhost:%FRONTEND_PORT%
-start "Minh Di Dau The - Frontend" /D "%PROJECT_ROOT%\frontend" cmd /k "set "NEXT_PUBLIC_API_URL=http://localhost:%BACKEND_PORT%"&& "%NODE_EXE%" node_modules\next\dist\bin\next dev -p %FRONTEND_PORT%"
+start "Minh Di Dau The - Frontend" /D "%PROJECT_ROOT%\frontend" cmd /k "set "NEXT_PUBLIC_API_URL=http://localhost:%BACKEND_PORT%"&& set "NEXT_PUBLIC_BASE_URL=http://localhost:%FRONTEND_PORT%"&& "%NODE_EXE%" node_modules\next\dist\bin\next dev -p %FRONTEND_PORT%"
 
 echo.
 echo Da mo Backend va Frontend trong hai cua so rieng.

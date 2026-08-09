@@ -1,6 +1,14 @@
 import type { Plan } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
+
+export function publicShareUrl(token: string): string {
+  if (typeof window !== "undefined" && !BASE_URL) {
+    return `${window.location.origin}/plan/${token}`;
+  }
+  return `${BASE_URL ?? "http://localhost:3000"}/plan/${token}`;
+}
 
 export async function consumePlanStream(
   response: Response,
@@ -8,14 +16,15 @@ export async function consumePlanStream(
 ): Promise<{ plan: Plan; token: string; ma_phien: string; phien_ban: number }> {
   if (!response.ok) {
     const text = await response.text();
+    let detail = "Không thể tạo kế hoạch";
     try {
       const parsed = JSON.parse(text);
-      throw new Error(parsed.detail ?? text);
+      if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
+      else if (text) detail = text;
     } catch {
-      if (!text.startsWith("{")) throw new Error(text || "Không thể tạo kế hoạch");
-      const parsed = JSON.parse(text);
-      throw new Error(parsed.detail ?? "Không thể tạo kế hoạch");
+      if (text) detail = text;
     }
+    throw new Error(detail);
   }
   if (!response.body) throw new Error("Trình duyệt không hỗ trợ nhận tiến trình");
   const reader = response.body.getReader();

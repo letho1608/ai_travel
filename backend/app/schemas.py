@@ -102,7 +102,7 @@ class FlightSearchRequest(BaseModel):
     @model_validator(mode="after")
     def valid_route_and_dates(self):
         if self.departure_date < datetime.now(UTC).date():
-            raise ValueError("NgÃ y Ä‘i khÃ´ng Ä‘Æ°á»£c á»Ÿ quÃ¡ khá»©")
+            raise ValueError("Ngày đi không được ở quá khứ")
         if self.origin == self.destination:
             raise ValueError("Điểm đi và điểm đến phải khác nhau")
         if self.return_date and self.return_date < self.departure_date:
@@ -160,7 +160,7 @@ class HotelSearchRequest(BaseModel):
     @classmethod
     def checkin_not_in_past(cls, value: date):
         if value < datetime.now(UTC).date():
-            raise ValueError("NgÃ y nháº­n phÃ²ng khÃ´ng Ä‘Æ°á»£c á»Ÿ quÃ¡ khá»©")
+            raise ValueError("Ngày nhận phòng không được ở quá khứ")
         return value
 
 
@@ -212,7 +212,7 @@ class TransferSearchRequest(BaseModel):
     @classmethod
     def timezone_required(cls, value: datetime):
         if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("Thá»i gian Ä‘Ã³n pháº£i cÃ³ mÃºi giá»")
+            raise ValueError("Thời gian đón phải có múi giờ")
         return value
 
 

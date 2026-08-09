@@ -1,12 +1,12 @@
 import hashlib
+import random
 import re
-import unicodedata
 from datetime import UTC, datetime, timedelta
 
 import httpx
 
 from app.config import settings
-from app.data import DISTANCE_METADATA, PLACES, Place
+from app.data import DISTANCE_METADATA, PLACES, Place, image_for
 from app.pipeline.routing import (
     haversine_km,
     is_routable,
@@ -18,6 +18,7 @@ from app.schemas import PlanRequest
 from app.services.ai import ai_adapter
 from app.services.osm_verify import verify_place_name
 from app.services.weather import WeatherUnavailable, get_daily_weather
+from app.text_utils import ascii_fold
 
 LIMITS = {
     "vai_gio": (4, 300, 1),
@@ -27,7 +28,7 @@ LIMITS = {
 }
 
 AI_FALLBACK_NOTE = {
-    "vi": "AI táº¡m thá»i khÃ´ng kháº£ dá»¥ng; lá»‹ch trÃ¬nh Ä‘ang dÃ¹ng bá»™ xáº¿p lá»‹ch an toÃ n tá»« dá»¯ liá»‡u Ä‘Ã£ kiá»ƒm chá»©ng.",
+    "vi": "AI tạm thời không khả dụng; lịch trình đang dùng bộ xếp lịch an toàn từ dữ liệu đã kiểm chứng.",
     "en": "AI is temporarily unavailable; this itinerary uses the safe deterministic planner with verified data.",
 }
 
@@ -129,12 +130,7 @@ OLD_QUARTER_TERMS = {
 
 
 def _ascii_fold(value: str) -> str:
-    return (
-        unicodedata.normalize("NFKD", value)
-        .encode("ascii", "ignore")
-        .decode("ascii")
-        .lower()
-    )
+    return ascii_fold(value)
 
 
 def relevant_tags(context: str) -> set[str]:
@@ -190,16 +186,14 @@ def _intent_score(place: Place, profiles: list[dict[str, set[str]]]) -> int:
 
 def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     tags = relevant_tags(request.context)
-    wants_hanoi_highlights = bool(
-        tags.intersection(INTENT_PROFILES["hanoi_highlights"]["terms"])
-        or tags.intersection({"ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh", "pho_co"})
-    )
-    if not wants_hanoi_highlights:
-        return []
+    generic_tourism = tags.intersection({"du_lich", "tham_quan", "noi_tieng", "lan_dau", "classic"})
+    explicit_anchor = tags.intersection({"ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh"})
+    wants_hanoi_highlights = bool(generic_tourism or explicit_anchor)
+    wants_night = bool(tags.intersection(INTENT_PROFILES["night"]["terms"]))
     by_id = {place.id: place for place in PLACES}
     place_ids = [
-        *HANOI_HIGHLIGHT_IDS,
-        *(HANOI_NIGHT_IDS if tags.intersection(INTENT_PROFILES["night"]["terms"]) else ()),
+        *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
+        *((*HANOI_NIGHT_IDS,) if wants_night else ()),
     ]
     return [
         place
@@ -270,14 +264,14 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     highlights = _highlight_places(request, excluded)
     highlight_ids = {place.id for place in highlights}
     if intent_matches:
-        intent_offset = seed % len(intent_matches)
-        other_offset = seed % len(other_matches) if other_matches else 0
-        ordered = (
-            intent_matches[intent_offset:]
-            + intent_matches[:intent_offset]
-            + other_matches[other_offset:]
-            + other_matches[:other_offset]
-        )
+        count, _, _ = LIMITS[request.thoi_luong]
+        keep = max(count - len(highlights), 0)
+        pinned = intent_matches[: max(min(keep, 3), 1)]
+        pool = intent_matches[len(pinned):] + other_matches
+        rng = random.Random(seed)
+        shuffled_pool = pool[:]
+        rng.shuffle(shuffled_pool)
+        ordered = pinned + shuffled_pool
         return highlights + [place for place in ordered if place.id not in highlight_ids]
     offset = seed % len(quality_pool)
     ordered = quality_pool[offset:] + quality_pool[:offset]
@@ -535,12 +529,20 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
                 cursor += timedelta(minutes=travel_minutes(previous, place))
             opening = cursor.replace(hour=place.open_hour, minute=0)
             cursor = max(cursor, opening)
-            visit_minutes = min(place.duration_min, 40) if request.thoi_luong == "vai_gio" else place.duration_min
-            end = cursor + timedelta(minutes=visit_minutes)
             closing = cursor.replace(hour=place.close_hour, minute=0)
-            if end > closing or int((end - day_start).total_seconds() // 60) > max_minutes:
-                raise PipelineUnavailable("Không thể xếp lịch tuần tự trong giờ mở cửa")
+            end_limit = min(closing, day_start + timedelta(minutes=max_minutes))
+            max_visit = int((end_limit - cursor).total_seconds() // 60)
+            if max_visit <= 0:
+                continue
+            visit_minutes = min(
+                min(place.duration_min, 40) if request.thoi_luong == "vai_gio" else place.duration_min,
+                max_visit,
+            )
+            if visit_minutes < 20:
+                continue
+            end = cursor + timedelta(minutes=visit_minutes)
             mo_ta, ghi_chu = _slot_copy(place, request, copy, llm_details_by_id.get(place.id))
+            image_url, image_credit = image_for(place)
             slots.append(
                 {
                     "bat_dau": cursor.strftime("%H:%M"),
@@ -553,11 +555,15 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
                     "toa_do": {"lat": place.lat, "lng": place.lng},
                     "nguon": place.source,
                     "nguon_url": place.source_url,
+                    "anh": image_url,
+                    "anh_nguon": image_credit,
                     "ghi_chu": ghi_chu,
                 }
             )
             total_cost += place.cost * request.so_nguoi
             cursor, previous = end, place
+        if len(slots) < 4:
+            raise PipelineUnavailable("Không đủ thời gian để xếp đủ địa điểm trong ngày")
         days.append({"thu_tu": day_index, "nhan_de": copy[5].format(day=day_index), "khoang_gio": slots})
     draft = {
         "tieu_de": f"Hà Nội · {request.context[:48]}",

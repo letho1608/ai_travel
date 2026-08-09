@@ -9,6 +9,11 @@ import time
 import urllib.parse
 import urllib.request
 from collections import Counter
+
+import datetime as _dt
+
+if not hasattr(_dt, "UTC"):
+    _dt.UTC = _dt.timezone.utc
 from datetime import UTC, datetime
 from pathlib import Path
 

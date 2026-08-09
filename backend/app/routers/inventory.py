@@ -90,9 +90,9 @@ def request_booking_assistance(
             payload.offer_id, payload.ghi_chu,
         )
     except ValueError as exc:
-        raise HTTPException(404, "Snapshot hoáº·c offer khÃ´ng cÃ²n há»£p lá»‡") from exc
+        raise HTTPException(404, "Snapshot hoặc offer không còn hợp lệ") from exc
     return {
         "yeu_cau": item,
-        "thong_bao": "ÄÃ£ ghi nháº­n yÃªu cáº§u há»— trá»£; Ä‘Ã¢y chÆ°a pháº£i xÃ¡c nháº­n Ä‘áº·t chá»—.",
+        "thong_bao": "Đã ghi nhận yêu cầu hỗ trợ; đây chưa phải xác nhận đặt chỗ.",
     }
 

@@ -22,6 +22,58 @@ class Place:
     close_hour: int = 22
     source: str = "demo"
     source_url: str | None = None
+    image_url: str | None = None
+    image_credit: str | None = None
+
+
+PLACE_IMAGE_URLS: dict[str, str] = {
+    "ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hoan_Kiem.jpg?width=800",
+    "van-mieu": "https://commons.wikimedia.org/wiki/Special:FilePath/V%C4%83n_Mi%E1%BA%BFu_Street%2C_Hanoi.jpg?width=800",
+    "chua-tran-quoc": "https://commons.wikimedia.org/wiki/Special:FilePath/Ch%C3%B9a_Tr%E1%BA%A5n_Qu%E1%BB%91c%2C_H%C3%A0_N%E1%BB%99i.jpg?width=800",
+    "long-bien": "https://commons.wikimedia.org/wiki/Special:FilePath/Long_bien_bridge.jpg?width=800",
+    "bao-tang-phu-nu": "https://commons.wikimedia.org/wiki/Special:FilePath/Vietnamese_Women%27s_Museum_Building.JPG?width=800",
+    "curated-ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hoan_Kiem.jpg?width=800",
+    "curated-ho-tay": "https://commons.wikimedia.org/wiki/Special:FilePath/H%E1%BB%93_T%C3%A2y_ho%C3%A0ng_h%C3%B4n_-_NKS.jpg?width=800",
+    "curated-lang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/L%C4%83ng_B%C3%A1c_-_NKS.jpg?width=800",
+    "curated-pho-co-ha-noi": "https://commons.wikimedia.org/wiki/Special:FilePath/T%E1%BA%A1_Hi%E1%BB%87n_Street%2C_Hanoi%2C_Vietnam_14.jpg?width=800",
+    "curated-cho-dem-dong-xuan": "https://commons.wikimedia.org/wiki/Special:FilePath/Ch%E1%BB%A3_%C4%90%E1%BB%93ng_Xu%C3%A2n_-_NKS.jpg?width=800",
+    "curated-pho-ta-hien": "https://commons.wikimedia.org/wiki/Special:FilePath/T%E1%BA%A1_Hi%E1%BB%87n_Street%2C_Hanoi%2C_Vietnam_14.jpg?width=800",
+    "curated-hang-dao": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-gai": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-ma": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-duong": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-ngang": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-buom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-dau": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-khay": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hang-trong": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
+    "curated-hoang-thanh-thang-long": "https://commons.wikimedia.org/wiki/Special:FilePath/Central_Sector_of_the_Imperial_Citadel_of_Thang_Long_-_Hanoi.jpg?width=800",
+    "curated-nha-hat-lon": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_Opera_House_1.jpg?width=800",
+}
+
+PLACE_IMAGE_CREDITS: dict[str, str] = {
+    "ho-guom": "Wikimedia Commons (Hoan_Kiem.jpg)",
+    "van-mieu": "Wikimedia Commons (Văn Miếu Street, Hanoi)",
+    "chua-tran-quoc": "Wikimedia Commons (Chùa Trấn Quốc, Hà Nội)",
+    "long-bien": "Wikimedia Commons (Long_bien_bridge.jpg)",
+    "bao-tang-phu-nu": "Wikimedia Commons (Vietnamese Women's Museum Building)",
+    "curated-ho-guom": "Wikimedia Commons (Hoan_Kiem.jpg)",
+    "curated-ho-tay": "Wikimedia Commons (Hồ Tây hoàng hôn – NKS)",
+    "curated-lang-bac": "Wikimedia Commons (Lăng Bác – NKS)",
+    "curated-pho-co-ha-noi": "Wikimedia Commons (Tạ Hiện Street, Hanoi)",
+    "curated-cho-dem-dong-xuan": "Wikimedia Commons (Chợ Đồng Xuân – NKS)",
+    "curated-pho-ta-hien": "Wikimedia Commons (Tạ Hiện Street, Hanoi)",
+    "curated-hoang-thanh-thang-long": "Wikimedia Commons (Imperial Citadel of Thang Long)",
+    "curated-nha-hat-lon": "Wikimedia Commons (Hanoi Opera House 1)",
+}
+
+
+def image_for(place: "Place") -> tuple[str | None, str | None]:
+    if place.image_url:
+        return place.image_url, place.image_credit
+    url = PLACE_IMAGE_URLS.get(place.id)
+    return url, PLACE_IMAGE_CREDITS.get(place.id)
 
 
 PLACES = [
@@ -54,6 +106,7 @@ def _load_imported_places() -> tuple[list[Place], dict]:
             duration_min=int(item.get("duration_min", 60)), tags=tuple(item.get("tags", [])),
             open_hour=int(item.get("open_hour", 7)), close_hour=int(item.get("close_hour", 22)),
             source=item.get("source", "OpenStreetMap"), source_url=item.get("source_url"),
+            image_url=item.get("image_url"), image_credit=item.get("image_credit"),
         )
         for item in payload.get("places", [])
     ]
@@ -179,7 +232,7 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
     with psycopg.connect(database_url, row_factory=dict_row, connect_timeout=3) as connection:
         rows = connection.execute(
             "SELECT ten,loai,khu_vuc,gia_trung_binh,tags,gio_mo_cua,toa_do,"
-            "nguon,nguon_url,ma_nguon,thoi_luong_phut FROM dia_diem "
+            "nguon,nguon_url,ma_nguon,thoi_luong_phut,hinh_anh FROM dia_diem "
             "WHERE trang_thai='active' AND ma_nguon IS NOT NULL"
         ).fetchall()
     if not rows:
@@ -193,6 +246,7 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
             open_hour=int((row["gio_mo_cua"] or {}).get("open", 7)),
             close_hour=int((row["gio_mo_cua"] or {}).get("close", 22)),
             source=row["nguon"], source_url=row["nguon_url"],
+            image_url=row["hinh_anh"],
         )
         for row in rows
     ]

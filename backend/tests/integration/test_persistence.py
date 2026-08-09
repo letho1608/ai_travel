@@ -30,19 +30,19 @@ def test_durable_plan_invariants_and_redis_limit(real_services):
     request = {
         "ngay_di": (datetime.now(UTC) + timedelta(hours=20)).date().isoformat()
     }
-    item = store.save(session, {"tieu_de": "Kiá»ƒm thá»­ tháº­t", "ngay": []}, request)
+    item = store.save(session, {"tieu_de": "Kiểm thử thật", "ngay": []}, request)
     redis_key = f"integration:{uuid4()}"
     multi_ip_key = f"integration-many-ip:{uuid4()}"
     multi_session_key = f"integration-many-session:{uuid4()}"
     try:
-        assert store.get(item.token).plan["tieu_de"] == "Kiá»ƒm thá»­ tháº­t"
-        store.update(item, 1, {"tieu_de": "ÄÃ£ cáº­p nháº­t", "ngay": []})
+        assert store.get(item.token).plan["tieu_de"] == "Kiểm thử thật"
+        store.update(item, 1, {"tieu_de": "Đã cập nhật", "ngay": []})
         assert store.get(item.token).version == 2
         versions = store.list_versions(item.token)
         assert [entry["phien_ban"] for entry in versions] == [2, 1]
-        assert store.get_version(item.token, 1)["du_lieu"]["tieu_de"] == "Kiá»ƒm thá»­ tháº­t"
+        assert store.get_version(item.token, 1)["du_lieu"]["tieu_de"] == "Kiểm thử thật"
         with pytest.raises(ValueError, match="VERSION_CONFLICT"):
-            store.update(item, 1, {"tieu_de": "Sai phiÃªn báº£n", "ngay": []})
+            store.update(item, 1, {"tieu_de": "Sai phiên bản", "ngay": []})
 
         assert len(store.list_for_owner(session, None)) == 1
         first = store.set_nonce(item.token, "nonce-12345678", item.token)
@@ -81,18 +81,18 @@ def test_durable_booking_support_state_machine(real_services):
         ).fetchone()[0]
     try:
         request = store.create_booking_request(
-            str(snapshot_id), session, None, "live-offer", "Kiá»ƒm thá»­ persistence"
+            str(snapshot_id), session, None, "live-offer", "Kiểm thử persistence"
         )
         duplicate = store.create_booking_request(
             str(snapshot_id), session, None, "live-offer", "ignored duplicate"
         )
         assert duplicate["id"] == request["id"]
         store.update_booking_request(
-            request["id"], "reviewing", "Integration Operator", "ÄÃ£ nháº­n", None
+            request["id"], "reviewing", "Integration Operator", "Đã nhận", None
         )
         handed_off = store.update_booking_request(
             request["id"], "handed_off", "Integration Operator",
-            "ÄÃ£ chuyá»ƒn provider", "provider-case-integration",
+            "Đã chuyển provider", "provider-case-integration",
         )
         assert handed_off["trang_thai"] == "handed_off"
         queued = next(
@@ -116,7 +116,7 @@ def test_durable_booking_support_state_machine(real_services):
 def test_account_erasure_is_atomic_and_removes_owned_plans(real_services):
     store, _ = real_services
     session = f"erase-integration-{uuid4()}"
-    item = store.save(session, {"tieu_de": "Sáº½ xÃ³a", "ngay": []}, {})
+    item = store.save(session, {"tieu_de": "Sẽ xóa", "ngay": []}, {})
     user = store.upsert_user_and_claim(
         "google", f"{session}@example.com", "Erase Test", session, "2026-08-05"
     )
@@ -134,7 +134,7 @@ def test_account_erasure_is_atomic_and_removes_owned_plans(real_services):
 def test_maintenance_removes_expired_anonymous_plan_and_orphans(real_services):
     store, _ = real_services
     session = f"expired-integration-{uuid4()}"
-    item = store.save(session, {"tieu_de": "ÄÃ£ háº¿t háº¡n", "ngay": []}, {})
+    item = store.save(session, {"tieu_de": "Đã hết hạn", "ngay": []}, {})
     with psycopg.connect(DATABASE_URL) as connection:
         connection.execute(
             "UPDATE ke_hoach SET ngay_het_han=now()-interval '1 second' WHERE ma_chia_se=%s",
@@ -156,7 +156,7 @@ def test_reminder_notification_persists_and_is_owner_scoped(real_services):
     store, _ = real_services
     session = f"notification-integration-{uuid4()}"
     request = {"ngay_di": (datetime.now(UTC) + timedelta(days=1)).date().isoformat()}
-    item = store.save(session, {"tieu_de": "Chuyáº¿n sáº¯p Ä‘i", "ngay": []}, request)
+    item = store.save(session, {"tieu_de": "Chuyến sắp đi", "ngay": []}, request)
     try:
         assert store.materialize_due_reminders() >= 1
         notification = next(
@@ -164,7 +164,7 @@ def test_reminder_notification_persists_and_is_owner_scoped(real_services):
             if value["plan_token"] == item.token
         )
         assert notification["da_doc"] is False
-        assert notification["plan_title"] == "Chuyáº¿n sáº¯p Ä‘i"
+        assert notification["plan_title"] == "Chuyến sắp đi"
         assert store.list_notifications("other-session", None) == []
         assert store.mark_notification_read(notification["id"], session, None)["da_doc"] is True
     finally:

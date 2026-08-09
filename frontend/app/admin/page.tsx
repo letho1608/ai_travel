@@ -61,8 +61,8 @@ type AdminDashboard = {
 };
 
 const STATUS_LABELS:Record<string,string> = {
-  requested:"Moi nhan", reviewing:"Dang kiem tra", needs_customer:"Cho khach",
-  handed_off:"Da chuyen provider", cancelled:"Da huy",
+  requested:"Mới nhận", reviewing:"Đang kiểm tra", needs_customer:"Chờ khách",
+  handed_off:"Đã chuyển provider", cancelled:"Đã hủy",
 };
 const OPEN_STATUSES=["requested","reviewing","needs_customer"];
 const LIMIT_LABELS:Record<string,string> = {
@@ -130,17 +130,17 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok) throw new Error(payload.detail||"Khong tai duoc admin dashboard");
+      if(!response.ok) throw new Error(payload.detail||"Không tải được admin dashboard");
       setData(payload);
       setLastLoaded(new Date());
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc admin dashboard");
+      setError(reason instanceof Error?reason.message:"Không tải được admin dashboard");
     }finally{setBusy(false)}
   }
 
   async function move(item:BookingRequest,status:string){
     const owner=assignee.trim();
-    if(!owner){setError("Nhap ten nhan su phu trach truoc khi cap nhat.");return}
+    if(!owner){setError("Nhập tên nhân sự phụ trách trước khi cập nhật.");return}
     setPendingRequest(item.id); setError("");
     const response=await fetch(`${API_URL}/api/support/booking-requests/${item.id}`,{
       method:"PATCH",
@@ -148,13 +148,13 @@ export default function AdminPage(){
       body:JSON.stringify({
         trang_thai:status,
         phu_trach:owner,
-        ghi_chu_noi_bo:notes[item.id]?.trim()||"Updated from admin dashboard",
+        ghi_chu_noi_bo:notes[item.id]?.trim()||"Cập nhật từ admin dashboard",
         provider_reference:status==="handed_off"?(references[item.id]?.trim()||null):null,
       }),
     });
     const payload=await response.json();
     if(!response.ok){
-      setError(payload.detail||"Khong cap nhat duoc yeu cau");
+      setError(payload.detail||"Không cập nhật được yêu cầu");
       setPendingRequest(null);
       return;
     }
@@ -183,7 +183,7 @@ export default function AdminPage(){
       });
       if(!response.ok){
         const payload=await response.json().catch(()=>null);
-        throw new Error(payload?.detail||"Khong xuat duoc catalog CSV");
+        throw new Error(payload?.detail||"Không xuất được catalog CSV");
       }
       const blob=await response.blob();
       const url=URL.createObjectURL(blob);
@@ -193,7 +193,7 @@ export default function AdminPage(){
       anchor.click();
       setTimeout(()=>URL.revokeObjectURL(url),0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong xuat duoc catalog CSV");
+      setError(reason instanceof Error?reason.message:"Không xuất được catalog CSV");
     }finally{setCatalogExportBusy(false)}
   }
 
@@ -206,11 +206,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tim duoc catalog");
+      if(!response.ok)throw new Error(payload.detail||"Không tìm được catalog");
       setCatalogItems(Array.isArray(payload.items)?payload.items:[]);
       setCatalogTotal(typeof payload.total==="number"?payload.total:0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tim duoc catalog");
+      setError(reason instanceof Error?reason.message:"Không tìm được catalog");
     }finally{setCatalogBusy(false)}
   }
 
@@ -222,10 +222,10 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc data quality");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được data quality");
       setData(current=>current?{...current,catalog_quality:payload}:current);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc data quality");
+      setError(reason instanceof Error?reason.message:"Không tải được data quality");
     }finally{setCatalogQualityBusy(false)}
   }
 
@@ -239,11 +239,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc danh sach plan");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được danh sách plan");
       setPlans(Array.isArray(payload.items)?payload.items:[]);
       setPlanTotal(typeof payload.total==="number"?payload.total:0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc danh sach plan");
+      setError(reason instanceof Error?reason.message:"Không tải được danh sách plan");
     }finally{setPlansBusy(false)}
   }
 
@@ -257,11 +257,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc danh sach user");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được danh sách user");
       setUsers(Array.isArray(payload.items)?payload.items:[]);
       setUserTotal(typeof payload.total==="number"?payload.total:0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc danh sach user");
+      setError(reason instanceof Error?reason.message:"Không tải được danh sách user");
     }finally{setUsersBusy(false)}
   }
 
@@ -276,11 +276,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc AI usage");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được AI usage");
       setAiUsage(Array.isArray(payload.items)?payload.items:[]);
       setAiUsageTotal(typeof payload.total==="number"?payload.total:0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc AI usage");
+      setError(reason instanceof Error?reason.message:"Không tải được AI usage");
     }finally{setAiUsageBusy(false)}
   }
 
@@ -292,10 +292,10 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc AI quality");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được AI quality");
       setData(current=>current?{...current,ai_quality:payload}:current);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc AI quality");
+      setError(reason instanceof Error?reason.message:"Không tải được AI quality");
     }finally{setAiQualityBusy(false)}
   }
 
@@ -313,11 +313,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong tai duoc event audit log");
+      if(!response.ok)throw new Error(payload.detail||"Không tải được event audit log");
       setEvents(Array.isArray(payload.items)?payload.items:[]);
       setEventTotal(typeof payload.total==="number"?payload.total:0);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong tai duoc event audit log");
+      setError(reason instanceof Error?reason.message:"Không tải được event audit log");
     }finally{setEventsBusy(false)}
   }
 
@@ -329,11 +329,11 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong chay duoc cleanup");
+      if(!response.ok)throw new Error(payload.detail||"Không chạy được cleanup");
       setMaintenanceMessage(`Removed ${typeof payload.removed_plans==="number"?payload.removed_plans:0} expired plans.`);
       await load();
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong chay duoc cleanup");
+      setError(reason instanceof Error?reason.message:"Không chạy được cleanup");
     }finally{setMaintenanceBusy(false)}
   }
 
@@ -345,27 +345,27 @@ export default function AdminPage(){
         headers:{"X-Admin-Token":token},
       });
       const payload=await response.json();
-      if(!response.ok)throw new Error(payload.detail||"Khong kiem tra duoc provider");
+      if(!response.ok)throw new Error(payload.detail||"Không kiểm tra được provider");
       setData(current=>current?{...current,provider_diagnostics:payload}:current);
     }catch(reason){
-      setError(reason instanceof Error?reason.message:"Khong kiem tra duoc provider");
+      setError(reason instanceof Error?reason.message:"Không kiểm tra được provider");
     }finally{setDiagnosticsBusy(false)}
   }
 
   return <main className="admin-page">
     <div className="eyebrow">Admin console</div>
-    <h1>Quan ly he thong</h1>
-    <p className="lead">Theo doi du lieu, AI, provider, chi phi va hang doi ho tro booking trong mot man hinh rieng cho admin.</p>
+    <h1>Quản lý hệ thống</h1>
+    <p className="lead">Theo dõi dữ liệu, AI, provider, chi phí và hàng đợi hỗ trợ booking trong một màn hình riêng cho admin.</p>
 
     <form className="card admin-login" onSubmit={load}>
       <label>Admin token<input type="password" value={token} onChange={event=>setToken(event.target.value)} autoComplete="current-password" required/></label>
-      <button className="primary" disabled={busy}>{busy?"Dang tai...":"Mo dashboard"}</button>
+      <button className="primary" disabled={busy}>{busy?"Đang tải...":"Mở dashboard"}</button>
     </form>
     {error&&<p className="error" role="alert">{error}</p>}
 
     {data&&<>
       <section className="admin-strip">
-        <article className="card"><span>Environment</span><strong>{data.environment}</strong><small>{data.ready?"Ready":"Can kiem tra"}</small></article>
+        <article className="card"><span>Environment</span><strong>{data.environment}</strong><small>{data.ready?"Ready":"Cần kiểm tra"}</small></article>
         <article className="card"><span>Plans</span><strong>{data.summary.plans}</strong><small>{data.summary.comments} comments</small></article>
         <article className="card"><span>AI cost today</span><strong>${data.summary.daily_ai_cost_usd.toFixed(4)}</strong><small>{data.summary.ai_calls} AI calls</small></article>
         <article className="card"><span>AI deterministic</span><strong>{data.ai_quality.deterministic_rate_percent}%</strong><small>{data.ai_quality.deterministic_plan_count}/{data.ai_quality.total_plans} plans</small></article>
@@ -451,7 +451,7 @@ export default function AdminPage(){
             <span className={`admin-pill ${item.success===false?"down":"ready"}`}>{item.success===false?"failed":"success"}</span>
             <span>{item.created_at?new Date(item.created_at).toLocaleString("vi-VN"):"n/a"}</span>
           </article>)}
-          {aiUsage.length===0&&<p className="disclaimer">Bam Load AI usage de xem lich su goi AI gan day.</p>}
+          {aiUsage.length===0&&<p className="disclaimer">Bấm Load AI usage để xem lịch sử gọi AI gần đây.</p>}
         </div>
       </section>
 
@@ -502,7 +502,7 @@ export default function AdminPage(){
         <form className="admin-catalog-form" onSubmit={searchCatalog}>
           <label>Text<input value={catalogQuery} onChange={event=>setCatalogQuery(event.target.value)} placeholder="name, tag, source"/></label>
           <label>Kind<input value={catalogKind} onChange={event=>setCatalogKind(event.target.value)} placeholder="cafe, dia_danh"/></label>
-          <label>Area<input value={catalogArea} onChange={event=>setCatalogArea(event.target.value)} placeholder="Hoan Kiem"/></label>
+          <label>Area<input value={catalogArea} onChange={event=>setCatalogArea(event.target.value)} placeholder="Hoàn Kiếm"/></label>
           <label>Tag<input value={catalogTag} onChange={event=>setCatalogTag(event.target.value)} placeholder="chill"/></label>
           <button className="primary" disabled={catalogBusy}>{catalogBusy?"Searching...":"Search"}</button>
           <button type="button" className="secondary" disabled={catalogExportBusy} onClick={exportCatalog}>{catalogExportBusy?"Exporting...":"Export CSV"}</button>
@@ -512,7 +512,7 @@ export default function AdminPage(){
           {catalogItems.map(place=><article key={place.id}>
             <strong>{place.name}</strong><span>{place.kind}</span><span>{place.area}</span><span>{place.open_hour}:00-{place.close_hour}:00</span>{place.source_url?<a href={place.source_url} target="_blank" rel="noreferrer">source</a>:<em>missing source</em>}
           </article>)}
-          {catalogItems.length===0&&<p className="disclaimer">Nhap filter va bam Search de xem catalog.</p>}
+          {catalogItems.length===0&&<p className="disclaimer">Nhập filter và bấm Search để xem catalog.</p>}
         </div>
       </section>
 
@@ -528,7 +528,7 @@ export default function AdminPage(){
             <div><strong>{plan.title||plan.token}</strong><small>{plan.summary}</small></div>
             <span>v{plan.version}</span><span>{plan.duration||"n/a"} · {plan.people||"?"} pax</span><span>{plan.language}</span><a href={`/plan/${plan.token}`}>Open</a>
           </article>)}
-          {plans.length===0&&<p className="disclaimer">Bam Load plans de xem cac ke hoach gan day.</p>}
+          {plans.length===0&&<p className="disclaimer">Bấm Load plans để xem các kế hoạch gần đây.</p>}
         </div>
       </section>
 
@@ -549,7 +549,7 @@ export default function AdminPage(){
             <span>{user.feedback} feedback</span>
             <span>{user.notifications} notices</span>
           </article>)}
-          {users.length===0&&<p className="disclaimer">Bam Load users de xem tai khoan va muc su dung.</p>}
+          {users.length===0&&<p className="disclaimer">Bấm Load users để xem tài khoản và mức sử dụng.</p>}
         </div>
       </section>
 
@@ -562,25 +562,25 @@ export default function AdminPage(){
           <button type="button" className="secondary" onClick={()=>load()} disabled={busy||pendingRequest!==null}>Refresh</button>
         </div>
         <div className="admin-controls">
-          <label className="admin-assignee">Nhan su phu trach<input value={assignee} onChange={event=>setAssignee(event.target.value)} placeholder="vd. Trang"/></label>
-          <label className="admin-assignee">Loc trang thai<select value={statusFilter} onChange={event=>setStatusFilter(event.target.value)}><option value="open">Dang mo</option><option value="all">Tat ca</option><option value="requested">Moi nhan</option><option value="reviewing">Dang kiem tra</option><option value="needs_customer">Cho khach</option><option value="handed_off">Da chuyen provider</option><option value="cancelled">Da huy</option></select></label>
+          <label className="admin-assignee">Nhân sự phụ trách<input value={assignee} onChange={event=>setAssignee(event.target.value)} placeholder="vd. Trang"/></label>
+          <label className="admin-assignee">Lọc trạng thái<select value={statusFilter} onChange={event=>setStatusFilter(event.target.value)}><option value="open">Đang mở</option><option value="all">Tất cả</option><option value="requested">Mới nhận</option><option value="reviewing">Đang kiểm tra</option><option value="needs_customer">Chờ khách</option><option value="handed_off">Đã chuyển provider</option><option value="cancelled">Đã hủy</option></select></label>
         </div>
         <div className="offer-grid">
-          {visibleBookings.map(item=><article className="offer-card" key={item.id}>
+          {visibleBookings.map(item=><article className="offer-card card" key={item.id}>
             <div className="eyebrow">{STATUS_LABELS[item.trang_thai]||item.trang_thai} - {item.loai||"inventory"}</div>
             <h2>{item.offer_id}</h2>
-            <p>{item.ghi_chu||"Khach chua de lai ghi chu."}</p>
-            <label className="admin-field">Ghi chu noi bo<input value={notes[item.id]||""} onChange={event=>setNotes(values=>({...values,[item.id]:event.target.value}))} placeholder="Noi dung can luu vao lich su"/></label>
-            <label className="admin-field">Provider reference<input value={references[item.id]||item.provider_reference||""} onChange={event=>setReferences(values=>({...values,[item.id]:event.target.value}))} placeholder="Ma ho so tu provider"/></label>
-            <p className="disclaimer">Tao luc {new Date(item.ngay_tao).toLocaleString("vi-VN")} - booking_confirmed=false</p>
+            <p>{item.ghi_chu||"Khách chưa để lại ghi chú."}</p>
+            <label className="admin-field">Ghi chú nội bộ<input value={notes[item.id]||""} onChange={event=>setNotes(values=>({...values,[item.id]:event.target.value}))} placeholder="Nội dung cần lưu vào lịch sử"/></label>
+            <label className="admin-field">Provider reference<input value={references[item.id]||item.provider_reference||""} onChange={event=>setReferences(values=>({...values,[item.id]:event.target.value}))} placeholder="Mã hồ sơ từ provider"/></label>
+            <p className="disclaimer">Tạo lúc {new Date(item.ngay_tao).toLocaleString("vi-VN")} - booking_confirmed=false</p>
             <div className="support-actions">
-              {item.trang_thai==="requested"&&<button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"reviewing")}>Nhan xu ly</button>}
-              {item.trang_thai==="reviewing"&&<><button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"needs_customer")}>Can khach bo sung</button><button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"handed_off")}>Chuyen provider</button></>}
-              {item.trang_thai==="needs_customer"&&<button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"reviewing")}>Tiep tuc</button>}
-              {OPEN_STATUSES.includes(item.trang_thai)&&<button type="button" disabled={pendingRequest!==null} onClick={()=>move(item,"cancelled")}>Huy</button>}
+              {item.trang_thai==="requested"&&<button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"reviewing")}>Nhận xử lý</button>}
+              {item.trang_thai==="reviewing"&&<><button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"needs_customer")}>Cần khách bổ sung</button><button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"handed_off")}>Chuyển provider</button></>}
+              {item.trang_thai==="needs_customer"&&<button type="button" className="secondary" disabled={pendingRequest!==null} onClick={()=>move(item,"reviewing")}>Tiếp tục</button>}
+              {OPEN_STATUSES.includes(item.trang_thai)&&<button type="button" disabled={pendingRequest!==null} onClick={()=>move(item,"cancelled")}>Hủy</button>}
             </div>
           </article>)}
-          {visibleBookings.length===0&&<p className="disclaimer">Khong co yeu cau phu hop bo loc.</p>}
+          {visibleBookings.length===0&&<p className="disclaimer">Không có yêu cầu phù hợp bộ lọc.</p>}
         </div>
       </section>
 
@@ -596,7 +596,7 @@ export default function AdminPage(){
             <strong>{event.su_kien}</strong><span>{new Date(event.thoi_gian).toLocaleString("vi-VN")}</span>
             <code>{event.ma_phien}</code><small>{JSON.stringify(event.du_lieu).slice(0,180)}</small>
           </article>)}
-          {events.length===0&&data.recent_events.length===0&&<p className="disclaimer">Chua co su kien nao.</p>}
+          {events.length===0&&data.recent_events.length===0&&<p className="disclaimer">Chưa có sự kiện nào.</p>}
         </div>
       </section>
     </>}

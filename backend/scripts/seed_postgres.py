@@ -2,6 +2,11 @@
 
 import json
 import os
+
+import datetime as _dt
+
+if not hasattr(_dt, "UTC"):
+    _dt.UTC = _dt.timezone.utc
 from datetime import UTC, datetime
 from pathlib import Path
 

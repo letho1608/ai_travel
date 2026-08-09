@@ -153,10 +153,11 @@ def test_plan_locale_is_persisted_and_reused_by_swipe_and_regenerate():
     )
     assert regenerated.status_code == 200
     assert regenerated.json()["ke_hoach"]["ngay"][0]["nhan_de"] == "Day 1"
+    assert regenerated.json()["token"] == result["token"]
 
     refined = client.post(
         f"/api/plans/{result['token']}/refine",
-        json={"message": "budget 900000", "phien_ban": 2,
+        json={"message": "budget 900000", "phien_ban": 3,
               "ma_phien": payload["ma_phien"]},
     )
     assert refined.status_code == 200
@@ -213,6 +214,25 @@ def test_regenerate_nonce_is_idempotent():
     assert len(regenerate_bucket) == 1
 
 
+def test_regenerate_stays_in_place_and_preserves_version_chain():
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    import json
+    result = json.loads(next(line for line in generated.text.splitlines() if line.startswith("data: {\"type\""))[6:])
+    token = result["token"]
+    regenerated = client.post(
+        f"/api/plans/{token}/regenerate",
+        json={"ma_phien": PAYLOAD["ma_phien"], "nonce": "in-place-nonce"},
+    )
+    assert regenerated.status_code == 200
+    assert regenerated.json()["token"] == token
+    assert regenerated.json()["phien_ban"] == 2
+    versions = client.get(
+        f"/api/plans/{token}/versions",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+    ).json()["ds_phien_ban"]
+    assert [entry["phien_ban"] for entry in versions] == [2, 1]
+
+
 def test_generate_nonce_replays_existing_plan_without_extra_quota():
     payload = PAYLOAD | {"ma_phien": "generate-nonce-session", "nonce": "same-generate-nonce"}
     first = client.post("/api/plan/generate", json=payload)
@@ -267,6 +287,9 @@ def test_chat_refine_creates_version_and_restore_is_optimistic():
     )
     assert refined.status_code == 200
     assert refined.json()["phien_ban"] == 2
+    stored = store.get(token)
+    assert stored.request["so_nguoi"] == 3
+    assert stored.request["ngan_sach"] == 500000
     versions = client.get(
         f"/api/plans/{token}/versions",
         headers={"X-Session-Id": PAYLOAD["ma_phien"]},
@@ -284,6 +307,41 @@ def test_chat_refine_creates_version_and_restore_is_optimistic():
         json={"phien_ban_hien_tai": 2, "ma_phien": PAYLOAD["ma_phien"]},
     )
     assert stale.status_code == 409
+
+
+def test_chat_refine_persists_conversation_and_echoes_constraints():
+    generated = client.post("/api/plan/generate", json=PAYLOAD)
+    result = json.loads(
+        next(line for line in generated.text.splitlines() if line.startswith('data: {"type"'))[6:]
+    )
+    token = result["token"]
+
+    detail = client.get(f"/api/plans/{token}").json()
+    assert detail["tham_so"]["ngan_sach"] == PAYLOAD["ngan_sach"]
+    assert detail["tham_so"]["so_nguoi"] == PAYLOAD["so_nguoi"]
+    assert detail["tham_so"]["thoi_luong"] == PAYLOAD["thoi_luong"]
+
+    refined = client.post(
+        f"/api/plans/{token}/refine",
+        json={"message": "di 4 người, ngân sách tối đa 500k", "phien_ban": 1,
+              "ma_phien": PAYLOAD["ma_phien"]},
+    )
+    assert refined.status_code == 200
+    body = refined.json()
+    assert body["tham_so"]["so_nguoi"] == 4
+    assert body["tham_so"]["ngan_sach"] == 500000
+    assert len(body["hoi_thoai"]) >= 3
+    roles = [turn["vai_tro"] for turn in body["hoi_thoai"]]
+    assert roles[-1] == "assistant"
+    assert any(turn["noi_dung"] == PAYLOAD["context"] for turn in body["hoi_thoai"])
+
+    reloaded = client.get(f"/api/plans/{token}").json()
+    assert any(
+        turn["noi_dung"] == "di 4 người, ngân sách tối đa 500k"
+        for turn in reloaded["ke_hoach"].get("hoi_thoai", [])
+    )
+    assert isinstance(reloaded["ke_hoach"].get("ngay_cap_nhat"), str)
+    assert reloaded["ke_hoach"]["ngay_cap_nhat"] >= detail["ke_hoach"]["ngay_cap_nhat"]
 
 
 def test_quick_refine_cheaper_reduces_saved_budget():

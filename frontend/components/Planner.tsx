@@ -65,10 +65,10 @@ export default function Planner() {
 
   function inferDuration(value: string) {
     const normalized = normalizeText(value);
-    if (/(?:nhieu ngay|2 ngay|hai ngay|3 ngay|ba ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
+    if (/(?:vai ngay|2 ngay|hai ngay|3 ngay|ba ngay|4 ngay|bon ngay|nhieu ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
     if (/(?:vai gio|2 gio|3 gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
-    if (/(?:nua ngay|half day|buoi sang|buoi chieu)/.test(normalized)) return "nua_ngay";
-    if (/(?:ca ngay|mot ngay|1 ngay|nguyen ngay|full day|one day|buoi toi|toi|dem|evening|night)/.test(normalized)) return "ca_ngay";
+    if (/(?:nua ngay|half day|buoi sang|buoi chieu|morning|afternoon)/.test(normalized)) return "nua_ngay";
+    if (/(?:ca ngay|mot ngay|1 ngay|nguyen ngay|full day|one day|cuoi tuan|weekend)/.test(normalized)) return "ca_ngay";
     return null;
   }
 
@@ -119,6 +119,14 @@ export default function Planner() {
           nonce,
         }),
       });
+      if (response.status === 401) {
+        try {
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("ma_phien");
+        } catch {}
+        window.location.href = "/login";
+        return;
+      }
       const result = await consumePlanStream(response, (value) => {
         if (mounted.current) setStatusKey(safeStatusKey(value));
       });
@@ -149,7 +157,11 @@ export default function Planner() {
 
   return (
     <form className="planner" onSubmit={submit}>
-      <div className="chips">
+      <div className="chat-welcome">
+        <span className="assistant-dot" />
+        <p className="bubble assistant">{t("chatWelcome")}</p>
+      </div>
+      <div className="quick-actions" aria-label={t("dayPrompt")}>
         {ideaKeys.map((key) => {
           const idea = t(key);
           return (
@@ -169,21 +181,27 @@ export default function Planner() {
           );
         })}
       </div>
-      <label htmlFor="planner-context">{t("dayPrompt")}</label>
-      <textarea
-        id="planner-context"
-        value={context}
-        maxLength={500}
-        onChange={(event) => {
-          setContext(event.target.value);
-          setNeedsDuration(false);
-        }}
-        required
-        disabled={busy}
-      />
+      <div className="chat-box">
+        <input
+          id="planner-context"
+          value={context}
+          maxLength={500}
+          onChange={(event) => {
+            setContext(event.target.value);
+            setNeedsDuration(false);
+          }}
+          placeholder={t("chatPlaceholder")}
+          aria-label={t("chatPlaceholder")}
+          required
+          disabled={busy}
+        />
+        <button type="submit" disabled={busy} aria-label={t("sendChat")}>
+          ↑
+        </button>
+      </div>
       {needsDuration && (
-        <div className="status" role="status" aria-live="polite">
-          Bạn muốn đi trong bao lâu? Hãy thêm vào mô tả: vài giờ, nửa ngày, cả ngày, buổi tối hoặc 2 ngày.
+        <div className="status duration-ask" role="status" aria-live="polite">
+          {t("dayPrompt")} {t("durationLabel")}: {t("fewHours")}, {t("halfDay")}, {t("fullDay")} {t("multiDay")}
         </div>
       )}
       <label htmlFor="planner-people">{t("peopleLabel")}</label>
@@ -198,9 +216,6 @@ export default function Planner() {
         required
         disabled={busy}
       />
-      <button className="primary" disabled={busy}>
-        {busy ? t("creatingPlan") : t("createPlan")}
-      </button>
       {statusKey && (
         <div className="status" role="status" aria-live="polite">
           {t(statusKey)}

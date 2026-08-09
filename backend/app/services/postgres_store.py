@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import json
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
 
-from app.services.store import StoredPlan
+if TYPE_CHECKING:
+    from app.services.store import StoredPlan
 
 
 class PostgresStore:
@@ -26,6 +30,8 @@ class PostgresStore:
     def _record(row: dict | None) -> StoredPlan | None:
         if not row:
             return None
+        from app.services.store import StoredPlan
+
         return StoredPlan(
             token=str(row["ma_chia_se"]), session_id=row["ma_phien"], plan=row["du_lieu"],
             request=row["yeu_cau"], version=row["phien_ban"], expires_at=row["ngay_het_han"],
