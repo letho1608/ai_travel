@@ -376,6 +376,7 @@ def _choose_meal_place(
     meal_type: str,
     seed: int,
     budget_per_person: int,
+    excluded_names: set[str] | None = None,
 ) -> Place | None:
     start_h, _, end_h, _ = MEAL_WINDOWS[meal_type]
     food_profile = INTENT_PROFILES["food"]
@@ -383,6 +384,7 @@ def _choose_meal_place(
         place
         for place in PLACES
         if place.id not in excluded
+        and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
         and _is_dining_place(place)
         and place.cost <= budget_per_person
         and not _looks_like_non_travel_business(place)
@@ -411,11 +413,13 @@ def _choose_extra_sight(
     anchor: tuple[float, float],
     seed: int,
     budget_per_person: int,
+    excluded_names: set[str] | None = None,
 ) -> Place | None:
     pool = [
         place
         for place in PLACES
         if place.id not in excluded
+        and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
         and place.kind in SIGHT_KINDS
         and place.cost <= budget_per_person
         and not _looks_like_non_travel_business(place)
@@ -442,11 +446,13 @@ def _choose_refreshment(
     anchor: tuple[float, float],
     seed: int,
     budget_per_person: int,
+    excluded_names: set[str] | None = None,
 ) -> Place | None:
     pool = [
         place
         for place in PLACES
         if place.id not in excluded
+        and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
         and place.kind == "cafe"
         and place.cost <= budget_per_person
         and not _looks_like_non_travel_business(place)
@@ -458,6 +464,7 @@ def _choose_refreshment(
             place
             for place in PLACES
             if place.id not in excluded
+            and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
             and place.kind == "quan_an"
             and "an_vat" in place.tags
             and place.cost <= budget_per_person
@@ -511,12 +518,14 @@ def _choose_midday_rest(
     anchor: tuple[float, float],
     seed: int,
     budget_per_person: int,
+    excluded_names: set[str] | None = None,
 ) -> Place | None:
     """Quiet cafe/snack stop to bridge the hot early afternoon."""
     pool = [
         place
         for place in PLACES
         if place.id not in excluded
+        and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
         and place.kind == "cafe"
         and place.cost <= budget_per_person
         and not _looks_like_non_travel_business(place)
@@ -529,6 +538,7 @@ def _choose_midday_rest(
             place
             for place in PLACES
             if place.id not in excluded
+            and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
             and place.kind == "quan_an"
             and "an_vat" in place.tags
             and place.cost <= budget_per_person
@@ -554,6 +564,7 @@ def _choose_evening_place(
     anchor: tuple[float, float],
     seed: int,
     budget_per_person: int,
+    excluded_names: set[str] | None = None,
 ) -> Place | None:
     by_id = {place.id: place for place in PLACES}
 
@@ -563,6 +574,7 @@ def _choose_evening_place(
             for place_id in ids
             if (place := by_id.get(place_id))
             and place.id not in excluded
+            and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
             and place.cost <= budget_per_person
             and is_routable(place)
         ]
@@ -582,6 +594,7 @@ def _choose_evening_place(
             place
             for place in PLACES
             if place.id not in excluded
+            and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
             and _is_evening_place(place)
             and not _is_dining_place(place)
             and place.cost <= budget_per_person
@@ -603,43 +616,54 @@ def _build_day_route(
     used: set[str],
     remaining_budget: int,
     seed: int,
+    used_names: set[str],
 ) -> list[tuple[Place, str | None]]:
     if request.thoi_luong != "vai_gio":
         route = _interleave_meals(day_sights, day_meals)
         anchor = _anchor_for_places(day_sights, (request.location.lat, request.location.lng))
         lunch_at = next((i for i, (_, meal) in enumerate(route) if meal == "trua"), None)
         if request.thoi_luong in {"ca_ngay", "nhieu_ngay"} and remaining_budget > 0 and lunch_at is not None:
-            rest = _choose_midday_rest(request, used, anchor, seed, remaining_budget)
+            rest = _choose_midday_rest(request, used, anchor, seed, remaining_budget, used_names)
             if rest:
                 route.insert(lunch_at + 1, (rest, "nghi"))
                 used.add(rest.id)
+                if name_key := _place_name_key(rest):
+                    used_names.add(name_key)
                 remaining_budget -= rest.cost
             # Keep one more afternoon attraction when the day still looks thin.
             if len(day_sights) + len(day_meals) <= 5:
-                extra = _choose_extra_sight(request, used, anchor, seed + 1, remaining_budget)
+                extra = _choose_extra_sight(request, used, anchor, seed + 1, remaining_budget, used_names)
                 if extra:
                     insert_at = lunch_at + (2 if rest else 1)
                     route.insert(insert_at, (extra, None))
                     used.add(extra.id)
+                    if name_key := _place_name_key(extra):
+                        used_names.add(name_key)
                     remaining_budget -= extra.cost
         # Always add an evening stop after dinner for full/multi-day trips.
         if request.thoi_luong in {"ca_ngay", "nhieu_ngay"}:
             has_evening = any(meal_type == "dem" or (meal_type is None and _is_evening_place(place)) for place, meal_type in route)
             if not has_evening:
                 evening = _choose_evening_place(
-                    request, used, anchor, seed + 3, max(remaining_budget, 0)
+                    request, used, anchor, seed + 3, max(remaining_budget, 0), used_names
                 )
                 if evening:
                     dinner_at = next((i for i, (_, meal) in enumerate(route) if meal == "toi"), None)
                     insert_at = (dinner_at + 1) if dinner_at is not None else len(route)
                     route.insert(insert_at, (evening, "dem"))
                     used.add(evening.id)
+                    if name_key := _place_name_key(evening):
+                        used_names.add(name_key)
         return route
     sights = day_sights[:2]
     anchor = _anchor_for_places(sights, (request.location.lat, request.location.lng))
     refresh = None
     if _wants_coffee(request) or request.thoi_luong == "vai_gio":
-        refresh = _choose_refreshment(request, used, anchor, seed, remaining_budget)
+        refresh = _choose_refreshment(request, used, anchor, seed, remaining_budget, used_names)
+        if refresh:
+            used.add(refresh.id)
+            if name_key := _place_name_key(refresh):
+                used_names.add(name_key)
     if not day_meals:
         return [(place, None) for place in sights]
     lunch_type, lunch_place = day_meals[0]
@@ -697,16 +721,19 @@ def _pick_day_meals(
     used: set[str],
     budget_per_person: int,
     seed: int,
+    used_names: set[str],
 ) -> list[tuple[str, Place]]:
     anchor = _anchor_for_places(day_sights, (request.location.lat, request.location.lng))
     meals: list[tuple[str, Place]] = []
     remaining = budget_per_person
     for meal_type in _meals_per_day(request.thoi_luong):
-        place = _choose_meal_place(request, used, anchor, meal_type, seed, remaining)
+        place = _choose_meal_place(request, used, anchor, meal_type, seed, remaining, used_names)
         if not place:
             continue
         meals.append((meal_type, place))
         used.add(place.id)
+        if name_key := _place_name_key(place):
+            used_names.add(name_key)
         remaining -= place.cost
     return meals
 
@@ -1046,6 +1073,9 @@ def _pack_day_slots(
         name_key = _place_name_key(place)
         if name_key:
             scheduled_names.add(name_key)
+            remaining = [
+                item for item in remaining if _place_name_key(item[0]) != name_key
+            ]
         cursor = end
         previous = place
     slots = _tighten_day_gaps(slots, day_end)
@@ -1152,35 +1182,46 @@ def _backfill_day_gaps(
         travel_out = travel_minutes(prev_place, prev_place)  # noop placeholder
         del travel_out
         anchor = (prev_place.lat, prev_place.lng)
-        candidate = _choose_extra_sight(
-            request,
-            used_ids | scheduled_ids,
-            anchor,
-            seed + index + len(slots),
-            remaining_budget,
-        )
-        if not candidate:
-            index += 1
-            continue
-        travel = travel_minutes(prev_place, candidate)
-        arrive = cursor + timedelta(minutes=travel)
-        bounds = _compute_slot_bounds(candidate, None, arrive, day_start, day_end, request)
-        if not bounds:
-            bounds = _compute_slot_bounds(
-                candidate, None, arrive, day_start, day_end, request, relax=True
-            )
-        if not bounds:
-            index += 1
-            continue
-        start, end, _visit = bounds
-        # Must leave travel time to the next stop.
-        travel_next = travel_minutes(candidate, next_place)
         next_start = day_start.replace(
             hour=int(nxt["bat_dau"][:2]), minute=int(nxt["bat_dau"][3:5])
         )
-        if end + timedelta(minutes=travel_next) > next_start:
+        attempted_ids: set[str] = set()
+        attempted_names: set[str] = set()
+        candidate = None
+        bounds = None
+        while True:
+            option = _choose_extra_sight(
+                request,
+                used_ids | scheduled_ids | attempted_ids,
+                anchor,
+                seed + index + len(slots),
+                remaining_budget,
+                scheduled_names | attempted_names,
+            )
+            if not option:
+                break
+            attempted_ids.add(option.id)
+            if option_name := _place_name_key(option):
+                attempted_names.add(option_name)
+            travel = travel_minutes(prev_place, option)
+            arrive = cursor + timedelta(minutes=travel)
+            option_bounds = _compute_slot_bounds(
+                option, None, arrive, day_start, day_end, request
+            ) or _compute_slot_bounds(
+                option, None, arrive, day_start, day_end, request, relax=True
+            )
+            if not option_bounds:
+                continue
+            _start, option_end, _visit = option_bounds
+            if option_end + timedelta(minutes=travel_minutes(option, next_place)) > next_start:
+                continue
+            candidate = option
+            bounds = option_bounds
+            break
+        if not candidate or not bounds:
             index += 1
             continue
+        start, end, _visit = bounds
         mo_ta, ghi_chu = _slot_copy(
             candidate, request, copy, llm_details_by_id.get(candidate.id), None, labels
         )
@@ -1733,6 +1774,11 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     total_cost = 0
     scheduled_ids: set[str] = set()
     scheduled_names: set[str] = set()
+    used_names = {
+        name_key
+        for place in sight_chosen
+        if (name_key := _place_name_key(place))
+    }
 
     for day_index, day_sights in enumerate(sight_by_day, start=1):
         day_meals = _pick_day_meals(
@@ -1741,6 +1787,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             used_ids,
             remaining_budget,
             seed + day_index,
+            used_names,
         )
         meal_places.extend(place for _, place in day_meals)
         for _, place in day_meals:
@@ -1752,6 +1799,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             used_ids,
             remaining_budget,
             seed + day_index,
+            used_names,
         )
         refreshment = [
             place

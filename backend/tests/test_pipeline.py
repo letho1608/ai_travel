@@ -127,8 +127,95 @@ def test_plan_never_repeats_same_place_name():
         ids = [slot["dia_diem_id"] for slot in slots]
         names = [slot["ten_dia_diem"] for slot in slots]
         assert len(ids) == len(set(ids))
-        assert len(names) == len(set(names))
+        normalized_names = [
+            planner._place_name_key(replace(PLACES[0], name=name)) for name in names
+        ]
+        assert len(normalized_names) == len(set(normalized_names))
         assert names.count("Lăng Chủ tịch Hồ Chí Minh") <= 1
+
+
+def test_place_name_dedupe_uses_accent_case_and_spacing_normalization():
+    first = replace(PLACES[0], id="alias-one", name="  Café   Đinh ")
+    alias = replace(PLACES[0], id="alias-two", name="cafe dinh")
+    distinct = replace(PLACES[0], id="distinct", name="Café Phố Cổ")
+
+    deduped = planner._dedupe_places([first, alias, distinct])
+
+    assert len(deduped) == 2
+    assert {planner._place_name_key(place) for place in deduped} == {
+        "cafe dinh",
+        "cafe pho co",
+    }
+
+
+def test_extra_candidate_skips_used_name_alias_and_tries_next(monkeypatch):
+    alias = replace(
+        PLACES[0],
+        id="alias-nearest",
+        name="  Café   Đinh ",
+        kind="dia_danh",
+        lat=21.0285,
+        lng=105.8542,
+        source="curated",
+    )
+    fallback = replace(
+        PLACES[0],
+        id="different-next",
+        name="Văn Miếu",
+        kind="dia_danh",
+        lat=21.03,
+        lng=105.85,
+        source="curated",
+    )
+    monkeypatch.setattr(planner, "PLACES", [alias, fallback])
+
+    chosen = planner._choose_extra_sight(
+        request(),
+        set(),
+        (21.0285, 105.8542),
+        1,
+        1_000_000,
+        {"cafe dinh"},
+    )
+
+    assert chosen is not None
+    assert chosen.id == "different-next"
+
+
+def test_backfill_tries_next_candidate_when_first_cannot_fit(monkeypatch):
+    day_start = planner.datetime(2026, 8, 10, 8)
+    previous = replace(PLACES[0], id="previous", name="Điểm đầu")
+    following = replace(PLACES[0], id="following", name="Điểm cuối")
+    cannot_fit = replace(PLACES[0], id="cannot-fit", name="Không vừa giờ")
+    fits = replace(PLACES[0], id="fits", name="Điểm thay thế")
+    monkeypatch.setattr(planner, "PLACES", [previous, following, cannot_fit, fits])
+
+    def choose(*args, **kwargs):
+        excluded = args[1]
+        return fits if cannot_fit.id in excluded else cannot_fit
+
+    def bounds(place, _meal, _arrive, *_args, **_kwargs):
+        if place.id == cannot_fit.id:
+            return None
+        return day_start.replace(hour=10), day_start.replace(hour=10, minute=30), 30
+
+    monkeypatch.setattr(planner, "_choose_extra_sight", choose)
+    monkeypatch.setattr(planner, "_compute_slot_bounds", bounds)
+    monkeypatch.setattr(planner, "travel_minutes", lambda *_args: 5)
+    monkeypatch.setattr(planner, "_slot_copy", lambda *_args: ("Mô tả", "Ghi chú"))
+    monkeypatch.setattr(planner, "image_for", lambda *_args: (None, None))
+    monkeypatch.setattr(planner, "_tighten_day_gaps", lambda slots, _end: slots)
+    slots = [
+        {"bat_dau": "08:00", "ket_thuc": "09:00", "dia_diem_id": previous.id},
+        {"bat_dau": "12:00", "ket_thuc": "13:00", "dia_diem_id": following.id},
+    ]
+
+    result, _ = planner._backfill_day_gaps(
+        slots, day_start, 600, request(), COPY["vi"], {}, planner._meal_labels("vi"),
+        {previous.id, following.id}, {"diem dau", "diem cuoi"}, set(), 1_000_000, 1, 5,
+    )
+
+    assert [slot["dia_diem_id"] for slot in result] == [previous.id, fits.id, following.id]
 
 
 def test_plan_has_one_valid_route_with_trusted_places():
