@@ -1390,13 +1390,19 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     return highlights + [place for place in ordered if place.id not in highlight_ids]
 
 
-def validate_plan(plan: dict, trusted_ids: set[str], request: PlanRequest | None = None) -> list[str]:
+def validate_plan(
+    plan: dict,
+    trusted_ids: set[str],
+    request: PlanRequest | None = None,
+    *,
+    allow_below_minimum: bool = False,
+) -> list[str]:
     errors: list[str] = []
     slots = [slot for day in plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
     thoi_luong = (request.thoi_luong if request else plan.get("thoi_luong")) or "ca_ngay"
     min_slots = _min_plan_slots(thoi_luong) if thoi_luong in LIMITS else 4
     max_slots = _max_plan_slots(thoi_luong) if thoi_luong in LIMITS else 10
-    if not min_slots <= len(slots) <= max_slots:
+    if (not allow_below_minimum and len(slots) < min_slots) or len(slots) > max_slots:
         errors.append(f"Kế hoạch phải có {min_slots}–{max_slots} địa điểm")
     if any(slot.get("dia_diem_id") not in trusted_ids for slot in slots):
         errors.append("Có địa điểm ngoài danh sách tin cậy")

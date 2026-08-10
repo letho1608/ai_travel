@@ -357,6 +357,18 @@ def test_validator_rejects_hallucinated_place():
     assert "Có địa điểm ngoài danh sách tin cậy" in validate_plan(plan, set())
 
 
+def test_delete_validation_relaxes_only_minimum_cardinality():
+    payload = request()
+    plan = build_plan(payload)
+    slot = plan["ngay"][0]["khoang_gio"][0]
+    for day in plan["ngay"]:
+        day["khoang_gio"] = []
+    plan["ngay"][0]["khoang_gio"] = [slot]
+    assert validate_plan(plan, {slot["dia_diem_id"]}, payload, allow_below_minimum=True) == []
+    slot["dia_diem_id"] = "fake"
+    assert validate_plan(plan, set(), payload, allow_below_minimum=True)
+
+
 def test_all_duration_modes_are_supported():
     from app.pipeline.planner import _max_plan_slots, _min_plan_slots
 

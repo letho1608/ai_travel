@@ -14,6 +14,12 @@ function MapLoading(){const {t}=useLocale();return <div className="card map">{t(
 const MapView=dynamic(()=>import("./MapView"),{ssr:false,loading:()=> <MapLoading/>});
 type BusyAction="save"|"copy"|"download"|"swipe"|"refine"|"versions"|"restore"|"comment"|"resolve"|"feedback"|"regenerate";
 type Version={phien_ban:number;ly_do?:string;ngay_tao?:string};
+type ReplacementCandidate = {
+  id: string;
+  ten: string;
+  loai: string;
+  khu_vuc: string;
+};
 type UiMessage={key:WorkspaceTranslationKey;values?:Record<string,string|number>};
 type ChatItem={role:"assistant"|"user";text?:string;key?:WorkspaceTranslationKey};
 const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==="object"&&value!==null;
@@ -23,6 +29,14 @@ const isDay=(value:unknown)=>isRecord(value)&&typeof value.thu_tu==="number"&&Nu
 const isPlan=(value:unknown):value is Plan=>isRecord(value)&&typeof value.tieu_de==="string"&&typeof value.tom_tat==="string"&&typeof value.chi_phi_moi_nguoi==="number"&&Number.isFinite(value.chi_phi_moi_nguoi)&&Array.isArray(value.ngay)&&value.ngay.length<=31&&value.ngay.every(isDay)&&isRecord(value.thoi_tiet)&&typeof value.thoi_tiet.tinh_trang==="string"&&typeof value.thoi_tiet.ghi_chu==="string";
 const isComment=(value:unknown):value is Comment=>isRecord(value)&&typeof value.id==="string"&&typeof value.ten_hien_thi==="string"&&typeof value.noi_dung==="string"&&typeof value.da_giai_quyet==="boolean"&&typeof value.ngay_tao==="string";
 const isVersion=(value:unknown):value is Version=>isRecord(value)&&typeof value.phien_ban==="number"&&Number.isInteger(value.phien_ban)&&value.phien_ban>0&&(value.ly_do===undefined||typeof value.ly_do==="string")&&(value.ngay_tao===undefined||typeof value.ngay_tao==="string");
+const isReplacementCandidate = (
+  value: unknown,
+): value is ReplacementCandidate =>
+  isRecord(value) &&
+  typeof value.id === "string" &&
+  typeof value.ten === "string" &&
+  typeof value.loai === "string" &&
+  typeof value.khu_vuc === "string";
 const parseReplyKey=(value:unknown):WorkspaceTranslationKey|undefined=>value==="swipeSuccess"||value==="assistantWelcome"||value==="refineApplied"?value:undefined;
 const isThamSo=(value:unknown):value is ThamSo=>isRecord(value)&&typeof value.ngan_sach==="number"&&Number.isFinite(value.ngan_sach)&&typeof value.so_nguoi==="number"&&Number.isInteger(value.so_nguoi)&&typeof value.thoi_luong==="string";
 const toChatItems=(value:unknown):ChatItem[]=>Array.isArray(value)&&value.length>0&&value.every(item=>isRecord(item)&&(item.vai_tro==="user"||item.vai_tro==="assistant")&&typeof item.noi_dung==="string")?value.map(item=>({role:item.vai_tro==="user"?"user":"assistant",text:item.noi_dung})):[];
@@ -82,7 +96,12 @@ export default function PlanView({initial,token,version,constraints:initialConst
   const [constraints,setConstraints]=useState<ThamSo|null>(initialConstraints??null);
   const [unit,setUnit]=useState<"metric"|"imperial">("metric");
   const [brokenImages,setBrokenImages]=useState<Set<string>>(new Set());
-  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version);
+  const [changeFor, setChangeFor] = useState<string | null>(null),
+    [customSearch, setCustomSearch] = useState(false),
+    [searchText, setSearchText] = useState(""),
+    [suggestions, setSuggestions] = useState<ReplacementCandidate[]>([]),
+    [searchStatus,setSearchStatus]=useState<"idle"|"loading"|"empty"|"error">("idle");
+  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),changeTrigger=useRef<HTMLButtonElement|null>(null);
   const slots=useMemo(()=>plan.ngay[activeDay]?.khoang_gio??[],[plan,activeDay]);
   const money=useMemo(()=>new Intl.NumberFormat(locale,{style:"currency",currency:"VND",maximumFractionDigits:0}),[locale]);
   const date=useMemo(()=>new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short"}),[locale]);
@@ -95,21 +114,96 @@ export default function PlanView({initial,token,version,constraints:initialConst
   useEffect(()=>{const activeControllers=controllers.current;mounted.current=true;return()=>{mounted.current=false;activeControllers.forEach(controller=>controller.abort());activeControllers.clear()}},[]);
   useLayoutEffect(()=>{currentToken.current=token},[token]);
   useEffect(()=>()=>{controllers.current.forEach(controller=>controller.abort());controllers.current.clear()},[token]);
-  useEffect(()=>{busyRef.current=null;setBusy(null);setPlan(initial);setVer(version);verRef.current=version;setSelectedId(initial.ngay[0]?.khoang_gio[0]?.dia_diem_id);setActiveDay(0);setVersions([]);setShowVersions(false);setComments([]);setShowComments(false);setShowFeedback(false);setMessage(null);setConstraints(initialConstraints??null);setConversation(toChatItems(initial.hoi_thoai).length>0?toChatItems(initial.hoi_thoai):[{role:"assistant",key:"assistantWelcome"}])},[token,initial,version,initialConstraints]);
+  useEffect(()=>{busyRef.current=null;setBusy(null);setPlan(initial);setVer(version);verRef.current=version;setSelectedId(initial.ngay[0]?.khoang_gio[0]?.dia_diem_id);setActiveDay(0);setVersions([]);setShowVersions(false);setComments([]);setShowComments(false);setShowFeedback(false);setChangeFor(null);setCustomSearch(false);setSearchText("");setSuggestions([]);setMessage(null);setConstraints(initialConstraints??null);setConversation(toChatItems(initial.hoi_thoai).length>0?toChatItems(initial.hoi_thoai):[{role:"assistant",key:"assistantWelcome"}])},[token,initial,version,initialConstraints]);
   useEffect(()=>{const next=t("companion");setCommentName(current=>current===previousCompanion.current?next:current);previousCompanion.current=next},[locale,t]);
   useEffect(()=>{const sync=()=>setUnit(preferredUnit());sync();window.addEventListener("travel-preferences-changed",sync);return()=>window.removeEventListener("travel-preferences-changed",sync)},[]);
   useEffect(()=>{setActiveDay(day=>Math.min(day,Math.max(0,plan.ngay.length-1)))},[plan.ngay.length]);
   useEffect(()=>{const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);let active=true;(async()=>{try{const response=await fetch(`${API_URL}/api/plans/${token}/comments`,{signal:controller.signal,headers:{"X-Session-Id":getSession()}});const data=await safeJson(response);if(!response.ok||!isRecord(data)||!Array.isArray(data.ds_binh_luan)||!data.ds_binh_luan.every(isComment))throw new Error();if(active&&mounted.current)setComments(data.ds_binh_luan)}catch(error){if(active&&mounted.current)setMessage(current=>current??{key:"commentsFailed"})}})();return()=>{active=false;clearTimeout(timeout);controller.abort()}},[token]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(null),5000);return()=>clearTimeout(timer)},[message]);
+  useEffect(()=>{if(!changeFor)return;document.querySelector<HTMLButtonElement>(`#change-${CSS.escape(changeFor)} .change-choice`)?.focus();const dismiss=(event:KeyboardEvent|MouseEvent)=>{if(event instanceof KeyboardEvent&&event.key!=="Escape")return;const menu=document.getElementById(`change-${changeFor}`);if(event instanceof MouseEvent&&(menu?.contains(event.target as Node)||changeTrigger.current?.contains(event.target as Node)))return;setChangeFor(null);setCustomSearch(false);searchGeneration.current+=1;changeTrigger.current?.focus()};document.addEventListener("keydown",dismiss);document.addEventListener("mousedown",dismiss);return()=>{document.removeEventListener("keydown",dismiss);document.removeEventListener("mousedown",dismiss)}},[changeFor]);
 
   async function copy(){if(!start("copy"))return;const url=publicShareUrl(token);try{const result=await shareViaApi(url,plan.tieu_de,plan.tom_tat);if(result==="shared"){setMessage({key:"shared"})}else if(result==="cancelled"){setMessage(null)}else{setMessage({key:await copyShareLink(url)?"copied":"copyFailed"})}}catch{setMessage({key:"copyFailed"})}finally{finish()}}
   function saveOffline(){if(!start("save"))return;try{localStorage.setItem(`offline-plan:${token}`,JSON.stringify({plan,version:ver,savedAt:new Date().toISOString()}));setMessage({key:"planSaved"})}catch{setMessage({key:"offlineSaveFailed"})}finally{finish()}}
   function downloadJson(){if(!start("download"))return;let url:string|null=null,anchor:HTMLAnchorElement|null=null;try{const blob=new Blob([JSON.stringify(plan,null,2)],{type:"application/json"});url=URL.createObjectURL(blob);anchor=document.createElement("a");anchor.href=url;anchor.download=`itinerary-${token}.json`;anchor.style.display="none";document.body.appendChild(anchor);anchor.click()}catch{fail("actionFailed")}finally{anchor?.remove();if(url)URL.revokeObjectURL(url);finish()}}
-  async function swipe(id:string){if(!start("swipe"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/swipe`,{method:"PATCH",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader()},body:JSON.stringify({diem_bi_loai:id,phien_ban:verRef.current,ma_phien:session})}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach_moi)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=0)throw new Error();if(!active())return null;const oldIds=new Set(plan.ngay.flatMap(day=>day.khoang_gio).map(slot=>slot.dia_diem_id));const replacement=data.ke_hoach_moi.ngay.flatMap(day=>day.khoang_gio).find(slot=>!oldIds.has(slot.dia_diem_id));const nextConversation=toChatItems(data.hoi_thoai);setPlan(data.ke_hoach_moi);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(replacement?.dia_diem_id??data.ke_hoach_moi.ngay[0]?.khoang_gio[0]?.dia_diem_id);setConversation(nextConversation.length>0?nextConversation:items=>[...items,{role:"assistant",key:"swipeSuccess"}]);setMessage({key:"swipeSuccess"});return replacement?.ten_dia_diem??null}catch{fail("actionFailed");return null}finally{finish()}}
+  async function swipe(id: string, replacementId?:string){if(!start("swipe"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/swipe`,{method:"PATCH",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader(),},body:JSON.stringify({diem_bi_loai:id,dia_diem_thay_the: replacementId,phien_ban:verRef.current,ma_phien:session,}),}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach_moi)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=verRef.current)throw new Error();if(!active())return null;const oldIds=new Set(plan.ngay.flatMap((day)=>day.khoang_gio).map((slot)=>slot.dia_diem_id),);const replacement=data.ke_hoach_moi.ngay.flatMap((day)=>day.khoang_gio).find((slot)=>!oldIds.has(slot.dia_diem_id));const nextConversation=toChatItems(data.hoi_thoai);setPlan(data.ke_hoach_moi);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(replacement?.dia_diem_id??data.ke_hoach_moi.ngay[0]?.khoang_gio[0]?.dia_diem_id,
+      );
+      setChangeFor(null);
+      setCustomSearch(false);
+      setSuggestions([]);setConversation(nextConversation.length>0?nextConversation:(items)=>[...items,{role:"assistant",key:"swipeSuccess"}],);setMessage({key:"swipeSuccess"});return replacement?.ten_dia_diem??null;}catch{fail("actionFailed");return null;}finally{finish();
+    }
+  }
+  async function searchReplacements(id: string, query = searchText) {
+    const generation=++searchGeneration.current;
+    setSearchStatus("loading");
+    const session = getSession();
+    try {
+      const response = await request(
+          `${API_URL}/api/plans/${token}/replacement-candidates?diem_bi_loai=${encodeURIComponent(id)}&q=${encodeURIComponent(query.trim())}`,
+          { headers: { "X-Session-Id": session, ...authHeader() } },
+        ),
+        data = await safeJson(response);
+      if (
+        !response.ok ||
+        !isRecord(data) ||
+        !Array.isArray(data.goi_y) ||
+        !data.goi_y.every(isReplacementCandidate)
+      )
+        throw new Error();
+      if (active()&&generation===searchGeneration.current&&changeFor===id){setSuggestions(data.goi_y);setSearchStatus(data.goi_y.length?"idle":"empty")}
+    } catch {
+      if(generation===searchGeneration.current){setSuggestions([]);setSearchStatus("error")}
+    }
+  }
+  async function deleteSlot(slot: Slot) {
+    if (
+      !window.confirm(t("deletePlaceConfirm", { place: slot.ten_dia_diem })) ||
+      !start("swipe")
+    )
+      return;
+    const session = getSession();
+    try {
+      const response = await request(`${API_URL}/api/plans/${token}/slots`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Session-Id": session,
+            ...authHeader(),
+          },
+          body: JSON.stringify({
+            dia_diem_id: slot.dia_diem_id,
+            phien_ban: verRef.current,
+            ma_phien: session,
+          }),
+        }),
+        data = await safeJson(response);
+      if (
+        !response.ok ||
+        !isRecord(data) ||
+        !isPlan(data.ke_hoach_moi) ||
+        typeof data.phien_ban !== "number" ||
+        !Number.isInteger(data.phien_ban) ||
+        data.phien_ban <= verRef.current
+      )
+        throw new Error();
+      if (!active()) return;
+      setPlan(data.ke_hoach_moi);
+      setVer(data.phien_ban);
+      verRef.current = data.phien_ban;
+      const remaining = data.ke_hoach_moi.ngay.flatMap((day) => day.khoang_gio);
+      setSelectedId((current) =>
+        current === slot.dia_diem_id ? remaining[0]?.dia_diem_id : current,
+      );
+      setChangeFor(null);
+      setCustomSearch(false);setSearchText("");setSuggestions([]);setSearchStatus("idle");searchGeneration.current+=1;
+      setMessage({ key: "deletePlaceSuccess" });
+    } catch {
+      fail("actionFailed");
+    } finally {
+      finish();}}
   async function applyRefine(text:string){const messageText=text.trim();if(!messageText||!start("refine"))return;setConversation(items=>[...items,{role:"user",text:messageText}]);setChat("");const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/refine`,{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader()},body:JSON.stringify({message:messageText,phien_ban:verRef.current,ma_phien:session,dia_diem_dang_chon:selectedId})}),data=await safeJson(response),replyKey=isRecord(data)?parseReplyKey(data.tra_loi_key):undefined;if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=0||!replyKey)throw new Error();if(!active())return;const nextConversation=toChatItems(data.hoi_thoai);setPlan(data.ke_hoach);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(data.ke_hoach.ngay[0]?.khoang_gio[0]?.dia_diem_id);setConstraints(isThamSo(data.tham_so)?data.tham_so:constraints);setConversation(nextConversation.length>0?nextConversation:items=>[...items,{role:"assistant",key:replyKey as WorkspaceTranslationKey}])}catch{if(active())setConversation(items=>[...items,{role:"assistant",key:"refineFailed"}])}finally{finish()}}
   async function sendChat(event:FormEvent){event.preventDefault();await applyRefine(chat)}
   async function loadVersions(){if(showVersions){setShowVersions(false);return}if(!start("versions"))return;try{const session=getSession(),response=await request(`${API_URL}/api/plans/${token}/versions`,{headers:{"X-Session-Id":session,...authHeader()}}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!Array.isArray(data.ds_phien_ban)||!data.ds_phien_ban.every(isVersion)||new Set(data.ds_phien_ban.map(item=>item.phien_ban)).size!==data.ds_phien_ban.length)throw new Error();if(!active())return;setVersions(data.ds_phien_ban);setShowVersions(true)}catch{fail("versionsFailed")}finally{finish()}}
-  async function restore(target:number){if(!start("restore"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/versions/${target}/restore`,{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader()},body:JSON.stringify({phien_ban_hien_tai:verRef.current,ma_phien:session})}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=0)throw new Error();if(!active())return;setPlan(data.ke_hoach);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(data.ke_hoach.ngay[0]?.khoang_gio[0]?.dia_diem_id);setShowVersions(false);setMessage({key:"restoreSuccess",values:{target,version:data.phien_ban}})}catch{fail("actionFailed")}finally{finish()}}
+  async function restore(target:number){if(!start("restore"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/versions/${target}/restore`,{method:"POST",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader()},body:JSON.stringify({phien_ban_hien_tai:verRef.current,ma_phien:session})}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=verRef.current)throw new Error();if(!active())return;setPlan(data.ke_hoach);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(data.ke_hoach.ngay[0]?.khoang_gio[0]?.dia_diem_id);setShowVersions(false);setChangeFor(null);setCustomSearch(false);setSearchText("");setSuggestions([]);searchGeneration.current+=1;setMessage({key:"restoreSuccess",values:{target,version:data.phien_ban}})}catch{fail("actionFailed")}finally{finish()}}
   async function addComment(event:FormEvent){event.preventDefault();if(!commentText.trim()||!commentName.trim()||!start("comment"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/comments`,{method:"POST",headers:{"Content-Type":"application/json",...authHeader()},body:JSON.stringify({noi_dung:commentText.trim(),ten_hien_thi:commentName.trim(),ma_phien:session})}),data=await safeJson(response);if(response.status===401){try{localStorage.removeItem("auth_token")}catch{}}if(!response.ok||!isRecord(data)||!isComment(data.binh_luan))throw new Error();if(!active())return;const savedComment=data.binh_luan;setComments(items=>[...items,savedComment]);setCommentText("");setMessage({key:"commentAdded"})}catch{fail("commentsFailed")}finally{finish()}}
   async function resolveComment(comment:Comment){if(!start("resolve"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/comments/${encodeURIComponent(comment.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json",...authHeader()},body:JSON.stringify({da_giai_quyet:!comment.da_giai_quyet,ma_phien:session})}),data=await safeJson(response);if(response.status===401){try{localStorage.removeItem("auth_token")}catch{}}if(!response.ok||!isRecord(data)||!isComment(data.binh_luan))throw new Error();if(!active())return;const updatedComment=data.binh_luan;setComments(items=>items.map(item=>item.id===comment.id?updatedComment:item))}catch{fail("commentsFailed")}finally{finish()}}
   async function submitFeedback(event:FormEvent){event.preventDefault();if(!start("feedback"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/feedback`,{method:"POST",headers:{"Content-Type":"application/json",...authHeader()},body:JSON.stringify({diem:feedbackScore,noi_dung:feedbackText.trim(),ma_phien:session})});if(response.status===401){try{localStorage.removeItem("auth_token")}catch{}}if(!response.ok)throw new Error();if(!active())return;setShowFeedback(false);setMessage({key:"feedbackThanks"})}catch{fail("actionFailed")}finally{finish()}}
@@ -128,7 +222,109 @@ export default function PlanView({initial,token,version,constraints:initialConst
     {showComments&&<section className="comment-drawer card"><div className="panel-title">{t("groupDiscussion")}</div><div className="comment-list">{comments.length===0&&<p className="disclaimer">{t("noComments")}</p>}{comments.map(comment=><article className={comment.da_giai_quyet?"comment resolved":"comment"} key={comment.id}><div><strong>{comment.ten_hien_thi}</strong><p>{comment.noi_dung}</p></div><button className="secondary" disabled={disabled} onClick={()=>resolveComment(comment)}>{comment.da_giai_quyet?t("reopen"):t("resolved")}</button></article>)}</div><form className="comment-form" onSubmit={addComment}><input value={commentName} onChange={event=>setCommentName(event.target.value)} maxLength={80} aria-label={t("displayName")} required/><input value={commentText} onChange={event=>setCommentText(event.target.value)} maxLength={1000} placeholder={t("commentPlaceholder")} aria-label={t("commentPlaceholder")} required/><button className="primary" disabled={disabled}>{t("sendComment")}</button></form></section>}
     {showFeedback&&<form className="feedback-card card" onSubmit={submitFeedback}><div className="panel-title">{t("tripReview")}</div><label>{t("rating")}<select value={feedbackScore} disabled={disabled} onChange={event=>setFeedbackScore(Number(event.target.value))}>{[5,4,3,2,1].map(score=><option value={score} key={score}>{score}/5</option>)}</select></label><textarea value={feedbackText} disabled={disabled} onChange={event=>setFeedbackText(event.target.value)} maxLength={2000} placeholder={t("feedbackPlaceholder")} aria-label={t("feedbackPlaceholder")}/><button className="primary" disabled={disabled}>{t("sendFeedback")}</button></form>}
     <div className="workspace"><aside className="chat-panel card" aria-label={t("tripAssistant")}><div className="panel-title"><span className="assistant-dot"/>{t("tripAssistant")}</div><div className="messages" aria-live="polite">{conversation.map((item,index)=><div key={index} className={`bubble ${item.role}`}>{item.key?t(item.key):item.text}</div>)}</div><div className="quick-actions">{quickActions.map(([label,prompt])=><button type="button" className="chip" disabled={disabled} onClick={()=>{void applyRefine(prompt)}} key={prompt}>{label}</button>)}</div><form className="chat-box" onSubmit={sendChat}><input value={chat} disabled={disabled} onChange={event=>setChat(event.target.value)} placeholder={t("chatPlaceholder")} aria-label={t("chatPlaceholder")}/><button disabled={disabled} aria-label={t("send")}>↑</button></form></aside>
-      <section className="itinerary-panel card" aria-labelledby="itinerary-card-title"><div className="itinerary-card-hero">{summaryImage&&safeImageUrl(summaryImage.anh)&&<Image src={safeImageUrl(summaryImage.anh)!} alt={summaryImage.ten_dia_diem} fill priority sizes="(max-width:760px) 100vw, 50vw" referrerPolicy="no-referrer" unoptimized onError={()=>hideImage(safeImageUrl(summaryImage.anh)!)}/>}<span className="itinerary-summary-badge">{plan.ngay[activeDay]?.nhan_de||t("itinerary")}</span></div><div className="itinerary-card-body"><h2 id="itinerary-card-title">{plan.tieu_de}</h2><div className="itinerary-summary-facts"><span>💵 {money.format(plan.chi_phi_moi_nguoi)}</span><span>◷ {t(durationKeys[constraints?.thoi_luong??plan.thoi_luong]??constraints?.thoi_luong??plan.thoi_luong)}</span><span>☀ {plan.thoi_tiet.tinh_trang}{plan.thoi_tiet.nhiet_do_max!==undefined?` · ${unit==="imperial"?Math.round(plan.thoi_tiet.nhiet_do_max*9/5+32):plan.thoi_tiet.nhiet_do_max}°${unit==="imperial"?"F":"C"}`:""}</span></div><div className="day-tabs" aria-label={t("itinerary")}>{plan.ngay.map((day,index)=><button className={index===activeDay?"active":""} onClick={()=>setActiveDay(index)} key={`${day.thu_tu}-${index}`}>{day.nhan_de}</button>)}</div><div className="timeline">{slots.length===0&&<p className="itinerary-empty">{t("noStops")}</p>}{slots.map((slot,index)=><article className={`slot ${selectedId===slot.dia_diem_id?"selected":""}`} key={`${activeDay}-${index}-${slot.dia_diem_id}`}><button type="button" className="slot-select" aria-pressed={selectedId===slot.dia_diem_id} aria-label={slot.ten_dia_diem} onClick={()=>selectSlot(slot.dia_diem_id)}/>{slotPhoto(slot)}<div className="stop-index">{index+1}</div><strong>{slot.bat_dau}<br/><span>{slot.ket_thuc}</span></strong><div>{slot.nhan_bua&&<span className="meal-badge">{slot.nhan_bua}</span>}<h3>{slot.ten_dia_diem}</h3><p>{slot.mo_ta}</p><small>{money.format(slot.chi_phi)} · {slot.ghi_chu}</small>{slot.nguon_url&&<a className="source" href={slot.nguon_url} target="_blank" rel="noreferrer">{t("source",{source:slot.nguon||slot.nguon_url})}</a>}</div><button className="icon-action" disabled={disabled} onClick={()=>{void swipe(slot.dia_diem_id)}} aria-label={t("swapPlace",{place:slot.ten_dia_diem})}>↻</button></article>)}</div><div className="itinerary-summary-actions"><button className="primary" type="button" onClick={saveOffline} disabled={disabled}><span aria-hidden="true">▯</span> {t("savePlan")}</button><button className="secondary" type="button" onClick={copy} disabled={disabled}><span aria-hidden="true">⌯</span> {t("share")}</button></div><button className="itinerary-regenerate secondary" type="button" onClick={regenerate} disabled={disabled}><span aria-hidden="true">↻</span> {t("regenerate")}</button></div></section>
+      <section className="itinerary-panel card" aria-labelledby="itinerary-card-title"><div className="itinerary-card-hero">{summaryImage&&safeImageUrl(summaryImage.anh)&&<Image src={safeImageUrl(summaryImage.anh)!} alt={summaryImage.ten_dia_diem} fill priority sizes="(max-width:760px) 100vw, 50vw" referrerPolicy="no-referrer" unoptimized onError={()=>hideImage(safeImageUrl(summaryImage.anh)!)}/>}<span className="itinerary-summary-badge">{plan.ngay[activeDay]?.nhan_de||t("itinerary")}</span></div><div className="itinerary-card-body"><h2 id="itinerary-card-title">{plan.tieu_de}</h2><div className="itinerary-summary-facts"><span>💵 {money.format(plan.chi_phi_moi_nguoi)}</span><span>◷ {t(durationKeys[constraints?.thoi_luong??plan.thoi_luong]??constraints?.thoi_luong??plan.thoi_luong)}</span><span>☀ {plan.thoi_tiet.tinh_trang}{plan.thoi_tiet.nhiet_do_max!==undefined?` · ${unit==="imperial"?Math.round(plan.thoi_tiet.nhiet_do_max*9/5+32):plan.thoi_tiet.nhiet_do_max}°${unit==="imperial"?"F":"C"}`:""}</span></div><div className="day-tabs" aria-label={t("itinerary")}>{plan.ngay.map((day,index)=><button className={index===activeDay?"active":""} onClick={()=>setActiveDay(index)} key={`${day.thu_tu}-${index}`}>{day.nhan_de}</button>)}</div><div className="timeline">{slots.length===0&&<p className="itinerary-empty">{t("noStops")}</p>}{slots.map((slot,index)=>(<article className={`slot ${selectedId === slot.dia_diem_id ? "selected" : ""}`} key={`${activeDay}-${index}-${slot.dia_diem_id}`}><button type="button" className="slot-select" aria-pressed={selectedId===slot.dia_diem_id} aria-label={slot.ten_dia_diem} onClick={()=>selectSlot(slot.dia_diem_id)}/>{slotPhoto(slot)}<div className="stop-index">{index+1}</div><strong>{slot.bat_dau}<br/><span>{slot.ket_thuc}</span></strong><div>{slot.nhan_bua&&(<span className="meal-badge">{slot.nhan_bua}</span>)}<h3>{slot.ten_dia_diem}</h3><p>{slot.mo_ta}</p><small>{money.format(slot.chi_phi)} · {slot.ghi_chu}</small>{slot.nguon_url&&(<a className="source" href={slot.nguon_url} target="_blank" rel="noreferrer">{t("source",{source:slot.nguon||slot.nguon_url})}</a>)}</div><div className="slot-actions">
+                    <button className="secondary change-place"
+                      ref={changeFor===slot.dia_diem_id?changeTrigger:undefined}
+                      type="button" disabled={disabled} aria-expanded={changeFor === slot.dia_diem_id}
+                      aria-controls={`change-${slot.dia_diem_id}`}
+                      onClick={() => {
+                        setChangeFor((current) =>
+                          current === slot.dia_diem_id
+                            ? null
+                            : slot.dia_diem_id,
+                        );
+                        setCustomSearch(false);
+                        setSuggestions([]);
+                        setSearchStatus("idle");searchGeneration.current+=1;
+                      }}
+                    >
+                      ↝ {t("changePlace")}
+                    </button>
+                    <button
+                      className="icon-action delete-place"
+                      type="button"
+                      disabled={disabled}
+                      title={t("deletePlace")}
+                      aria-label={t("deletePlaceLabel", {
+                        place: slot.ten_dia_diem,
+                      })}
+                      onClick={() => {
+                        void deleteSlot(slot);
+                      }}
+                    >
+                        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" />
+                        </svg>
+                    </button>
+                  </div>
+                  {changeFor === slot.dia_diem_id && (
+                    <div
+                      className="change-menu"
+                      id={`change-${slot.dia_diem_id}`}
+                      role="dialog"
+                      aria-label={t("changePlaceOptions")}
+                    >
+                      <button
+                        type="button"
+                        className="change-choice"onClick={()=>{void swipe(slot.dia_diem_id);}}>
+                        {t("aiReplace")}
+                      </button>
+                      <button
+                        type="button"
+                        className="change-choice"
+                        onClick={() => {
+                          setCustomSearch(true);
+                          void searchReplacements(slot.dia_diem_id, "");
+                        }}
+                      >
+                        {t("chooseReplacement")}
+                      </button>
+                      {customSearch && (
+                        <form
+                          className="replacement-search"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            void searchReplacements(slot.dia_diem_id);
+                          }}
+                        >
+                          <label htmlFor={`replacement-${slot.dia_diem_id}`}>
+                            {t("replacementSearchLabel")}
+                          </label>
+                          <div>
+                            <input
+                              id={`replacement-${slot.dia_diem_id}`}
+                              autoFocus
+                              value={searchText}
+                              onChange={(event) =>
+                                setSearchText(event.target.value)
+                              }
+                              placeholder={t("replacementSearchPlaceholder")}/><button className="secondary" type="submit">
+                              {t("search")}</button></div>
+                          {searchStatus==="loading"&&<p role="status">{t("replacementLoading")}</p>}
+                          {searchStatus==="empty"&&<p role="status">{t("replacementEmpty")}</p>}
+                          {searchStatus==="error"&&<p role="alert">{t("replacementError")}</p>}
+                          <ul aria-label={t("replacementSuggestions")}>
+                            {suggestions.map((candidate) => (
+                              <li key={candidate.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void swipe(slot.dia_diem_id, candidate.id);
+                                  }}
+                                >
+                                  <strong>{candidate.ten}</strong>
+                                  <small>
+                                    {candidate.loai} · {candidate.khu_vuc}
+                                  </small>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </article>))}</div><div className="itinerary-summary-actions"><button className="primary" type="button" onClick={saveOffline} disabled={disabled}><span aria-hidden="true">▯</span> {t("savePlan")}</button><button className="secondary" type="button" onClick={copy} disabled={disabled}><span aria-hidden="true">⌯</span> {t("share")}</button></div><button className="itinerary-regenerate secondary" type="button" onClick={regenerate} disabled={disabled}><span aria-hidden="true">↻</span> {t("regenerate")}</button></div></section>
       <section className="map-panel"><MapView slots={slots} selectedId={selectedId} onSelect={setSelectedId}/><div className="map-legend card">{t("mapLegend")}</div></section></div>
     <p className="disclaimer">{t("estimateDisclaimer",{weather:plan.thoi_tiet.ghi_chu})}</p>
   </main>

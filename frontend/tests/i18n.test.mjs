@@ -84,7 +84,7 @@ test("workspace catalog covers its typed contract and all locales",()=>{
   assert.equal(workspace.workspaceTranslations.vi.itinerary,"Lịch trình");
   assert.equal(workspace.workspaceTranslations.vi.tripSummary,"Tóm tắt chuyến đi");
   assert.equal(workspace.workspaceTranslations.vi.savePlan,"Lưu kế hoạch");
-  assert.equal(workspace.workspaceTranslations.vi.regenerate,"Tạo lại");
+  assert.equal(workspace.workspaceTranslations.vi.regenerate,"Yêu cầu AI tạo lại lịch trình khác");
   assert.equal(workspace.workspaceTranslations.vi.planSaved,"Đã lưu kế hoạch");
 });
 
@@ -158,9 +158,9 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/localStorage\.setItem\(`offline-plan:/);
   assert.match(planViewSource,/function saveOffline\(\)\{if\(!start\("save"\)\)return/);
   assert.match(planViewSource,/setMessage\(\{key:"planSaved"\}\)/);
-  assert.match(planViewSource,/className=\{`action-toast \$\{errorMessageKeys\.has\(message\.key\)\?"error":"success"\}`\} role="status" aria-live="polite" aria-atomic="true"/);
-  assert.match(planViewSource,/setMessage\(current=>current\?\?\{key:"commentsFailed"\}\)/);
-  assert.match(planViewSource,/body:JSON\.stringify\(\{ma_phien:session,nonce\}\)\},90000/);
+  assert.match(planViewSource,/className=\{`action-toast \$\{errorMessageKeys\.has\(message\.key\)\s*\?\s*"error"\s*:\s*"success"\}`\}[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/);
+  assert.match(planViewSource,/setMessage\(\(?current\)?\s*=>\s*current\?\?\{key:"commentsFailed"\}\)/);
+  assert.match(planViewSource,/body:JSON\.stringify\(\{ma_phien:session,nonce\}\),?\},90000,?/);
   assert.match(planViewSource,/setMessage\(\{key:"regenerateSuccess"\}\)/);
   assert.match(globalsSource,/\.action-toast\{position:fixed/);
   assert.match(globalsSource,/\.action-toast\.error\{[^}]*background:#9f2f20/);
@@ -253,8 +253,8 @@ test("history sidebar contains long plan titles without losing mobile scrolling"
   assert.match(historyPageSource,/className="history-plan-nav"[^]*plans\.map\(item => <Link[^]*<span>\{item\.ke_hoach\.tieu_de\}<\/span><span aria-hidden="true">/);
   assert.match(globalsSource,/\.history-page \.history-plan-nav>a\{[^}]*min-width:0;max-width:100%/);
   assert.match(globalsSource,/\.history-page \.history-plan-nav>a span:first-child\{[^}]*flex:1 1 auto;min-width:0;[^}]*text-overflow:ellipsis/);
-  assert.match(globalsSource,/\.history-page \.history-plan-nav>a span:last-child\{flex:0 0 auto\}/);
-  assert.match(globalsSource,/@media\(max-width:720px\)\{\.history-page \.history-plan-nav\{overflow-x:auto\}\.history-page \.history-plan-nav>a\{min-width:210px;max-width:210px\}\}/);
+  assert.match(globalsSource,/\.history-page \.history-plan-nav>a span:last-child\{\s*flex:0 0 auto;?\s*\}/);
+  assert.match(globalsSource,/@media\(max-width:720px\)\{\.history-page \.history-plan-nav\{overflow-x:auto;?\}\.history-page \.history-plan-nav>a\{min-width:210px;max-width:210px;?\}\}/);
 });
 
 test("support queue actions guard duplicate state transitions",()=>{

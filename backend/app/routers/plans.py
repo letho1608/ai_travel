@@ -4,15 +4,16 @@ from asyncio import to_thread
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
 from app.data import PLACES, image_for
-from app.pipeline.planner import COPY, PipelineUnavailable, build_plan, validate_plan
+from app.pipeline.planner import COPY, PipelineUnavailable, _effective_hours, build_plan, travel_minutes, validate_plan
 from app.routers.auth import resolve_user
 from app.schemas import (
     CommentRequest,
+    DeleteSlotRequest,
     PlanRequest,
     ReadNotificationRequest,
     RefineRequest,
@@ -334,6 +335,50 @@ def list_plans(
     return {"ds_ke_hoach": items}
 
 
+def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False):
+    slots = [slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
+    matches = [slot for slot in slots if slot.get("dia_diem_id") == rejected_id]
+    if len(matches) != 1:
+        raise HTTPException(404 if not matches else 409, "Địa điểm không nằm duy nhất trong kế hoạch")
+    target = matches[0]
+    rejected = next((place for place in PLACES if place.id == rejected_id), None)
+    if not rejected:
+        raise HTTPException(404, "Địa điểm không còn trong danh mục")
+    day = next(day for day in item.plan.get("ngay", []) if target in day.get("khoang_gio", []))
+    index = day["khoang_gio"].index(target)
+    previous_slot = day["khoang_gio"][index - 1] if index else None
+    next_slot = day["khoang_gio"][index + 1] if index + 1 < len(day["khoang_gio"]) else None
+    by_id = {place.id: place for place in PLACES}
+    used_ids = {slot.get("dia_diem_id") for slot in slots}
+    used_names = {ascii_fold(slot.get("ten_dia_diem", "")).lower() for slot in slots if slot.get("dia_diem_id") != rejected_id}
+    request = PlanRequest.model_validate(item.request)
+
+    def minutes(value: str) -> int:
+        hour, minute = map(int, value.split(":"))
+        return hour * 60 + minute
+
+    def eligible(candidate) -> bool:
+        open_hour, close_hour = _effective_hours(candidate)
+        if candidate.id in used_ids or ascii_fold(candidate.name).lower() in used_names:
+            return False
+        if same_kind and candidate.kind != rejected.kind:
+            return False
+        if not (f"{open_hour:02d}:00" <= target["bat_dau"] and target["ket_thuc"] <= f"{close_hour:02d}:00"):
+            return False
+        if previous_slot:
+            previous = by_id.get(previous_slot["dia_diem_id"])
+            if previous and minutes(target["bat_dau"]) - minutes(previous_slot["ket_thuc"]) < travel_minutes(previous, candidate):
+                return False
+        if next_slot:
+            following = by_id.get(next_slot["dia_diem_id"])
+            if following and minutes(next_slot["bat_dau"]) - minutes(target["ket_thuc"]) < travel_minutes(candidate, following):
+                return False
+        next_total = item.plan.get("tong_chi_phi", 0) - target.get("chi_phi", 0) + candidate.cost * request.so_nguoi
+        return next_total // request.so_nguoi <= request.ngan_sach
+
+    return target, rejected, [place for place in PLACES if eligible(place)]
+
+
 @router.patch("/plans/{token}/swipe")
 def swipe(
     token: str,
@@ -348,31 +393,20 @@ def swipe(
     owner(item, x_session_id or payload.ma_phien, authorization)
     if not limiter.check(f"swipe:{item.session_id}", 20):
         raise HTTPException(429, "Bạn đã đổi điểm quá nhiều lần")
-    slots = [slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
-    matching_slots = [slot for slot in slots if slot["dia_diem_id"] == payload.diem_bi_loai]
-    if not matching_slots:
-        raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
-    if len(matching_slots) != 1:
-        raise HTTPException(409, "Lịch trình chứa địa điểm trùng lặp, vui lòng làm lại")
-    used = {s["dia_diem_id"] for s in slots}
-    rejected = next((p for p in PLACES if p.id == payload.diem_bi_loai), None)
-    if not rejected:
-        raise HTTPException(404, "Địa điểm không còn trong danh mục")
-    target = matching_slots[0]
-    candidates = [
-        p
-        for p in PLACES
-        if p.id not in used
-        and p.kind == rejected.kind
-        and p.open_hour <= int(target["bat_dau"][:2])
-        and int(target["ket_thuc"][:2]) <= p.close_hour
-    ]
+    target, rejected, candidates = _replacement_candidates(
+        item, payload.diem_bi_loai, same_kind=not bool(payload.dia_diem_thay_the)
+    )
     if not candidates:
         raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
-    replacement = min(
-        candidates,
-        key=lambda p: (p.lat - rejected.lat) ** 2 + (p.lng - rejected.lng) ** 2,
-    )
+    if payload.dia_diem_thay_the:
+        replacement = next((p for p in candidates if p.id == payload.dia_diem_thay_the), None)
+        if not replacement:
+            raise HTTPException(422, "Địa điểm thay thế không phù hợp với khung giờ hoặc lịch trình")
+    else:
+        replacement = min(
+            candidates,
+            key=lambda p: (p.lat - rejected.lat) ** 2 + (p.lng - rejected.lng) ** 2,
+        )
     plan = json.loads(json.dumps(item.plan, ensure_ascii=False))
     new_target = next(
         slot
@@ -415,6 +449,68 @@ def swipe(
         raise HTTPException(503, str(exc)) from exc
     store.penalize_tags(item.session_id, rejected.tags)
     store.log(item.session_id, "vuot_doi_diem", {"id_ke_hoach": token, "id_dia_diem_bi_loai": payload.diem_bi_loai})
+    return {"ke_hoach_moi": plan, "phien_ban": item.version}
+
+
+@router.get("/plans/{token}/replacement-candidates")
+def replacement_candidates(
+    token: str,
+    diem_bi_loai: str,
+    q: str = Query(default="", max_length=100),
+    x_session_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    item = store.get(token)
+    if not item:
+        raise HTTPException(404, "Kế hoạch không tồn tại")
+    owner(item, x_session_id, authorization)
+    if not limiter.check(f"candidate-search:{item.session_id}", 60):
+        raise HTTPException(429, "Bạn đã tìm kiếm quá nhiều lần")
+    _, _, eligible = _replacement_candidates(item, diem_bi_loai)
+    query = ascii_fold(q.strip()).lower()
+    candidates = [
+        place for place in eligible
+        if not query or query in ascii_fold(f"{place.name} {place.kind} {place.area}").lower()
+    ][:10]
+    return {"goi_y": [{"id": p.id, "ten": p.name, "loai": p.kind, "khu_vuc": p.area} for p in candidates]}
+
+
+@router.delete("/plans/{token}/slots")
+def delete_slot(
+    token: str,
+    payload: DeleteSlotRequest,
+    x_session_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    item = store.get(token)
+    if not item:
+        raise HTTPException(404, "Kế hoạch không tồn tại")
+    owner(item, x_session_id or payload.ma_phien, authorization)
+    if not limiter.check(f"delete-slot:{item.session_id}", 20):
+        raise HTTPException(429, "Bạn đã xóa quá nhiều địa điểm")
+    plan = json.loads(json.dumps(item.plan, ensure_ascii=False))
+    matches = [(day, slot) for day in plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") == payload.dia_diem_id]
+    if not matches:
+        raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
+    if len(matches) != 1:
+        raise HTTPException(409, "Lịch trình chứa địa điểm trùng lặp, vui lòng làm lại")
+    day, removed = matches[0]
+    day["khoang_gio"] = [slot for slot in day["khoang_gio"] if slot.get("dia_diem_id") != payload.dia_diem_id]
+    plan_request = PlanRequest.model_validate(item.request)
+    plan["tong_chi_phi"] = sum(
+        max(0, slot.get("chi_phi", 0))
+        for current_day in plan.get("ngay", [])
+        for slot in current_day.get("khoang_gio", [])
+    )
+    plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
+    errors = validate_plan(plan, {p.id for p in PLACES}, plan_request, allow_below_minimum=True)
+    if errors:
+        raise HTTPException(503, "; ".join(errors))
+    try:
+        store.update(item, payload.phien_ban, plan, item.request, "Xóa địa điểm")
+    except ValueError as exc:
+        raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
+    store.log(item.session_id, "xoa_dia_diem", {"id_ke_hoach": token, "id_dia_diem": payload.dia_diem_id})
     return {"ke_hoach_moi": plan, "phien_ban": item.version}
 
 

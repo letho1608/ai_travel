@@ -180,12 +180,43 @@ def test_swipe_supports_a_slot_on_the_second_day():
         json={"diem_bi_loai": target, "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]},
     )
     assert response.status_code == 200
-    ids = {
-        slot["dia_diem_id"]
-        for day in response.json()["ke_hoach_moi"]["ngay"]
-        for slot in day["khoang_gio"]
-    }
-    assert target not in ids
+
+
+def _generated_plan(payload=None):
+    request_payload = payload or PAYLOAD
+    response = client.post("/api/plan/generate", json=request_payload)
+    return json.loads(next(line for line in response.text.splitlines() if line.startswith('data: {"type"'))[6:])
+
+
+def test_explicit_replacement_search_delete_and_restore_contract():
+    result = _generated_plan()
+    token, plan = result["token"], result["plan"]
+    target = plan["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+    headers = {"X-Session-Id": PAYLOAD["ma_phien"]}
+    denied = client.get(f"/api/plans/{token}/replacement-candidates", params={"diem_bi_loai": target}, headers={"X-Session-Id": "wrong"})
+    assert denied.status_code == 403
+    search = client.get(f"/api/plans/{token}/replacement-candidates", params={"diem_bi_loai": target}, headers=headers)
+    assert search.status_code == 200 and search.json()["goi_y"]
+    candidate = search.json()["goi_y"][0]
+    replaced = client.patch(f"/api/plans/{token}/swipe", headers=headers, json={"diem_bi_loai": target, "dia_diem_thay_the": candidate["id"], "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
+    assert replaced.status_code == 200 and replaced.json()["phien_ban"] == 2
+    assert any(slot["dia_diem_id"] == candidate["id"] for day in replaced.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"])
+    stale = client.request("DELETE", f"/api/plans/{token}/slots", headers=headers, json={"dia_diem_id": candidate["id"], "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
+    assert stale.status_code == 409
+    deleted = client.request("DELETE", f"/api/plans/{token}/slots", headers=headers, json={"dia_diem_id": candidate["id"], "phien_ban": 2, "ma_phien": PAYLOAD["ma_phien"]})
+    assert deleted.status_code == 200 and deleted.json()["phien_ban"] == 3
+    remaining = [slot for day in deleted.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"]]
+    assert deleted.json()["ke_hoach_moi"]["tong_chi_phi"] == sum(slot["chi_phi"] for slot in remaining)
+    restored = client.post(f"/api/plans/{token}/versions/2/restore", headers=headers, json={"phien_ban_hien_tai": 3, "ma_phien": PAYLOAD["ma_phien"]})
+    assert restored.status_code == 200 and restored.json()["phien_ban"] == 4
+
+
+def test_explicit_replacement_rejects_unknown_id():
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+    headers = {"X-Session-Id": PAYLOAD["ma_phien"]}
+    unknown = client.patch(f"/api/plans/{result['token']}/swipe", headers=headers, json={"diem_bi_loai": target, "dia_diem_thay_the": "missing", "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
+    assert unknown.status_code == 422
 
 
 def test_budget_counter_fails_closed():

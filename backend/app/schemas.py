@@ -47,6 +47,13 @@ class PlanRequest(BaseModel):
 
 class SwipeRequest(BaseModel):
     diem_bi_loai: str
+    dia_diem_thay_the: str | None = Field(default=None, min_length=1, max_length=200)
+    phien_ban: int = Field(ge=1)
+    ma_phien: str
+
+
+class DeleteSlotRequest(BaseModel):
+    dia_diem_id: str = Field(min_length=1, max_length=200)
     phien_ban: int = Field(ge=1)
     ma_phien: str
 
