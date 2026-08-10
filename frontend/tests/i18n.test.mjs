@@ -192,6 +192,8 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/createPortal\(<div className="delete-menu"[\s\S]*?<\/div>,document\.body\)/);
   assert.match(planViewSource,/viewBox="0 0 24 24"[^>]*><path d="M3 7h3c4 0 6 10 10 10h5"\/><path d="m18 14 3 3-3 3"\/><path d="M3 17h3c4 0 6-10 10-10h5"\/><path d="m18 4 3 3-3 3"\/>/);
   assert.match(globalsSource,/\.change-menu,\.delete-menu\{border-color:var\(--green\);background:var\(--green-soft\)\}/);
+  assert.match(planViewSource,/className="change-menu-close"[\s\S]*onClick=\{closeChange\}/);
+  assert.match(globalsSource,/\.change-menu-close\{position:absolute;top:10px;inset-inline-end:10px/);
   assert.match(planViewSource,/quickActions\.map/);
   assert.match(planViewSource,/applyRefine\(prompt\)/);
   assert.doesNotMatch(planViewSource,/<article role="button"/);
