@@ -218,7 +218,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
   const canFeedback=isPastUtcDate(plan.ngay_di),disabled=busy!==null,quickActions=locale==="vi"?quickRefines.vi:quickRefines.en;
   const summaryImage=slots.find(slot=>{const url=safeImageUrl(slot.anh);return Boolean(url&&!brokenImages.has(url))});
   const selectSlot=(id:string)=>setSelectedId(id);
-  const returnToChat=()=>{const input=document.querySelector<HTMLInputElement>(".chat-panel .chat-box input");input?.scrollIntoView({behavior:"smooth",block:"center"});input?.focus({preventScroll:true})};
+  const returnToChat=()=>{if(window.history.length>1){window.history.back();return}window.location.assign("/")};
   const hideImage=(url:string)=>setBrokenImages(current=>{if(current.has(url))return current;const next=new Set(current);next.add(url);return next});
   const slotPhoto=(slot:Slot)=>{const url=safeImageUrl(slot.anh);return url&&!brokenImages.has(url)?<div className="slot-photo"><Image src={url} alt="" fill sizes="(max-width:760px) 100vw, 33vw" loading="lazy" referrerPolicy="no-referrer" unoptimized onError={()=>hideImage(url)}/></div>:null};
 

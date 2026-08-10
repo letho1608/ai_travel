@@ -208,7 +208,7 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/className="change-menu-close"[\s\S]*onClick=\{closeChange\}/);
   assert.match(globalsSource,/\.change-menu-close\{position:absolute;top:10px;inset-inline-end:10px/);
   assert.match(planViewSource,/className="result-back-to-chat" onClick=\{returnToChat\}/);
-  assert.match(planViewSource,/scrollIntoView\(\{behavior:"smooth",block:"center"\}\);input\?\.focus/);
+  assert.match(planViewSource,/window\.history\.length>1[\s\S]*window\.history\.back\(\)[\s\S]*window\.location\.assign\("\/"\)/);
   assert.match(planViewSource,/className="result-ready card"[\s\S]*t\("aiFinished"\)[\s\S]*t\("itinerarySuggestionTitle"\)/);
   assert.match(globalsSource,/\.result-back-to-chat\{display:inline-flex/);
   assert.match(planViewSource,/quickActions\.map/);
