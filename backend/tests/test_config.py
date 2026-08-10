@@ -26,6 +26,16 @@ def test_complete_production_configuration_passes_validation():
     settings.validate_production()
 
 
+def test_local_mode_always_allows_frontend_ports_3000_to_3010(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "local")
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000")
+    settings = Settings.from_env()
+    assert "http://localhost:3000" in settings.cors_origins
+    assert "http://localhost:3001" in settings.cors_origins
+    assert "http://127.0.0.1:3001" in settings.cors_origins
+    assert "http://localhost:3010" in settings.cors_origins
+
+
 def test_groq_environment_uses_groq_key_model_and_base_url(monkeypatch):
     monkeypatch.setenv("AI_MODE", "groq")
     monkeypatch.setenv("API_KEY_GROQ", "groq-key")

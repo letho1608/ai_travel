@@ -1,6 +1,19 @@
 import type { Plan } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const configuredApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(
+  /\/$/,
+  "",
+);
+
+/** Absolute backend URL for server-side fetches (RSC / Node). */
+export const SERVER_API_URL = configuredApiUrl;
+
+/**
+ * Browser calls use same-origin paths so Next.js rewrites proxy to the backend
+ * and avoid CORS issues when the frontend runs on a non-3000 port.
+ */
+export const API_URL = "";
+
 export const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL;
 
 export function publicShareUrl(token: string): string {
@@ -36,23 +49,35 @@ export async function consumePlanStream(
     buffer += decoder.decode(value, { stream: !done });
     const blocks = buffer.split(/\r?\n\r?\n/);
     buffer = blocks.pop() ?? "";
-    if(done&&buffer.trim()){blocks.push(buffer);buffer=""}
+    if (done && buffer.trim()) {
+      blocks.push(buffer);
+      buffer = "";
+    }
     for (const block of blocks) {
       const event = block.match(/^event: (.+)$/m)?.[1];
       const raw = block.match(/^data: (.+)$/m)?.[1];
       if (!raw) continue;
       const data = JSON.parse(raw);
       if (event === "status") {
-        if(typeof data.status!=="string")throw new Error("Malformed status event");
+        if (typeof data.status !== "string") throw new Error("Malformed status event");
         onStatus(data.status);
       }
-      if (event === "error") throw new Error("Plan generation failed");
+      if (event === "error") {
+        const detail =
+          data && typeof data.detail === "string" && data.detail.trim()
+            ? data.detail.trim()
+            : "Không thể tạo kế hoạch";
+        throw new Error(detail);
+      }
       if (event === "result") {
-        if(result)throw new Error("Duplicate result event");
+        if (result) throw new Error("Duplicate result event");
         result = data;
       }
     }
-    if(result){await reader.cancel();return result}
+    if (result) {
+      await reader.cancel();
+      return result;
+    }
     if (done) break;
   }
   if (!result) throw new Error("Máy chủ không trả kế hoạch");

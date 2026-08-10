@@ -72,9 +72,8 @@ test("all supported locales contain the complete planner contract",()=>{
 
 test("workspace catalog covers its typed contract and all locales",()=>{
   for(const locale of locales){
-    const line=workspaceSource.split("\n").find(value=>value.trimStart().startsWith(`${locale}:{`));
-    assert.ok(line,`missing workspace locale ${locale}`);
-    for(const key of workspaceKeys)assertKey(line,key,`${locale} workspace`);
+    assert.ok(workspace.workspaceTranslations[locale],`missing workspace locale ${locale}`);
+    for(const key of workspaceKeys)assert.equal(typeof workspace.workspaceTranslations[locale][key],"string",`missing ${locale} workspace.${key}`);
   }
   assert.match(source,/workspaceTranslations\[locale\]/);
   const tokens=value=>[...value.matchAll(/\{([^}]+)\}/g)].map(match=>match[1]).sort();
@@ -83,6 +82,8 @@ test("workspace catalog covers its typed contract and all locales",()=>{
   assert.equal(workspace.workspaceTranslations.vi.downloadPdf,"Tải PDF");
   assert.equal(workspace.workspaceTranslations.vi.itinerary,"Lịch trình");
   assert.equal(workspace.workspaceTranslations.vi.tripSummary,"Tóm tắt chuyến đi");
+  assert.equal(workspace.workspaceTranslations.vi.savePlan,"Lưu kế hoạch");
+  assert.equal(workspace.workspaceTranslations.vi.planSaved,"Đã lưu kế hoạch");
 });
 
 test("inventory catalog covers its typed contract and all locales",()=>{
@@ -146,13 +147,25 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/navigator\.clipboard&&window\.isSecureContext/);
   assert.match(planViewSource,/navigator\.clipboard\.writeText\(value\)/);
   assert.match(planViewSource,/document\.execCommand\("copy"\)/);
-  assert.match(planViewSource,/type BusyAction="copy"\|"download"/);
+  assert.match(planViewSource,/type BusyAction="save"\|"copy"\|"download"/);
   assert.match(planViewSource,/function downloadJson\(\)\{if\(!start\("download"\)\)return/);
   assert.match(planViewSource,/document\.body\.appendChild\(anchor\)/);
   assert.match(planViewSource,/anchor\?\.remove\(\);if\(url\)URL\.revokeObjectURL\(url\);finish\(\)/);
   assert.match(planViewSource,/async function safeJson/);
   assert.match(planViewSource,/catch\{fail\("actionFailed"\)/);
   assert.match(planViewSource,/localStorage\.setItem\(`offline-plan:/);
+  assert.match(planViewSource,/function saveOffline\(\)\{if\(!start\("save"\)\)return/);
+  assert.match(planViewSource,/setMessage\(\{key:"planSaved"\}\)/);
+  assert.doesNotMatch(planViewSource,/className="itinerary-summary"/);
+  assert.equal((planViewSource.match(/className="itinerary-panel card"/g)||[]).length,1);
+  assert.match(planViewSource,/className="itinerary-card-hero"/);
+  assert.match(planViewSource,/slot\.bat_dau/);
+  assert.match(planViewSource,/slot\.ket_thuc/);
+  assert.match(planViewSource,/slot\.mo_ta/);
+  assert.match(planViewSource,/slot\.chi_phi/);
+  assert.match(planViewSource,/slot\.ghi_chu/);
+  assert.match(planViewSource,/slot\.nguon_url/);
+  assert.match(planViewSource,/onClick=\{regenerate\} disabled=\{disabled\}/);
   assert.doesNotMatch(planViewSource,/data\.detail|error\.message/);
   assert.match(planViewSource,/className="slot-select"/);
   assert.match(planViewSource,/quickActions\.map/);
@@ -216,6 +229,10 @@ test("history page uses durable session helper for list and mutation actions",()
   assert.doesNotMatch(historyPageSource,/localStorage\.getItem\("ma_phien"\)/);
 });
 
+test("Vietnamese navigation labels the trip archive as history",()=>{
+  assert.match(source,/vi:\{roadtrip:"Road trip",inventory:"Vé & lưu trú",trips:"Lịch sử"/);
+});
+
 test("support queue actions guard duplicate state transitions",()=>{
   assert.match(supportPageSource,/const pendingRef = useRef<string\|null>\(null\)/);
   assert.match(supportPageSource,/if\(pendingRef\.current\) return/);
@@ -242,6 +259,8 @@ test("interpolation replaces template tokens once without rewriting values",()=>
 
 test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/setTimeout\(\(\) => controller\.abort\(\), 90000\)/);
+  assert.match(nextConfigSource,/async rewrites\(\)/);
+  assert.match(nextConfigSource,/destination: `\$\{apiOrigin\}\/api\/:path\*`/);
   assert.match(nextConfigSource,/Array\.from\(\{ length: 11 \}/);
   assert.match(nextConfigSource,/http:\/\/localhost:\$\{8000 \+ index\}/);
   assert.match(nextConfigSource,/http:\/\/127\.0\.0\.1:\$\{8000 \+ index\}/);
@@ -253,10 +272,24 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/function inferDuration\(value: string\)/);
   assert.match(plannerSource,/setNeedsDuration\(true\)/);
   assert.match(plannerSource,/needsDuration &&/);
+  assert.match(plannerSource,/const \[pendingContext, setPendingContext\]/);
+  assert.match(plannerSource,/role="log" aria-live="polite"/);
+  assert.match(plannerSource,/role="group" aria-label=\{t\("durationLabel"\)\}/);
+  assert.match(plannerSource,/transcriptEnd\.current\?\.scrollIntoView/);
+  assert.match(plannerSource,/if \(needsDuration\) \{/);
+  assert.match(plannerSource,/if \(!duration\) \{/);
+  assert.match(plannerSource,/const requestContext = `\$\{pendingContext\.trim\(\)\}\\n\$\{answer\.trim\(\)\}`/);
+  assert.match(plannerSource,/void generatePlan\(requestContext, duration\)/);
+  assert.match(plannerSource,/lastRequest\.current = \{ context: requestContext, duration \}/);
+  assert.match(plannerSource,/lastRequest\.current = null/);
+  assert.match(plannerSource,/onClick=\{retryGenerate\}/);
+  for(const duration of ["vai_gio","nua_ngay","ca_ngay","nhieu_ngay"]) assert.match(plannerSource,new RegExp(`\\[\\"[^\\"]+\\", \\"${duration}\\"\\]`));
   assert.match(plannerSource,/t\("durationLabel"\)/);
   assert.doesNotMatch(plannerSource,/Bạn muốn đi trong bao lâu/);
   assert.doesNotMatch(plannerSource,/id="planner-duration"/);
-  assert.match(plannerSource,/cause instanceof DOMException && cause\.name === "AbortError" \? "generateTimeout" : "generateFailed"/);
+  assert.match(plannerSource,/cause instanceof DOMException && cause\.name === "AbortError"/);
+  assert.match(plannerSource,/setErrorKey\("generateFailed"\)/);
+  assert.match(plannerSource,/setErrorDetail/);
   assert.match(plannerSource,/thoi_luong: duration/);
   const backendStatuses=[...backendPlanSource.matchAll(/sse\("status", \{"status": "([a-z_]+)"\}\)/g)].map(match=>match[1]);
   assert.deepEqual(backendStatuses,["finding_places","routing_plan"]);
@@ -266,9 +299,9 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
 
 test("SSE parser accepts CRLF and guards malformed or duplicate events",()=>{
   assert.match(apiSource,/split\(\/\\r\?\\n\\r\?\\n\/\)/);
-  assert.match(apiSource,/done&&buffer\.trim\(\)/);
-  assert.match(apiSource,/typeof data\.status!=="string"/);
-  assert.match(apiSource,/if\(result\)throw new Error\("Duplicate result event"\)/);
+  assert.match(apiSource,/done && buffer\.trim\(\)/);
+  assert.match(apiSource,/typeof data\.status !== "string"/);
+  assert.match(apiSource,/if \(result\) throw new Error\("Duplicate result event"\)/);
 });
 
 test("SSE parser returns a CRLF result without waiting for stream close",async()=>{

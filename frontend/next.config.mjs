@@ -2,6 +2,7 @@ const isDev = process.env.NODE_ENV !== "production";
 const scriptSrc = isDev
   ? "'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com"
   : "'self' 'unsafe-inline' https://accounts.google.com";
+const apiOrigin = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 const connectSrc = [
   "'self'",
   ...Array.from({ length: 11 }, (_, index) => `http://localhost:${8000 + index}`),
@@ -23,5 +24,12 @@ const nextConfig = {
   reactStrictMode: true,
   distDir: process.env.NEXT_DIST_DIR || ".next",
   async headers() { return [{ source: "/(.*)", headers: securityHeaders }]; },
+  async rewrites() {
+    return [
+      { source: "/api/:path*", destination: `${apiOrigin}/api/:path*` },
+      { source: "/health", destination: `${apiOrigin}/health` },
+      { source: "/ready", destination: `${apiOrigin}/ready` },
+    ];
+  },
 };
 export default nextConfig;

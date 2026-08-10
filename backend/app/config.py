@@ -77,19 +77,24 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        local_frontend_origins = tuple(
+            origin
+            for port in range(3000, 3011)
+            for origin in (f"http://localhost:{port}", f"http://127.0.0.1:{port}")
+        )
+        configured_origins = tuple(
+            origin.strip()
+            for origin in os.getenv("CORS_ORIGINS", ",".join(local_frontend_origins)).split(",")
+            if origin.strip()
+        )
+        app_env = os.getenv("APP_ENV", "local")
+        cors_origins = (
+            tuple(dict.fromkeys([*configured_origins, *local_frontend_origins]))
+            if app_env == "local"
+            else configured_origins
+        )
         return cls(
-            cors_origins=tuple(
-                os.getenv(
-                    "CORS_ORIGINS",
-                    ",".join(
-                        origin
-                        for port in range(3000, 3011)
-                        for origin in (
-                            f"http://localhost:{port}", f"http://127.0.0.1:{port}"
-                        )
-                    ),
-                ).split(",")
-            ),
+            cors_origins=cors_origins,
             max_generate_per_hour=int(os.getenv("GIOI_HAN_TAO", "100")),
             max_generate_ip_per_hour=int(os.getenv("GIOI_HAN_TAO_IP", "100")),
             max_roadtrip_route_per_hour=int(os.getenv("GIOI_HAN_ROADTRIP_ROUTE", "30")),
@@ -99,7 +104,7 @@ class Settings:
             daily_ai_budget_usd=float(os.getenv("TRAN_CHI_PHI_NGAY", "10")),
             monthly_ai_budget_usd=float(os.getenv("TRAN_CHI_PHI_THANG", "300")),
             ai_mode=os.getenv("AI_MODE", "mock"),
-            app_env=os.getenv("APP_ENV", "local"),
+            app_env=app_env,
             weather_enabled=os.getenv("WEATHER_ENABLED", "false").lower() == "true",
             ai_base_url=os.getenv(
                 "AI_BASE_URL",

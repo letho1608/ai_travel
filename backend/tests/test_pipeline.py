@@ -11,10 +11,132 @@ def request() -> PlanRequest:
     return PlanRequest(context="cuối tuần chill và ăn ngon", location={"lat": 21.0285, "lng": 105.8542}, thoi_luong="ca_ngay", so_nguoi=2, ngan_sach=1_000_000, ma_phien="test-session")
 
 
+def test_schedule_reserves_travel_time_between_stops():
+    from app.pipeline.routing import travel_minutes as travel
+
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội cả ngày",
+                "thoi_luong": "ca_ngay",
+                "nonce": "nonce-travel-gap-0001",
+            }
+        )
+    )
+    by_id = {place.id: place for place in PLACES}
+    for day in plan["ngay"]:
+        previous = None
+        for slot in day["khoang_gio"]:
+            place = by_id[slot["dia_diem_id"]]
+            if previous:
+                need = travel(previous[0], place)
+                ph, pm = map(int, previous[1].split(":"))
+                sh, sm = map(int, slot["bat_dau"].split(":"))
+                gap = (sh * 60 + sm) - (ph * 60 + pm)
+                assert gap >= need
+            previous = (place, slot["ket_thuc"])
+
+
+def test_full_day_schedule_avoids_long_gaps_and_midday_west_lake():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội cả ngày Hồ Tây Lăng Bác",
+                "thoi_luong": "ca_ngay",
+                "nonce": "nonce-schedule-quality-0001",
+            }
+        )
+    )
+    slots = plan["ngay"][0]["khoang_gio"]
+    assert len(slots) >= 4
+    # No multi-hour holes between consecutive stops
+    for left, right in zip(slots, slots[1:]):
+        lh, lm = map(int, left["ket_thuc"].split(":"))
+        rh, rm = map(int, right["bat_dau"].split(":"))
+        assert (rh * 60 + rm) - (lh * 60 + lm) <= 120
+    # Opening hours respected with known overrides
+    by_id = {place.id: place for place in PLACES}
+    for slot in slots:
+        place = by_id[slot["dia_diem_id"]]
+        open_hour, close_hour = planner._effective_hours(place)
+        assert slot["bat_dau"] >= f"{open_hour:02d}:00"
+        assert slot["ket_thuc"] <= f"{close_hour:02d}:00"
+    west = next((slot for slot in slots if "Hồ Tây" in slot["ten_dia_diem"]), None)
+    if west:
+        start = int(west["bat_dau"][:2]) + int(west["bat_dau"][3:]) / 60
+        assert start < 11 or start >= 14
+
+
+def test_full_day_plan_includes_scheduled_dining():
+    plan = build_plan(request().model_copy(update={"thoi_luong": "ca_ngay"}))
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    dining = [slot for slot in slots if slot["loai"] in {"nha_hang", "quan_an"} and slot.get("bua_an") in {"trua", "toi"}]
+    assert len(dining) >= 2
+    meal_types = {slot["bua_an"] for slot in dining if slot.get("bua_an")}
+    assert "trua" in meal_types
+    assert "toi" in meal_types
+    lunch = next(slot for slot in dining if slot.get("bua_an") == "trua")
+    dinner = next(slot for slot in dining if slot.get("bua_an") == "toi")
+    assert lunch["bat_dau"] >= "11:30"
+    assert dinner["bat_dau"] >= "18:00"
+    assert all(slot.get("nhan_bua") for slot in dining)
+
+
+def test_full_day_has_midday_rest_and_evening_after_dinner():
+    plan = build_plan(
+        request().model_copy(
+            update={"thoi_luong": "ca_ngay", "nonce": "nonce-rest-evening-0001"}
+        )
+    )
+    slots = plan["ngay"][0]["khoang_gio"]
+    rest = next((slot for slot in slots if slot.get("bua_an") == "nghi"), None)
+    lunch = next((slot for slot in slots if slot.get("bua_an") == "trua"), None)
+    dinner = next((slot for slot in slots if slot.get("bua_an") == "toi"), None)
+    assert rest is not None
+    assert lunch is not None and dinner is not None
+    assert lunch["ket_thuc"] <= rest["bat_dau"]
+    assert "12:00" <= rest["bat_dau"] <= "14:30"
+    after_dinner = [slot for slot in slots if slot["bat_dau"] >= dinner["ket_thuc"]]
+    assert after_dinner, "expected at least one evening stop after dinner"
+
+
+def test_half_day_plan_includes_lunch():
+    plan = build_plan(request().model_copy(update={"thoi_luong": "nua_ngay"}))
+    slots = plan["ngay"][0]["khoang_gio"]
+    dining = [slot for slot in slots if slot.get("bua_an") == "trua"]
+    assert len(dining) == 1
+    assert dining[0]["loai"] in {"nha_hang", "quan_an"}
+    assert dining[0]["bat_dau"] >= "11:30"
+
+
+def test_plan_never_repeats_same_place_name():
+    for duration, nonce in (
+        ("ca_ngay", "nonce-dedupe-day-0001"),
+        ("nhieu_ngay", "nonce-dedupe-multi-0001"),
+    ):
+        plan = build_plan(
+            request().model_copy(
+                update={
+                    "context": "du lịch Hà Nội lần đầu, tham quan điểm nổi tiếng",
+                    "thoi_luong": duration,
+                    "nonce": nonce,
+                }
+            )
+        )
+        slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+        ids = [slot["dia_diem_id"] for slot in slots]
+        names = [slot["ten_dia_diem"] for slot in slots]
+        assert len(ids) == len(set(ids))
+        assert len(names) == len(set(names))
+        assert names.count("Lăng Chủ tịch Hồ Chí Minh") <= 1
+
+
 def test_plan_has_one_valid_route_with_trusted_places():
+    from app.pipeline.planner import _max_plan_slots, _min_plan_slots
+
     plan = build_plan(request())
     slots = plan["ngay"][0]["khoang_gio"]
-    assert 4 <= len(slots) <= 10
+    assert _min_plan_slots("ca_ngay") <= len(slots) <= _max_plan_slots("ca_ngay")
     assert len({slot["dia_diem_id"] for slot in slots}) == len(slots)
     assert validate_plan(plan, {slot["dia_diem_id"] for slot in slots}) == []
 
@@ -26,12 +148,18 @@ def test_validator_rejects_hallucinated_place():
 
 
 def test_all_duration_modes_are_supported():
+    from app.pipeline.planner import _max_plan_slots, _min_plan_slots
+
     for duration in ("vai_gio", "nua_ngay", "ca_ngay", "nhieu_ngay"):
         payload = request().model_copy(update={"thoi_luong": duration})
         plan = build_plan(payload)
         slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
-        assert 4 <= len(slots) <= 10
+        assert _min_plan_slots(duration) <= len(slots) <= _max_plan_slots(duration)
         assert len(plan["ngay"]) == (2 if duration == "nhieu_ngay" else 1)
+        if duration == "nhieu_ngay":
+            day_counts = [len(day["khoang_gio"]) for day in plan["ngay"]]
+            assert all(count >= 4 for count in day_counts)
+            assert sum(day_counts) >= 10
 
 
 def test_plan_never_exceeds_per_person_budget():
@@ -67,6 +195,60 @@ def test_context_intent_changes_candidate_mix():
     }
     assert "cafe" in coffee_kinds
     assert {"bao_tang", "dia_danh"}.intersection(culture_kinds)
+
+
+def test_tourism_plan_prefers_attractions_over_cafes():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội 2 ngày tham quan",
+                "thoi_luong": "nhieu_ngay",
+                "nonce": "nonce-sights-not-cafe-0001",
+            }
+        )
+    )
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    kinds = [slot["loai"] for slot in slots]
+    cafe_as_sightseeing = sum(
+        1 for slot in slots if slot["loai"] == "cafe" and not slot.get("bua_an")
+    )
+    sight_count = sum(1 for kind in kinds if kind in {"dia_danh", "bao_tang", "cong_vien", "cho"})
+    meal_count = sum(1 for slot in slots if slot.get("bua_an") in {"trua", "toi"})
+    assert cafe_as_sightseeing == 0
+    assert sight_count >= 6
+    assert meal_count >= 2
+    assert sight_count > cafe_as_sightseeing
+    assert any(slot.get("bua_an") == "nghi" for slot in slots)
+    for day in plan["ngay"]:
+        dinner = next((slot for slot in day["khoang_gio"] if slot.get("bua_an") == "toi"), None)
+        assert dinner is not None
+        assert any(
+            slot.get("bua_an") == "dem" or slot["bat_dau"] >= dinner["ket_thuc"]
+            for slot in day["khoang_gio"]
+        )
+
+
+def test_visit_guidance_keeps_lang_bac_in_morning_window():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội tham quan Lăng Bác và phố cổ",
+                "thoi_luong": "ca_ngay",
+                "nonce": "nonce-lang-bac-morning-0001",
+            }
+        )
+    )
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    lang = next(
+        (slot for slot in slots if "Lăng" in slot["ten_dia_diem"] or "lang" in slot["dia_diem_id"]),
+        None,
+    )
+    assert lang is not None
+    assert lang["bat_dau"] < "11:00"
+    assert lang["ket_thuc"] <= "11:00"
+    dinner = next((slot for slot in slots if slot.get("bua_an") == "toi"), None)
+    assert dinner is not None
+    assert dinner["bat_dau"] >= "18:00"
 
 
 def test_deterministic_plan_has_richer_slot_descriptions():
@@ -277,7 +459,9 @@ def test_ai_failure_falls_back_to_verified_deterministic_plan(monkeypatch):
     payload = request().model_copy(update={"ngon_ngu": "en"})
     plan = build_plan(payload)
     slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
-    assert 4 <= len(slots) <= 10
+    from app.pipeline.planner import _max_plan_slots, _min_plan_slots
+
+    assert _min_plan_slots("ca_ngay") <= len(slots) <= _max_plan_slots("ca_ngay")
     assert validate_plan(plan, {slot["dia_diem_id"] for slot in slots}, payload) == []
     assert any("AI is temporarily unavailable" in note for note in plan["luu_y"])
 

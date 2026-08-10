@@ -6,19 +6,28 @@ import { useLocale } from "@/components/LocaleProvider";
 import { getSession, setSession } from "@/lib/session";
 import type { PlannerTranslationKey } from "@/lib/i18n-core";
 
+type Duration = "vai_gio" | "nua_ngay" | "ca_ngay" | "nhieu_ngay";
+type ChatMessage = { id: number; role: "user" | "assistant"; text: string };
+
 export default function Planner() {
   const { locale, t } = useLocale();
   const ideaKeys = ["ideaCoffee", "ideaFood", "ideaCulture"] as const;
   const [context, setContext] = useState(() => t("ideaCoffee"));
   const [people, setPeople] = useState<number | "">(2);
   const [needsDuration, setNeedsDuration] = useState(false);
+  const [pendingContext, setPendingContext] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [statusKey, setStatusKey] = useState<PlannerTranslationKey | null>(null);
   const [errorKey, setErrorKey] = useState<PlannerTranslationKey | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const mounted = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
   const previousDefault = useRef(context);
+  const messageId = useRef(0);
+  const lastRequest = useRef<{ context: string; duration: Duration } | null>(null);
+  const transcriptEnd = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -33,6 +42,10 @@ export default function Planner() {
     setContext((current) => (current === previousDefault.current ? next : current));
     previousDefault.current = next;
   }, [locale, t]);
+
+  useEffect(() => {
+    transcriptEnd.current?.scrollIntoView({ block: "nearest" });
+  }, [messages]);
 
   const safeStatusKey = (value: string): PlannerTranslationKey =>
     value === "finding_places" ? "findingPlaces" : value === "routing_plan" ? "routingPlan" : "working";
@@ -63,7 +76,7 @@ export default function Planner() {
     return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
-  function inferDuration(value: string) {
+  function inferDuration(value: string): Duration | null {
     const normalized = normalizeText(value);
     if (/(?:vai ngay|2 ngay|hai ngay|3 ngay|ba ngay|4 ngay|bon ngay|nhieu ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
     if (/(?:vai gio|2 gio|3 gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
@@ -72,33 +85,34 @@ export default function Planner() {
     return null;
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (submitting.current) return;
+  function durationQuestion() {
+    return `${t("dayPrompt")} ${t("durationLabel")}: ${t("fewHours")}, ${t("halfDay")}, ${t("fullDay")}, ${t("multiDay")}.`;
+  }
+
+  function addMessage(role: ChatMessage["role"], text: string) {
+    setMessages((current) => [...current, { id: ++messageId.current, role, text }]);
+  }
+
+  async function generatePlan(requestContext: string, duration: Duration) {
     const validPeople =
       typeof people === "number" &&
       Number.isFinite(people) &&
       Number.isInteger(people) &&
       people >= 1 &&
       people <= 30;
-    if (!context.trim() || !validPeople) {
+    if (!requestContext.trim() || !validPeople) {
       setErrorKey("generateFailed");
       return;
     }
-    const duration = inferDuration(context);
-    if (!duration) {
-      setNeedsDuration(true);
-      setErrorKey(null);
-      setStatusKey(null);
-      return;
-    }
+    lastRequest.current = { context: requestContext, duration };
     submitting.current = true;
     setBusy(true);
     setNeedsDuration(false);
     setErrorKey(null);
+    setErrorDetail(null);
     setStatusKey("sendingRequest");
     const session = getSession();
-    const fingerprint = JSON.stringify({ context: context.trim(), duration, people, locale, session });
+    const fingerprint = JSON.stringify({ context: requestContext.trim(), duration, people, locale, session });
     const nonce = requestNonce(fingerprint);
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -109,7 +123,7 @@ export default function Planner() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          context,
+          context: requestContext,
           location: { lat: 21.0285, lng: 105.8542 },
           thoi_luong: duration,
           so_nguoi: people,
@@ -145,7 +159,18 @@ export default function Planner() {
     } catch (cause) {
       if (mounted.current) {
         setStatusKey(null);
-        setErrorKey(cause instanceof DOMException && cause.name === "AbortError" ? "generateTimeout" : "generateFailed");
+        if (cause instanceof DOMException && cause.name === "AbortError") {
+          setErrorKey("generateTimeout");
+          setErrorDetail(null);
+        } else {
+          setErrorKey("generateFailed");
+          const message = cause instanceof Error ? cause.message.trim() : "";
+          setErrorDetail(
+            message && message !== "Không thể tạo kế hoạch" && message !== "invalid result"
+              ? message
+              : null,
+          );
+        }
       }
     } finally {
       clearTimeout(timeout);
@@ -155,12 +180,92 @@ export default function Planner() {
     }
   }
 
+  function answerDuration(answer: string, duration = inferDuration(answer)) {
+    if (submitting.current || !pendingContext) return;
+    addMessage("user", answer);
+    setContext("");
+    if (!duration) {
+      addMessage("assistant", durationQuestion());
+      setErrorKey(null);
+      setStatusKey(null);
+      return;
+    }
+    const validPeople =
+      typeof people === "number" && Number.isFinite(people) && Number.isInteger(people) && people >= 1 && people <= 30;
+    if (!validPeople) {
+      setErrorKey("generateFailed");
+      return;
+    }
+    const requestContext = `${pendingContext.trim()}\n${answer.trim()}`;
+    setPendingContext(null);
+    setNeedsDuration(false);
+    void generatePlan(requestContext, duration);
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (submitting.current) return;
+    const answer = context.trim();
+    if (needsDuration) {
+      if (answer) answerDuration(answer);
+      return;
+    }
+    const validPeople =
+      typeof people === "number" && Number.isFinite(people) && Number.isInteger(people) && people >= 1 && people <= 30;
+    if (!answer || !validPeople) {
+      setErrorKey("generateFailed");
+      return;
+    }
+    addMessage("user", answer);
+    const duration = inferDuration(answer);
+    if (!duration) {
+      setPendingContext(answer);
+      setNeedsDuration(true);
+      setContext("");
+      addMessage("assistant", durationQuestion());
+      setErrorKey(null);
+      setStatusKey(null);
+      return;
+    }
+    void generatePlan(answer, duration);
+  }
+
+  function retryGenerate() {
+    const request = lastRequest.current;
+    if (!request || submitting.current) return;
+    void generatePlan(request.context, request.duration);
+  }
+
   return (
     <form className="planner" onSubmit={submit}>
       <div className="chat-welcome">
         <span className="assistant-dot" />
         <p className="bubble assistant">{t("chatWelcome")}</p>
       </div>
+      {messages.length > 0 && (
+        <div className="planner-transcript" role="log" aria-live="polite" aria-relevant="additions text">
+          {messages.map((message) => (
+            <p className={`bubble ${message.role}`} key={message.id}>
+              {message.text}
+            </p>
+          ))}
+          {needsDuration && (
+            <div className="duration-suggestions" role="group" aria-label={t("durationLabel")}>
+              {([
+                ["fewHours", "vai_gio"],
+                ["halfDay", "nua_ngay"],
+                ["fullDay", "ca_ngay"],
+                ["multiDay", "nhieu_ngay"],
+              ] as const).map(([key, duration]) => (
+                <button type="button" className="chip" key={duration} onClick={() => answerDuration(t(key), duration)} disabled={busy}>
+                  {t(key)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div ref={transcriptEnd} aria-hidden="true" />
+        </div>
+      )}
       <div className="quick-actions" aria-label={t("dayPrompt")}>
         {ideaKeys.map((key) => {
           const idea = t(key);
@@ -173,6 +278,12 @@ export default function Planner() {
               onClick={() => {
                 setContext(idea);
                 setNeedsDuration(false);
+                setPendingContext(null);
+                setMessages([]);
+                setErrorKey(null);
+                setErrorDetail(null);
+                setStatusKey(null);
+                lastRequest.current = null;
               }}
               disabled={busy}
             >
@@ -188,7 +299,6 @@ export default function Planner() {
           maxLength={500}
           onChange={(event) => {
             setContext(event.target.value);
-            setNeedsDuration(false);
           }}
           placeholder={t("chatPlaceholder")}
           aria-label={t("chatPlaceholder")}
@@ -199,11 +309,6 @@ export default function Planner() {
           ↑
         </button>
       </div>
-      {needsDuration && (
-        <div className="status duration-ask" role="status" aria-live="polite">
-          {t("dayPrompt")} {t("durationLabel")}: {t("fewHours")}, {t("halfDay")}, {t("fullDay")} {t("multiDay")}
-        </div>
-      )}
       <label htmlFor="planner-people">{t("peopleLabel")}</label>
       <input
         id="planner-people"
@@ -223,8 +328,11 @@ export default function Planner() {
       )}
       {errorKey && (
         <div className="error retry-panel" role="alert">
-          <span>{t(errorKey)}</span>
-          <button type="submit" className="secondary retry-action" disabled={busy}>
+          <span>
+            {t(errorKey)}
+            {errorDetail ? ` — ${errorDetail}` : ""}
+          </span>
+          <button type="button" className="secondary retry-action" onClick={retryGenerate} disabled={busy}>
             {t("retryCreate")}
           </button>
         </div>
