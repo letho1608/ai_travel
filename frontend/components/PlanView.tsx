@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import {FormEvent,useEffect,useLayoutEffect,useMemo,useRef,useState} from "react";
+import {createPortal} from "react-dom";
 import Image from "next/image";
 
 import {useLocale} from "@/components/LocaleProvider";
@@ -244,7 +245,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                         setSearchStatus("idle");searchGeneration.current+=1;
                       }}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="m4 4 5 5"/></svg>
+                      <svg aria-hidden="true" viewBox="0 0 256 256" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round"><path d="m176 64 32 32-32 32"/><path d="M48 96h16a80 80 0 0 1 80 80h64"/><path d="m176 144 32 32-32 32"/><path d="M48 176h16a80 80 0 0 0 80-80h64"/></svg>
                       {t("changePlace")}
                     </button>
                     <button
@@ -263,9 +264,9 @@ export default function PlanView({initial,token,version,constraints:initialConst
                           <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" />
                         </svg>
                     </button>
-                    {deleteFor===slot.dia_diem_id&&<div className="delete-menu" style={deletePosition} id={`delete-${slot.dia_diem_id}`} role="dialog" aria-modal="true" aria-label={t("deletePlaceLabel",{place:slot.ten_dia_diem})}><p>{t("deletePlaceConfirm",{place:slot.ten_dia_diem})}</p><div><button type="button" className="secondary" autoFocus onClick={closeDelete}>{t("deletePlaceCancel")}</button><button type="button" className="danger" onClick={()=>void deleteSlot(slot)}>{t("deletePlace")}</button></div></div>}
+                    {deleteFor===slot.dia_diem_id&&typeof document!=="undefined"&&createPortal(<div className="delete-menu" style={deletePosition} id={`delete-${slot.dia_diem_id}`} role="dialog" aria-modal="true" aria-label={t("deletePlaceLabel",{place:slot.ten_dia_diem})}><p>{t("deletePlaceConfirm",{place:slot.ten_dia_diem})}</p><div><button type="button" className="secondary" autoFocus onClick={closeDelete}>{t("deletePlaceCancel")}</button><button type="button" className="danger" onClick={()=>void deleteSlot(slot)}>{t("deletePlace")}</button></div></div>,document.body)}
                   </div>
-                  {changeFor === slot.dia_diem_id && (
+                  {changeFor === slot.dia_diem_id && typeof document!=="undefined" && createPortal(
                     <div
                       className="change-menu"
                       id={`change-${slot.dia_diem_id}`}
@@ -329,7 +330,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                           </ul>
                         </form>
                       )}
-                    </div>
+                    </div>,document.body
                   )}
                 </article>))}</div><div className="itinerary-summary-actions"><button className="primary" type="button" onClick={saveOffline} disabled={disabled}><span aria-hidden="true">▯</span> {t("savePlan")}</button><button className="secondary" type="button" onClick={copy} disabled={disabled}><span aria-hidden="true">⌯</span> {t("share")}</button></div><button className="itinerary-regenerate secondary" type="button" onClick={regenerate} disabled={disabled}><span aria-hidden="true">↻</span> {t("regenerate")}</button></div></section>
       <section className="map-panel"><MapView slots={slots} selectedId={selectedId} onSelect={setSelectedId}/><div className="map-legend card">{t("mapLegend")}</div></section></div>
