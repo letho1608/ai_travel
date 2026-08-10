@@ -94,6 +94,9 @@ class MockAIAdapter:
     def assemble(self, draft: dict, trusted_ids: set[str], locale: str = "vi") -> dict:
         return json.loads(json.dumps(draft, ensure_ascii=False))
 
+    def estimate_place_metadata(self, name: str, kind: str, area: str) -> dict:
+        return {"open_hour": 8, "close_hour": 22, "cost": 0}
+
 
 class OpenAICompatibleAIAdapter:
     """Validated JSON adapter; AI may edit copy but never inventory or constraints."""
@@ -108,6 +111,39 @@ class OpenAICompatibleAIAdapter:
             timeout=httpx.Timeout(10, connect=2),
         )
         self.provider = settings.ai_mode
+
+    def estimate_place_metadata(self, name: str, kind: str, area: str) -> dict:
+        if not breaker.allow():
+            raise RuntimeError("Cầu dao AI đang mở")
+        prompt = {
+            "yeu_cau": "Estimate conservative public opening and closing whole hours and typical VND cost per person for this real Hanoi place. Return JSON only. Never return prose.",
+            "dia_diem": {"name": name, "kind": kind, "area": area},
+            "json_mau": {"open_hour": 8, "close_hour": 22, "cost": 50000},
+        }
+        try:
+            response = self.client.post("/chat/completions", json={
+                "model": settings.ai_model,
+                "messages": [{"role": "system", "content": "Only return a valid JSON object."}, {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}],
+                "response_format": {"type": "json_object"}, "temperature": 0.1, "max_tokens": 120,
+            })
+            response.raise_for_status()
+            body = response.json()
+            choice = body["choices"][0]
+            if choice.get("finish_reason") != "stop":
+                raise ValueError("AI estimate was incomplete")
+            payload = json.loads(choice["message"]["content"])
+            opening, closing, cost = int(payload["open_hour"]), int(payload["close_hour"]), int(payload["cost"])
+            if not (0 <= opening < closing <= 24 and 0 <= cost <= 10_000_000):
+                raise ValueError("AI estimate outside safe bounds")
+            usage = body.get("usage", {})
+            input_tokens, output_tokens = int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0))
+            amount = (input_tokens * settings.ai_input_usd_per_million + output_tokens * settings.ai_output_usd_per_million) / 1_000_000
+            store.record_ai_usage(self.provider, settings.ai_model, input_tokens, output_tokens, amount, settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd)
+            breaker.record_success()
+            return {"open_hour": opening, "close_hour": closing, "cost": cost}
+        except (httpx.HTTPError, IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            breaker.record_failure()
+            raise RuntimeError("AI không thể ước tính dữ liệu địa điểm an toàn") from exc
 
     def propose_place_ids(
         self,

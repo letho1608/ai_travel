@@ -111,6 +111,10 @@ def _catalog_match(name: str, origin: tuple[float, float]) -> Place | None:
     ]
     if not matches:
         return None
+    exact = [place for place in matches if _fold(place.name) == needle]
+    if len(exact) > 1 or (not exact and len(matches) > 1):
+        return None
+    matches = exact or matches
     return min(matches, key=lambda place: haversine_km(origin[0], origin[1], place.lat, place.lng))
 
 
@@ -122,14 +126,25 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
     cache = _load_cache()
     cached = cache.get(cache_key)
     if cached:
-        return Place(**cached)
+        try:
+            cached_place = Place(**cached)
+            if (
+                cached_place.id.startswith("osm-verified-")
+                and cached_place.source == "Nominatim"
+                and cached_place.source_url
+                and 20.8 <= cached_place.lat <= 21.3
+                and 105.5 <= cached_place.lng <= 106.1
+            ):
+                return cached_place
+        except (TypeError, ValueError):
+            pass
     try:
         response = httpx.get(
             NOMINATIM_URL,
             params={
                 "q": f"{name}, Hanoi, Vietnam",
                 "format": "jsonv2",
-                "limit": 1,
+                "limit": 5,
                 "addressdetails": 1,
             },
             headers={"User-Agent": USER_AGENT},
@@ -139,25 +154,36 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
         rows = response.json()
     except (httpx.HTTPError, ValueError, TypeError):
         return None
-    if not rows:
+    if not isinstance(rows, list) or not rows:
         return None
-    row = rows[0]
+    valid_rows = [row for row in rows if str(row.get("class", "")).casefold() in ALLOWED_NOMINATIM_CLASSES and str(row.get("type", "")).casefold() in ALLOWED_NOMINATIM_TYPES]
+    exact_rows = [row for row in valid_rows if _fold(str(row.get("name", ""))) == _fold(name)]
+    candidates = exact_rows or valid_rows
+    if len(candidates) != 1:
+        return None
+    row = candidates[0]
     place_class = str(row.get("class", "")).casefold()
     place_type = str(row.get("type", "")).casefold()
     if place_class not in ALLOWED_NOMINATIM_CLASSES or place_type not in ALLOWED_NOMINATIM_TYPES:
         return None
     display_name = str(row.get("display_name", ""))
-    if "Việt Nam" not in display_name and "Vietnam" not in display_name:
+    folded_display_name = _fold(display_name)
+    if "viet nam" not in folded_display_name and "vietnam" not in folded_display_name:
         return None
-    if "Hà Nội" not in display_name and "Hanoi" not in display_name:
+    if "ha noi" not in folded_display_name and "hanoi" not in folded_display_name:
         return None
     try:
         lat = float(row["lat"])
         lng = float(row["lon"])
     except (KeyError, TypeError, ValueError):
         return None
+    if not (20.8 <= lat <= 21.3 and 105.5 <= lng <= 106.1):
+        return None
+    osm_id, osm_type = row.get("osm_id"), str(row.get("osm_type", "")).casefold()
+    if not isinstance(osm_id, int) or osm_type not in {"node", "way", "relation"}:
+        return None
     place = Place(
-        id=f"osm-verified-{row.get('osm_type', 'place')}-{row.get('osm_id')}",
+        id=f"osm-verified-{osm_type}-{osm_id}",
         name=str(row.get("name") or name),
         kind="dia_danh",
         area="Hà Nội",
@@ -169,7 +195,7 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
         open_hour=7,
         close_hour=22,
         source="Nominatim",
-        source_url=f"https://www.openstreetmap.org/{row.get('osm_type')}/{row.get('osm_id')}",
+        source_url=f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
     )
     cache[cache_key] = place.__dict__
     _save_cache(cache)

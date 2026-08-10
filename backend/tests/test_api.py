@@ -3,9 +3,11 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from app.data import Place
 from app.main import app
 from app.pipeline.planner import AI_FALLBACK_NOTE
 from app.routers.auth import DEMO_USERS
+from app.routers import plans as plans_router
 from app.services.rate_limit import limiter
 from app.services.store import store
 
@@ -217,6 +219,19 @@ def test_explicit_replacement_rejects_unknown_id():
     headers = {"X-Session-Id": PAYLOAD["ma_phien"]}
     unknown = client.patch(f"/api/plans/{result['token']}/swipe", headers=headers, json={"diem_bi_loai": target, "dia_diem_thay_the": "missing", "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
     assert unknown.status_code == 422
+
+
+def test_free_text_replacement_verifies_and_labels_ai_estimates(monkeypatch):
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]
+    external = Place("osm-verified-node-987", "Vườn nghệ thuật mới", "dia_danh", "Hà Nội", target["toa_do"]["lat"], target["toa_do"]["lng"], 0, 60, ("osm_verified",), 7, 22, "Nominatim", "https://www.openstreetmap.org/node/987")
+    monkeypatch.setattr(plans_router, "verify_place_name", lambda name, origin: external)
+    monkeypatch.setattr(plans_router.ai_adapter, "estimate_place_metadata", lambda *args: {"open_hour": 8, "close_hour": 21, "cost": 25000})
+    response = client.patch(f"/api/plans/{result['token']}/swipe", headers={"X-Session-Id": PAYLOAD["ma_phien"]}, json={"diem_bi_loai": target["dia_diem_id"], "ten_dia_diem_thay_the": external.name, "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
+    assert response.status_code == 200
+    replacement = next(slot for day in response.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"] if slot["dia_diem_id"] == external.id)
+    assert replacement["du_lieu_uoc_tinh"] is True
+    assert "AI ước tính" in replacement["ghi_chu"] and "kiểm tra lại" in replacement["ghi_chu"]
 
 
 def test_budget_counter_fails_closed():

@@ -180,6 +180,11 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/onClick=\{regenerate\} disabled=\{disabled\}/);
   assert.doesNotMatch(planViewSource,/data\.detail|error\.message/);
   assert.match(planViewSource,/className="slot-select"/);
+  assert.match(planViewSource,/ten_dia_diem_thay_the:replacementText\?\.trim\(\)\|\|undefined/);
+  assert.match(planViewSource,/role="combobox" aria-autocomplete="list"/);
+  assert.match(planViewSource,/void swipe\(slot\.dia_diem_id,undefined,searchText\)/);
+  assert.match(globalsSource,/\.slot-actions\{grid-column:1\/-1;[^}]*justify-self:start/);
+  assert.match(globalsSource,/\.change-menu\{position:fixed/);
   assert.match(planViewSource,/quickActions\.map/);
   assert.match(planViewSource,/applyRefine\(prompt\)/);
   assert.doesNotMatch(planViewSource,/<article role="button"/);

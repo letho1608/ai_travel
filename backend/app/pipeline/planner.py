@@ -1396,6 +1396,7 @@ def validate_plan(
     request: PlanRequest | None = None,
     *,
     allow_below_minimum: bool = False,
+    trusted_places: tuple[Place, ...] = (),
 ) -> list[str]:
     errors: list[str] = []
     slots = [slot for day in plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
@@ -1409,7 +1410,7 @@ def validate_plan(
     place_ids = [slot.get("dia_diem_id") for slot in slots]
     if len(place_ids) != len(set(place_ids)):
         errors.append("Kế hoạch chứa địa điểm trùng lặp")
-    by_id = {place.id: place for place in PLACES}
+    by_id = {place.id: place for place in (*PLACES, *trusted_places)}
     name_keys = [
         _place_name_key(by_id[slot_id])
         for slot_id in place_ids

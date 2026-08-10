@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from app.data import PLACES
+from app.data import PLACES, Place
 from app.pipeline import planner
 from app.pipeline.planner import COPY, build_plan, validate_plan
 from app.schemas import PlanRequest, UserPreferencesRequest
@@ -367,6 +367,16 @@ def test_delete_validation_relaxes_only_minimum_cardinality():
     assert validate_plan(plan, {slot["dia_diem_id"]}, payload, allow_below_minimum=True) == []
     slot["dia_diem_id"] = "fake"
     assert validate_plan(plan, set(), payload, allow_below_minimum=True)
+
+
+def test_validator_accepts_verified_external_place_metadata():
+    payload = request()
+    plan = build_plan(payload)
+    slot = plan["ngay"][0]["khoang_gio"][0]
+    external = Place("osm-verified-node-42", "Điểm mới", "dia_danh", "Hà Nội", slot["toa_do"]["lat"], slot["toa_do"]["lng"], 0, 60, ("osm_verified",), 7, 22, "Nominatim")
+    slot.update({"dia_diem_id": external.id, "ten_dia_diem": external.name, "toa_do": {"lat": external.lat, "lng": external.lng}})
+    trusted = {item["dia_diem_id"] for day in plan["ngay"] for item in day["khoang_gio"]}
+    assert validate_plan(plan, trusted, payload, trusted_places=(external,)) == []
 
 
 def test_all_duration_modes_are_supported():

@@ -8,8 +8,9 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
-from app.data import PLACES, image_for
+from app.data import PLACES, Place, image_for
 from app.pipeline.planner import COPY, PipelineUnavailable, _effective_hours, build_plan, travel_minutes, validate_plan
+from app.services.ai import ai_adapter
 from app.routers.auth import resolve_user
 from app.schemas import (
     CommentRequest,
@@ -24,6 +25,7 @@ from app.schemas import (
     TripFeedbackRequest,
 )
 from app.services.pdf_export import build_itinerary_pdf
+from app.services.osm_verify import verify_place_name
 from app.services.rate_limit import limiter
 from app.services.store import store
 from app.text_utils import ascii_fold
@@ -335,22 +337,44 @@ def list_plans(
     return {"ds_ke_hoach": items}
 
 
-def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False):
+def _place_from_slot(slot: dict) -> Place:
+    coordinates = slot.get("toa_do") or {}
+    if not slot.get("du_lieu_uoc_tinh") or not slot.get("nguon_url") or not all(key in slot for key in ("gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi")):
+        raise ValueError("Địa điểm ngoài catalog thiếu metadata đã xác minh")
+    return Place(slot["dia_diem_id"], slot.get("ten_dia_diem") or slot["dia_diem_id"], slot.get("loai") or "dia_danh", "Hà Nội", float(coordinates.get("lat", 0)), float(coordinates.get("lng", 0)), max(0, int(slot.get("chi_phi_moi_nguoi", 0))), 60, ("verified_external",), int(slot.get("gio_mo_cua_uoc_tinh", 7)), int(slot.get("gio_dong_cua_uoc_tinh", 22)), slot.get("nguon") or "Nominatim", slot.get("nguon_url"), slot.get("anh"), slot.get("anh_nguon"))
+
+
+def _plan_external_places(plan: dict) -> tuple[Place, ...]:
+    catalog_ids = {place.id for place in PLACES}
+    places: list[Place] = []
+    for day in plan.get("ngay", []):
+        for slot in day.get("khoang_gio", []):
+            if slot.get("dia_diem_id") and slot["dia_diem_id"] not in catalog_ids:
+                try:
+                    places.append(_place_from_slot(slot))
+                except (TypeError, ValueError):
+                    continue
+    return tuple(places)
+
+
+def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, additional: tuple[Place, ...] = ()):
     slots = [slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
     matches = [slot for slot in slots if slot.get("dia_diem_id") == rejected_id]
     if len(matches) != 1:
         raise HTTPException(404 if not matches else 409, "Địa điểm không nằm duy nhất trong kế hoạch")
     target = matches[0]
-    rejected = next((place for place in PLACES if place.id == rejected_id), None)
+    plan_places = (*PLACES, *_plan_external_places(item.plan), *additional)
+    rejected = next((place for place in plan_places if place.id == rejected_id), None)
     if not rejected:
         raise HTTPException(404, "Địa điểm không còn trong danh mục")
     day = next(day for day in item.plan.get("ngay", []) if target in day.get("khoang_gio", []))
     index = day["khoang_gio"].index(target)
     previous_slot = day["khoang_gio"][index - 1] if index else None
     next_slot = day["khoang_gio"][index + 1] if index + 1 < len(day["khoang_gio"]) else None
-    by_id = {place.id: place for place in PLACES}
+    by_id = {place.id: place for place in plan_places}
     used_ids = {slot.get("dia_diem_id") for slot in slots}
     used_names = {ascii_fold(slot.get("ten_dia_diem", "")).lower() for slot in slots if slot.get("dia_diem_id") != rejected_id}
+    used_places = [by_id[slot_id] for slot_id in used_ids if slot_id != rejected_id and slot_id in by_id]
     request = PlanRequest.model_validate(item.request)
 
     def minutes(value: str) -> int:
@@ -360,6 +384,8 @@ def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False):
     def eligible(candidate) -> bool:
         open_hour, close_hour = _effective_hours(candidate)
         if candidate.id in used_ids or ascii_fold(candidate.name).lower() in used_names:
+            return False
+        if any((candidate.lat - place.lat) ** 2 + (candidate.lng - place.lng) ** 2 < 0.0000001 for place in used_places):
             return False
         if same_kind and candidate.kind != rejected.kind:
             return False
@@ -376,7 +402,7 @@ def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False):
         next_total = item.plan.get("tong_chi_phi", 0) - target.get("chi_phi", 0) + candidate.cost * request.so_nguoi
         return next_total // request.so_nguoi <= request.ngan_sach
 
-    return target, rejected, [place for place in PLACES if eligible(place)]
+    return target, rejected, [place for place in plan_places if eligible(place)]
 
 
 @router.patch("/plans/{token}/swipe")
@@ -393,13 +419,31 @@ def swipe(
     owner(item, x_session_id or payload.ma_phien, authorization)
     if not limiter.check(f"swipe:{item.session_id}", 20):
         raise HTTPException(429, "Bạn đã đổi điểm quá nhiều lần")
-    target, rejected, candidates = _replacement_candidates(
-        item, payload.diem_bi_loai, same_kind=not bool(payload.dia_diem_thay_the)
-    )
+    if payload.dia_diem_thay_the and payload.ten_dia_diem_thay_the:
+        raise HTTPException(422, "Chỉ chọn ID gợi ý hoặc nhập tên địa điểm")
+    requested_place: Place | None = None
+    estimated = False
+    if payload.ten_dia_diem_thay_the:
+        current = next((slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") == payload.diem_bi_loai), None)
+        if not current:
+            raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
+        coordinates = current.get("toa_do") or {}
+        requested_place = verify_place_name(payload.ten_dia_diem_thay_the.strip(), (float(coordinates.get("lat", 21.0285)), float(coordinates.get("lng", 105.8542))))
+        if not requested_place:
+            raise HTTPException(404, "Không tìm thấy địa điểm này tại Hà Nội")
+        if requested_place.id not in {place.id for place in PLACES}:
+            try:
+                estimate = ai_adapter.estimate_place_metadata(requested_place.name, requested_place.kind, requested_place.area)
+            except RuntimeError as exc:
+                raise HTTPException(503, "Không thể ước tính dữ liệu địa điểm") from exc
+            requested_place = Place(**(requested_place.__dict__ | estimate))
+            estimated = True
+    external = (requested_place,) if requested_place and requested_place.id not in {place.id for place in PLACES} else ()
+    target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=not bool(payload.dia_diem_thay_the or requested_place), additional=external)
     if not candidates:
         raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
-    if payload.dia_diem_thay_the:
-        replacement = next((p for p in candidates if p.id == payload.dia_diem_thay_the), None)
+    if payload.dia_diem_thay_the or requested_place:
+        replacement = next((p for p in candidates if p.id == (payload.dia_diem_thay_the or requested_place.id)), None)
         if not replacement:
             raise HTTPException(422, "Địa điểm thay thế không phù hợp với khung giờ hoặc lịch trình")
     else:
@@ -430,13 +474,26 @@ def swipe(
             "nguon_url": replacement.source_url,
         }
     )
+    for stale_key in ("du_lieu_uoc_tinh", "gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi", "nguon_du_lieu_uoc_tinh"):
+        new_target.pop(stale_key, None)
     swap_image_url, swap_image_credit = image_for(replacement)
     new_target["anh"] = swap_image_url
     new_target["anh_nguon"] = swap_image_credit
+    if estimated:
+        new_target["du_lieu_uoc_tinh"] = True
+        new_target["gio_mo_cua_uoc_tinh"] = replacement.open_hour
+        new_target["gio_dong_cua_uoc_tinh"] = replacement.close_hour
+        new_target["chi_phi_moi_nguoi"] = replacement.cost
+        new_target["nguon_du_lieu_uoc_tinh"] = "AI"
+        if plan_request.ngon_ngu == "vi":
+            new_target["ghi_chu"] = f"AI ước tính: mở {replacement.open_hour}:00–{replacement.close_hour}:00, khoảng {replacement.cost:,} VNĐ/người. Vui lòng kiểm tra lại."
+        else:
+            new_target["ghi_chu"] = f"AI estimate: open {replacement.open_hour}:00–{replacement.close_hour}:00, about {replacement.cost:,} VND/person. Please verify."
     plan["tong_chi_phi"] += new_target["chi_phi"] - old_cost
     plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
     try:
-        errors = validate_plan(plan, {p.id for p in PLACES}, plan_request)
+        trusted_external = _plan_external_places(plan)
+        errors = validate_plan(plan, {p.id for p in (*PLACES, *trusted_external)}, plan_request, trusted_places=trusted_external)
         if errors:
             raise PipelineUnavailable("; ".join(errors))
         if message:
@@ -503,7 +560,8 @@ def delete_slot(
         for slot in current_day.get("khoang_gio", [])
     )
     plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
-    errors = validate_plan(plan, {p.id for p in PLACES}, plan_request, allow_below_minimum=True)
+    trusted_external = _plan_external_places(plan)
+    errors = validate_plan(plan, {p.id for p in (*PLACES, *trusted_external)}, plan_request, allow_below_minimum=True, trusted_places=trusted_external)
     if errors:
         raise HTTPException(503, "; ".join(errors))
     try:

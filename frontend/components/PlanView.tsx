@@ -22,6 +22,7 @@ type ReplacementCandidate = {
 };
 type UiMessage={key:WorkspaceTranslationKey;values?:Record<string,string|number>};
 type ChatItem={role:"assistant"|"user";text?:string;key?:WorkspaceTranslationKey};
+class ReplacementRequestError extends Error{constructor(readonly key:"replacementNotFound"|"replacementInvalid"){super();}}
 const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==="object"&&value!==null;
 const isCoordinate=(value:unknown)=>isRecord(value)&&typeof value.lat==="number"&&Number.isFinite(value.lat)&&value.lat>=-90&&value.lat<=90&&typeof value.lng==="number"&&Number.isFinite(value.lng)&&value.lng>=-180&&value.lng<=180;
 const isSlot=(value:unknown)=>isRecord(value)&&typeof value.bat_dau==="string"&&typeof value.ket_thuc==="string"&&typeof value.dia_diem_id==="string"&&Boolean(value.dia_diem_id)&&typeof value.ten_dia_diem==="string"&&typeof value.mo_ta==="string"&&typeof value.chi_phi==="number"&&Number.isFinite(value.chi_phi)&&typeof value.ghi_chu==="string"&&isCoordinate(value.toa_do);
@@ -84,7 +85,7 @@ async function shareViaApi(value:string,title:string,text:string):Promise<"share
 }
 const quickRefines={vi:[["Rẻ hơn","Re hon"],["Ít di chuyển","It di chuyen"],["Thêm cafe","Them cafe"]],en:[["Cheaper","Cheaper"],["Less travel","Less travel"],["More cafe","More cafe"]]} as const;
 const durationKeys:Record<string,TranslationKey>={vai_gio:"fewHours",nua_ngay:"halfDay",ca_ngay:"fullDay",nhieu_ngay:"multiDay"};
-const errorMessageKeys=new Set<WorkspaceTranslationKey>(["copyFailed","offlineSaveFailed","actionFailed","refineFailed","versionsFailed","commentsFailed","regenerateFailed"]);
+const errorMessageKeys=new Set<WorkspaceTranslationKey>(["copyFailed","offlineSaveFailed","actionFailed","refineFailed","versionsFailed","commentsFailed","regenerateFailed","replacementNotFound","replacementInvalid"]);
 
 export default function PlanView({initial,token,version,constraints:initialConstraints}:{initial:Plan;token:string;version:number;constraints?:ThamSo}){
   const {locale,t}=useLocale();
@@ -101,7 +102,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
     [searchText, setSearchText] = useState(""),
     [suggestions, setSuggestions] = useState<ReplacementCandidate[]>([]),
     [searchStatus,setSearchStatus]=useState<"idle"|"loading"|"empty"|"error">("idle");
-  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),changeTrigger=useRef<HTMLButtonElement|null>(null);
+  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),searchTimer=useRef<ReturnType<typeof setTimeout>|null>(null),changeTrigger=useRef<HTMLButtonElement|null>(null);
   const slots=useMemo(()=>plan.ngay[activeDay]?.khoang_gio??[],[plan,activeDay]);
   const money=useMemo(()=>new Intl.NumberFormat(locale,{style:"currency",currency:"VND",maximumFractionDigits:0}),[locale]);
   const date=useMemo(()=>new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short"}),[locale]);
@@ -111,7 +112,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
   const fail=(key:"actionFailed"|"refineFailed"|"versionsFailed"|"commentsFailed"|"regenerateFailed")=>active()&&setMessage({key});
   const request=async(input:RequestInfo|URL,init:RequestInit={},timeoutMs=30000)=>{const requestToken=token,controller=new AbortController();controllers.current.add(controller);const timeout=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(input,{...init,signal:controller.signal});if(currentToken.current!==requestToken)throw new DOMException("Stale plan request","AbortError");return response}finally{clearTimeout(timeout);controllers.current.delete(controller)}};
 
-  useEffect(()=>{const activeControllers=controllers.current;mounted.current=true;return()=>{mounted.current=false;activeControllers.forEach(controller=>controller.abort());activeControllers.clear()}},[]);
+  useEffect(()=>{const activeControllers=controllers.current;mounted.current=true;return()=>{mounted.current=false;if(searchTimer.current)clearTimeout(searchTimer.current);activeControllers.forEach(controller=>controller.abort());activeControllers.clear()}},[]);
   useLayoutEffect(()=>{currentToken.current=token},[token]);
   useEffect(()=>()=>{controllers.current.forEach(controller=>controller.abort());controllers.current.clear()},[token]);
   useEffect(()=>{busyRef.current=null;setBusy(null);setPlan(initial);setVer(version);verRef.current=version;setSelectedId(initial.ngay[0]?.khoang_gio[0]?.dia_diem_id);setActiveDay(0);setVersions([]);setShowVersions(false);setComments([]);setShowComments(false);setShowFeedback(false);setChangeFor(null);setCustomSearch(false);setSearchText("");setSuggestions([]);setMessage(null);setConstraints(initialConstraints??null);setConversation(toChatItems(initial.hoi_thoai).length>0?toChatItems(initial.hoi_thoai):[{role:"assistant",key:"assistantWelcome"}])},[token,initial,version,initialConstraints]);
@@ -120,16 +121,16 @@ export default function PlanView({initial,token,version,constraints:initialConst
   useEffect(()=>{setActiveDay(day=>Math.min(day,Math.max(0,plan.ngay.length-1)))},[plan.ngay.length]);
   useEffect(()=>{const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);let active=true;(async()=>{try{const response=await fetch(`${API_URL}/api/plans/${token}/comments`,{signal:controller.signal,headers:{"X-Session-Id":getSession()}});const data=await safeJson(response);if(!response.ok||!isRecord(data)||!Array.isArray(data.ds_binh_luan)||!data.ds_binh_luan.every(isComment))throw new Error();if(active&&mounted.current)setComments(data.ds_binh_luan)}catch(error){if(active&&mounted.current)setMessage(current=>current??{key:"commentsFailed"})}})();return()=>{active=false;clearTimeout(timeout);controller.abort()}},[token]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(null),5000);return()=>clearTimeout(timer)},[message]);
-  useEffect(()=>{if(!changeFor)return;document.querySelector<HTMLButtonElement>(`#change-${CSS.escape(changeFor)} .change-choice`)?.focus();const dismiss=(event:KeyboardEvent|MouseEvent)=>{if(event instanceof KeyboardEvent&&event.key!=="Escape")return;const menu=document.getElementById(`change-${changeFor}`);if(event instanceof MouseEvent&&(menu?.contains(event.target as Node)||changeTrigger.current?.contains(event.target as Node)))return;setChangeFor(null);setCustomSearch(false);searchGeneration.current+=1;changeTrigger.current?.focus()};document.addEventListener("keydown",dismiss);document.addEventListener("mousedown",dismiss);return()=>{document.removeEventListener("keydown",dismiss);document.removeEventListener("mousedown",dismiss)}},[changeFor]);
+  useEffect(()=>{if(!changeFor)return;document.querySelector<HTMLButtonElement>(`#change-${CSS.escape(changeFor)} .change-choice`)?.focus();const dismiss=(event:KeyboardEvent|MouseEvent)=>{if(event instanceof KeyboardEvent&&event.key!=="Escape")return;const menu=document.getElementById(`change-${changeFor}`);if(event instanceof MouseEvent&&(menu?.contains(event.target as Node)||changeTrigger.current?.contains(event.target as Node)))return;if(searchTimer.current)clearTimeout(searchTimer.current);setChangeFor(null);setCustomSearch(false);searchGeneration.current+=1;changeTrigger.current?.focus()};document.addEventListener("keydown",dismiss);document.addEventListener("mousedown",dismiss);return()=>{document.removeEventListener("keydown",dismiss);document.removeEventListener("mousedown",dismiss)}},[changeFor]);
 
   async function copy(){if(!start("copy"))return;const url=publicShareUrl(token);try{const result=await shareViaApi(url,plan.tieu_de,plan.tom_tat);if(result==="shared"){setMessage({key:"shared"})}else if(result==="cancelled"){setMessage(null)}else{setMessage({key:await copyShareLink(url)?"copied":"copyFailed"})}}catch{setMessage({key:"copyFailed"})}finally{finish()}}
   function saveOffline(){if(!start("save"))return;try{localStorage.setItem(`offline-plan:${token}`,JSON.stringify({plan,version:ver,savedAt:new Date().toISOString()}));setMessage({key:"planSaved"})}catch{setMessage({key:"offlineSaveFailed"})}finally{finish()}}
   function downloadJson(){if(!start("download"))return;let url:string|null=null,anchor:HTMLAnchorElement|null=null;try{const blob=new Blob([JSON.stringify(plan,null,2)],{type:"application/json"});url=URL.createObjectURL(blob);anchor=document.createElement("a");anchor.href=url;anchor.download=`itinerary-${token}.json`;anchor.style.display="none";document.body.appendChild(anchor);anchor.click()}catch{fail("actionFailed")}finally{anchor?.remove();if(url)URL.revokeObjectURL(url);finish()}}
-  async function swipe(id: string, replacementId?:string){if(!start("swipe"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/swipe`,{method:"PATCH",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader(),},body:JSON.stringify({diem_bi_loai:id,dia_diem_thay_the: replacementId,phien_ban:verRef.current,ma_phien:session,}),}),data=await safeJson(response);if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach_moi)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=verRef.current)throw new Error();if(!active())return null;const oldIds=new Set(plan.ngay.flatMap((day)=>day.khoang_gio).map((slot)=>slot.dia_diem_id),);const replacement=data.ke_hoach_moi.ngay.flatMap((day)=>day.khoang_gio).find((slot)=>!oldIds.has(slot.dia_diem_id));const nextConversation=toChatItems(data.hoi_thoai);setPlan(data.ke_hoach_moi);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(replacement?.dia_diem_id??data.ke_hoach_moi.ngay[0]?.khoang_gio[0]?.dia_diem_id,
+  async function swipe(id: string, replacementId?:string, replacementText?:string){if(!start("swipe"))return;const session=getSession();try{const response=await request(`${API_URL}/api/plans/${token}/swipe`,{method:"PATCH",headers:{"Content-Type":"application/json","X-Session-Id":session,...authHeader(),},body:JSON.stringify({diem_bi_loai:id,dia_diem_thay_the:replacementId,ten_dia_diem_thay_the:replacementText?.trim()||undefined,phien_ban:verRef.current,ma_phien:session,}),}),data=await safeJson(response);if(response.status===404)throw new ReplacementRequestError("replacementNotFound");if(response.status===422||response.status===503)throw new ReplacementRequestError("replacementInvalid");if(!response.ok||!isRecord(data)||!isPlan(data.ke_hoach_moi)||typeof data.phien_ban!=="number"||!Number.isInteger(data.phien_ban)||data.phien_ban<=verRef.current)throw new Error();if(!active())return null;const oldIds=new Set(plan.ngay.flatMap((day)=>day.khoang_gio).map((slot)=>slot.dia_diem_id),);const replacement=data.ke_hoach_moi.ngay.flatMap((day)=>day.khoang_gio).find((slot)=>!oldIds.has(slot.dia_diem_id));const nextConversation=toChatItems(data.hoi_thoai);setPlan(data.ke_hoach_moi);setVer(data.phien_ban);verRef.current=data.phien_ban;setSelectedId(replacement?.dia_diem_id??data.ke_hoach_moi.ngay[0]?.khoang_gio[0]?.dia_diem_id,
       );
       setChangeFor(null);
       setCustomSearch(false);
-      setSuggestions([]);setConversation(nextConversation.length>0?nextConversation:(items)=>[...items,{role:"assistant",key:"swipeSuccess"}],);setMessage({key:"swipeSuccess"});return replacement?.ten_dia_diem??null;}catch{fail("actionFailed");return null;}finally{finish();
+      setSuggestions([]);changeTrigger.current?.focus();setConversation(nextConversation.length>0?nextConversation:(items)=>[...items,{role:"assistant",key:"swipeSuccess"}],);setMessage({key:"swipeSuccess"});return replacement?.ten_dia_diem??null;}catch(error){setMessage({key:error instanceof ReplacementRequestError?error.key:"actionFailed"});return null;}finally{finish();
     }
   }
   async function searchReplacements(id: string, query = searchText) {
@@ -154,6 +155,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
       if(generation===searchGeneration.current){setSuggestions([]);setSearchStatus("error")}
     }
   }
+  function queueReplacementSearch(id:string,value:string){setSearchText(value);if(searchTimer.current)clearTimeout(searchTimer.current);if(value.trim().length<2){searchGeneration.current+=1;setSuggestions([]);setSearchStatus("idle");return}searchTimer.current=setTimeout(()=>{void searchReplacements(id,value)},300)}
   async function deleteSlot(slot: Slot) {
     if (
       !window.confirm(t("deletePlaceConfirm", { place: slot.ten_dia_diem })) ||
@@ -274,7 +276,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                         className="change-choice"
                         onClick={() => {
                           setCustomSearch(true);
-                          void searchReplacements(slot.dia_diem_id, "");
+                          setSearchText("");setSuggestions([]);setSearchStatus("idle");
                         }}
                       >
                         {t("chooseReplacement")}
@@ -284,7 +286,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                           className="replacement-search"
                           onSubmit={(event) => {
                             event.preventDefault();
-                            void searchReplacements(slot.dia_diem_id);
+                            if(searchText.trim())void swipe(slot.dia_diem_id,undefined,searchText);
                           }}
                         >
                           <label htmlFor={`replacement-${slot.dia_diem_id}`}>
@@ -295,15 +297,14 @@ export default function PlanView({initial,token,version,constraints:initialConst
                               id={`replacement-${slot.dia_diem_id}`}
                               autoFocus
                               value={searchText}
-                              onChange={(event) =>
-                                setSearchText(event.target.value)
-                              }
+                              role="combobox" aria-autocomplete="list" aria-controls={`suggestions-${slot.dia_diem_id}`} aria-expanded={suggestions.length>0}
+                              onChange={(event) =>queueReplacementSearch(slot.dia_diem_id,event.target.value)}
                               placeholder={t("replacementSearchPlaceholder")}/><button className="secondary" type="submit">
-                              {t("search")}</button></div>
+                              {t("changePlace")}</button></div>
                           {searchStatus==="loading"&&<p role="status">{t("replacementLoading")}</p>}
                           {searchStatus==="empty"&&<p role="status">{t("replacementEmpty")}</p>}
                           {searchStatus==="error"&&<p role="alert">{t("replacementError")}</p>}
-                          <ul aria-label={t("replacementSuggestions")}>
+                          <ul id={`suggestions-${slot.dia_diem_id}`} aria-label={t("replacementSuggestions")}>
                             {suggestions.map((candidate) => (
                               <li key={candidate.id}>
                                 <button
