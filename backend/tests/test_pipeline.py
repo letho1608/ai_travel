@@ -100,6 +100,97 @@ def test_full_day_has_midday_rest_and_evening_after_dinner():
     assert after_dinner, "expected at least one evening stop after dinner"
 
 
+def test_each_night_market_tag_has_hard_evening_floor_in_normal_and_relax():
+    day_start = planner.datetime(2026, 8, 10, 8)
+    day_end = day_start.replace(hour=22)
+
+    for tag in ("cho_dem", "night_market"):
+        market = replace(
+            PLACES[0],
+            id=f"all-day-{tag}",
+            name=f"Night market {tag}",
+            tags=[tag],
+            open_hour=8,
+            close_hour=23,
+            duration_min=60,
+        )
+        for relax in (False, True):
+            bounds = planner._compute_slot_bounds(
+                market,
+                None,
+                day_start,
+                day_start,
+                day_end,
+                request(),
+                relax=relax,
+            )
+
+            assert bounds is not None
+            assert bounds[0] >= day_start.replace(hour=18)
+
+        meal_bounds = planner._compute_slot_bounds(
+            market,
+            "trua",
+            day_start,
+            day_start,
+            day_end,
+            request(),
+            relax=True,
+        )
+        assert meal_bounds is not None
+        assert meal_bounds[0] >= day_start.replace(hour=18)
+
+
+def test_night_market_is_skipped_when_evening_window_is_too_short():
+    market = replace(
+        PLACES[0],
+        id="night-market-without-room",
+        name="Night market without room",
+        tags=["night_market"],
+        open_hour=8,
+        close_hour=23,
+        duration_min=60,
+    )
+    day_start = planner.datetime(2026, 8, 10, 8)
+    day_end = day_start.replace(hour=18, minute=20)
+
+    for relax in (False, True):
+        assert planner._compute_slot_bounds(
+            market,
+            None,
+            day_start,
+            day_start,
+            day_end,
+            request(),
+            relax=relax,
+        ) is None
+
+
+def test_nightlife_only_place_keeps_daytime_scheduling():
+    nightlife = replace(
+        PLACES[0],
+        id="daytime-nightlife-landmark",
+        name="Daytime nightlife landmark",
+        tags=["nightlife"],
+        open_hour=8,
+        close_hour=23,
+        duration_min=60,
+    )
+    day_start = planner.datetime(2026, 8, 10, 8)
+
+    bounds = planner._compute_slot_bounds(
+        nightlife,
+        None,
+        day_start,
+        day_start,
+        day_start.replace(hour=22),
+        request(),
+    )
+
+    assert bounds is not None
+    assert bounds[0] < day_start.replace(hour=18)
+
+
 def test_half_day_plan_includes_lunch():
     plan = build_plan(request().model_copy(update={"thoi_luong": "nua_ngay"}))
     slots = plan["ngay"][0]["khoang_gio"]

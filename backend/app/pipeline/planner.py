@@ -512,6 +512,11 @@ def _is_evening_place(place: Place) -> bool:
     return bool({"cho_dem", "night_market"}.intersection(tags))
 
 
+def _is_night_market(place: Place) -> bool:
+    """Return whether a place has explicit night-market semantics."""
+    return bool({"cho_dem", "night_market"}.intersection(place.tags))
+
+
 def _choose_midday_rest(
     request: PlanRequest,
     excluded: set[str],
@@ -780,13 +785,15 @@ def _is_morning_only(place: Place) -> bool:
 
 def _preferred_window(place: Place, meal_type: str | None) -> tuple[int, int, int, int]:
     """Return preferred (start_h, start_m, end_h, end_m) local visit window."""
+    open_hour, close_hour = _effective_hours(place)
+    if _is_night_market(place):
+        return max(open_hour, 18), 0, close_hour, 0
     if meal_type:
         start_h, start_m, end_h, end_m = MEAL_WINDOWS[meal_type]
         return start_h, start_m, end_h, end_m
     tip = _guidance(place)
     if tip:
         return tip.preferred
-    open_hour, close_hour = _effective_hours(place)
     tags = set(place.tags)
     if _is_morning_only(place):
         return open_hour, 0, close_hour, 0
@@ -807,6 +814,8 @@ def _pick_visit_window(
     arrive: datetime,
 ) -> tuple[int, int, int, int]:
     """Choose primary or alternate preferred window closest to arrival."""
+    if _is_night_market(place):
+        return _preferred_window(place, meal_type)
     if meal_type:
         return _preferred_window(place, meal_type)
     tip = _guidance(place)
@@ -848,6 +857,9 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
 
 
 def _preference_score(place: Place, meal_type: str | None, hour: float) -> float:
+    if _is_night_market(place):
+        open_hour, close_hour = _effective_hours(place)
+        return 12 if max(open_hour, 18) <= hour < close_hour else -50
     if meal_type:
         preferred = MEAL_PREFERRED_START[meal_type]
         preferred_hour = preferred[0] + preferred[1] / 60
@@ -911,8 +923,11 @@ def _compute_slot_bounds(
     preferred_open = _at_clock(arrive, pref_start, pref_m)
     preferred_close = _at_clock(arrive, pref_end, pref_end_m)
     visit = _visit_minutes_for(place, meal_type, request)
+    night_market = _is_night_market(place)
 
     earliest = max(arrive, opening, day_start)
+    if night_market:
+        earliest = max(earliest, _at_clock(arrive, 18, 0))
     latest_end = min(closing, preferred_close if meal_type else closing, day_end)
     if meal_type:
         # Soft meal window: allow a little earlier than classic lunch/dinner.
@@ -937,13 +952,16 @@ def _compute_slot_bounds(
             ideal = max(earliest, cool_start)
             latest_end = min(latest_end, cool_end, closing, day_end)
     idle = (ideal - arrive).total_seconds() / 60
-    strict = (not relax) and (
-        _is_morning_only(place)
-        or bool(meal_type)
-        or (
-            _is_outdoor_place(place)
-            and not meal_type
-            and 11 <= (arrive.hour + arrive.minute / 60) < 14
+    strict = night_market or (
+        (not relax)
+        and (
+            _is_morning_only(place)
+            or bool(meal_type)
+            or (
+                _is_outdoor_place(place)
+                and not meal_type
+                and 11 <= (arrive.hour + arrive.minute / 60) < 14
+            )
         )
     )
     if idle > MAX_IDLE_MINUTES and not strict:
