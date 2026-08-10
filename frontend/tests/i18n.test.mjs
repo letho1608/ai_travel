@@ -249,6 +249,14 @@ test("Vietnamese navigation labels the trip archive as history",()=>{
   assert.match(source,/vi:\{roadtrip:"Road trip",inventory:"Vé & lưu trú",trips:"Lịch sử"/);
 });
 
+test("history sidebar contains long plan titles without losing mobile scrolling",()=>{
+  assert.match(historyPageSource,/className="history-plan-nav"[^]*plans\.map\(item => <Link[^]*<span>\{item\.ke_hoach\.tieu_de\}<\/span><span aria-hidden="true">/);
+  assert.match(globalsSource,/\.history-page \.history-plan-nav>a\{[^}]*min-width:0;max-width:100%/);
+  assert.match(globalsSource,/\.history-page \.history-plan-nav>a span:first-child\{[^}]*flex:1 1 auto;min-width:0;[^}]*text-overflow:ellipsis/);
+  assert.match(globalsSource,/\.history-page \.history-plan-nav>a span:last-child\{flex:0 0 auto\}/);
+  assert.match(globalsSource,/@media\(max-width:720px\)\{\.history-page \.history-plan-nav\{overflow-x:auto\}\.history-page \.history-plan-nav>a\{min-width:210px;max-width:210px\}\}/);
+});
+
 test("support queue actions guard duplicate state transitions",()=>{
   assert.match(supportPageSource,/const pendingRef = useRef<string\|null>\(null\)/);
   assert.match(supportPageSource,/if\(pendingRef\.current\) return/);
