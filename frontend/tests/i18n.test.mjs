@@ -84,6 +84,7 @@ test("workspace catalog covers its typed contract and all locales",()=>{
   assert.equal(workspace.workspaceTranslations.vi.itinerary,"Lịch trình");
   assert.equal(workspace.workspaceTranslations.vi.tripSummary,"Tóm tắt chuyến đi");
   assert.equal(workspace.workspaceTranslations.vi.savePlan,"Lưu kế hoạch");
+  assert.equal(workspace.workspaceTranslations.vi.regenerate,"Tạo lại");
   assert.equal(workspace.workspaceTranslations.vi.planSaved,"Đã lưu kế hoạch");
 });
 
@@ -163,6 +164,10 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/setMessage\(\{key:"regenerateSuccess"\}\)/);
   assert.match(globalsSource,/\.action-toast\{position:fixed/);
   assert.match(globalsSource,/\.action-toast\.error\{[^}]*background:#9f2f20/);
+  assert.match(globalsSource,/\.itinerary-summary-actions \.primary\{[^}]*background:#086b27/);
+  assert.match(globalsSource,/\.itinerary-summary-actions \.secondary\{[^}]*background:#f3f2ee/);
+  assert.match(globalsSource,/\.itinerary-summary-actions \.primary>span\{background-image:url\("data:image\/svg\+xml[^}]*M6\.75/);
+  assert.match(globalsSource,/\.itinerary-summary-actions \.secondary>span\{background-image:url\("data:image\/svg\+xml[^}]*circle/);
   assert.doesNotMatch(planViewSource,/className="itinerary-summary"/);
   assert.equal((planViewSource.match(/className="itinerary-panel card"/g)||[]).length,1);
   assert.match(planViewSource,/className="itinerary-card-hero"/);
