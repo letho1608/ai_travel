@@ -245,7 +245,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                         setSearchStatus("idle");searchGeneration.current+=1;
                       }}
                     >
-                      <svg aria-hidden="true" viewBox="0 0 256 256" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round"><path d="m176 64 32 32-32 32"/><path d="M48 96h16a80 80 0 0 1 80 80h64"/><path d="m176 144 32 32-32 32"/><path d="M48 176h16a80 80 0 0 0 80-80h64"/></svg>
+                      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h3c4 0 6 10 10 10h5"/><path d="m18 14 3 3-3 3"/><path d="M3 17h3c4 0 6-10 10-10h5"/><path d="m18 4 3 3-3 3"/></svg>
                       {t("changePlace")}
                     </button>
                     <button
