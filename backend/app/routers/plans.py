@@ -405,6 +405,18 @@ def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, 
     return target, rejected, [place for place in plan_places if eligible(place)]
 
 
+def _replacement_rank(candidate: Place, rejected: Place) -> tuple:
+    candidate_tags = {ascii_fold(tag).casefold() for tag in candidate.tags}
+    rejected_tags = {ascii_fold(tag).casefold() for tag in rejected.tags}
+    return (
+        candidate.kind != rejected.kind,
+        -len(candidate_tags & rejected_tags),
+        ascii_fold(candidate.area).casefold() != ascii_fold(rejected.area).casefold(),
+        (candidate.lat - rejected.lat) ** 2 + (candidate.lng - rejected.lng) ** 2,
+        candidate.id,
+    )
+
+
 @router.patch("/plans/{token}/swipe")
 def swipe(
     token: str,
@@ -439,7 +451,7 @@ def swipe(
             requested_place = Place(**(requested_place.__dict__ | estimate))
             estimated = True
     external = (requested_place,) if requested_place and requested_place.id not in {place.id for place in PLACES} else ()
-    target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=not bool(payload.dia_diem_thay_the or requested_place), additional=external)
+    target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=False, additional=external)
     if not candidates:
         raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
     if payload.dia_diem_thay_the or requested_place:
@@ -449,7 +461,7 @@ def swipe(
     else:
         replacement = min(
             candidates,
-            key=lambda p: (p.lat - rejected.lat) ** 2 + (p.lng - rejected.lng) ** 2,
+            key=lambda p: _replacement_rank(p, rejected),
         )
     plan = json.loads(json.dumps(item.plan, ensure_ascii=False))
     new_target = next(

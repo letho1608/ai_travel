@@ -98,30 +98,35 @@ export default function PlanView({initial,token,version,constraints:initialConst
   const [unit,setUnit]=useState<"metric"|"imperial">("metric");
   const [brokenImages,setBrokenImages]=useState<Set<string>>(new Set());
   const [changeFor, setChangeFor] = useState<string | null>(null),
+    [deleteFor, setDeleteFor] = useState<string | null>(null),
+    [deletePosition,setDeletePosition]=useState({left:16,top:16}),
     [customSearch, setCustomSearch] = useState(false),
     [searchText, setSearchText] = useState(""),
     [suggestions, setSuggestions] = useState<ReplacementCandidate[]>([]),
     [searchStatus,setSearchStatus]=useState<"idle"|"loading"|"empty"|"error">("idle");
-  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),searchTimer=useRef<ReturnType<typeof setTimeout>|null>(null),changeTrigger=useRef<HTMLButtonElement|null>(null);
+  const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),searchTimer=useRef<ReturnType<typeof setTimeout>|null>(null),changeTrigger=useRef<HTMLButtonElement|null>(null),deleteTrigger=useRef<HTMLButtonElement|null>(null);
   const slots=useMemo(()=>plan.ngay[activeDay]?.khoang_gio??[],[plan,activeDay]);
   const money=useMemo(()=>new Intl.NumberFormat(locale,{style:"currency",currency:"VND",maximumFractionDigits:0}),[locale]);
   const date=useMemo(()=>new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short"}),[locale]);
   const start=(action:BusyAction)=>{if(busyRef.current)return false;busyRef.current=action;setBusy(action);setMessage(null);return true};
   const active=()=>mounted.current&&currentToken.current===token;
   const finish=()=>{if(!active())return;busyRef.current=null;setBusy(null)};
+  const closeDelete=()=>{setDeleteFor(null);requestAnimationFrame(()=>deleteTrigger.current?.focus())};
   const fail=(key:"actionFailed"|"refineFailed"|"versionsFailed"|"commentsFailed"|"regenerateFailed")=>active()&&setMessage({key});
   const request=async(input:RequestInfo|URL,init:RequestInit={},timeoutMs=30000)=>{const requestToken=token,controller=new AbortController();controllers.current.add(controller);const timeout=setTimeout(()=>controller.abort(),timeoutMs);try{const response=await fetch(input,{...init,signal:controller.signal});if(currentToken.current!==requestToken)throw new DOMException("Stale plan request","AbortError");return response}finally{clearTimeout(timeout);controllers.current.delete(controller)}};
 
   useEffect(()=>{const activeControllers=controllers.current;mounted.current=true;return()=>{mounted.current=false;if(searchTimer.current)clearTimeout(searchTimer.current);activeControllers.forEach(controller=>controller.abort());activeControllers.clear()}},[]);
   useLayoutEffect(()=>{currentToken.current=token},[token]);
   useEffect(()=>()=>{controllers.current.forEach(controller=>controller.abort());controllers.current.clear()},[token]);
-  useEffect(()=>{busyRef.current=null;setBusy(null);setPlan(initial);setVer(version);verRef.current=version;setSelectedId(initial.ngay[0]?.khoang_gio[0]?.dia_diem_id);setActiveDay(0);setVersions([]);setShowVersions(false);setComments([]);setShowComments(false);setShowFeedback(false);setChangeFor(null);setCustomSearch(false);setSearchText("");setSuggestions([]);setMessage(null);setConstraints(initialConstraints??null);setConversation(toChatItems(initial.hoi_thoai).length>0?toChatItems(initial.hoi_thoai):[{role:"assistant",key:"assistantWelcome"}])},[token,initial,version,initialConstraints]);
+  useEffect(()=>{busyRef.current=null;setBusy(null);setPlan(initial);setVer(version);verRef.current=version;setSelectedId(initial.ngay[0]?.khoang_gio[0]?.dia_diem_id);setActiveDay(0);setVersions([]);setShowVersions(false);setComments([]);setShowComments(false);setShowFeedback(false);setChangeFor(null);setDeleteFor(null);setCustomSearch(false);setSearchText("");setSuggestions([]);setMessage(null);setConstraints(initialConstraints??null);setConversation(toChatItems(initial.hoi_thoai).length>0?toChatItems(initial.hoi_thoai):[{role:"assistant",key:"assistantWelcome"}])},[token,initial,version,initialConstraints]);
   useEffect(()=>{const next=t("companion");setCommentName(current=>current===previousCompanion.current?next:current);previousCompanion.current=next},[locale,t]);
   useEffect(()=>{const sync=()=>setUnit(preferredUnit());sync();window.addEventListener("travel-preferences-changed",sync);return()=>window.removeEventListener("travel-preferences-changed",sync)},[]);
   useEffect(()=>{setActiveDay(day=>Math.min(day,Math.max(0,plan.ngay.length-1)))},[plan.ngay.length]);
   useEffect(()=>{const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),30000);let active=true;(async()=>{try{const response=await fetch(`${API_URL}/api/plans/${token}/comments`,{signal:controller.signal,headers:{"X-Session-Id":getSession()}});const data=await safeJson(response);if(!response.ok||!isRecord(data)||!Array.isArray(data.ds_binh_luan)||!data.ds_binh_luan.every(isComment))throw new Error();if(active&&mounted.current)setComments(data.ds_binh_luan)}catch(error){if(active&&mounted.current)setMessage(current=>current??{key:"commentsFailed"})}})();return()=>{active=false;clearTimeout(timeout);controller.abort()}},[token]);
   useEffect(()=>{if(!message)return;const timer=setTimeout(()=>setMessage(null),5000);return()=>clearTimeout(timer)},[message]);
   useEffect(()=>{if(!changeFor)return;document.querySelector<HTMLButtonElement>(`#change-${CSS.escape(changeFor)} .change-choice`)?.focus();const dismiss=(event:KeyboardEvent|MouseEvent)=>{if(event instanceof KeyboardEvent&&event.key!=="Escape")return;const menu=document.getElementById(`change-${changeFor}`);if(event instanceof MouseEvent&&(menu?.contains(event.target as Node)||changeTrigger.current?.contains(event.target as Node)))return;if(searchTimer.current)clearTimeout(searchTimer.current);setChangeFor(null);setCustomSearch(false);searchGeneration.current+=1;changeTrigger.current?.focus()};document.addEventListener("keydown",dismiss);document.addEventListener("mousedown",dismiss);return()=>{document.removeEventListener("keydown",dismiss);document.removeEventListener("mousedown",dismiss)}},[changeFor]);
+  useLayoutEffect(()=>{if(!deleteFor)return;const position=()=>{const trigger=deleteTrigger.current,menu=document.getElementById(`delete-${deleteFor}`);if(!trigger||!menu)return;const rect=trigger.getBoundingClientRect(),menuRect=menu.getBoundingClientRect(),gap=8;let left=Math.min(window.innerWidth-menuRect.width-12,Math.max(12,rect.right-menuRect.width));let top=rect.bottom+gap;if(top+menuRect.height>window.innerHeight-12)top=Math.max(12,rect.top-menuRect.height-gap);setDeletePosition({left,top})};position();window.addEventListener("resize",position);window.addEventListener("scroll",position,true);return()=>{window.removeEventListener("resize",position);window.removeEventListener("scroll",position,true)}},[deleteFor]);
+  useEffect(()=>{if(!deleteFor)return;const dismiss=(event:KeyboardEvent|MouseEvent)=>{if(event instanceof KeyboardEvent&&event.key!=="Escape")return;const menu=document.getElementById(`delete-${deleteFor}`);if(event instanceof MouseEvent&&(menu?.contains(event.target as Node)||deleteTrigger.current?.contains(event.target as Node)))return;closeDelete()};document.addEventListener("keydown",dismiss);document.addEventListener("mousedown",dismiss);return()=>{document.removeEventListener("keydown",dismiss);document.removeEventListener("mousedown",dismiss)}},[deleteFor]);
 
   async function copy(){if(!start("copy"))return;const url=publicShareUrl(token);try{const result=await shareViaApi(url,plan.tieu_de,plan.tom_tat);if(result==="shared"){setMessage({key:"shared"})}else if(result==="cancelled"){setMessage(null)}else{setMessage({key:await copyShareLink(url)?"copied":"copyFailed"})}}catch{setMessage({key:"copyFailed"})}finally{finish()}}
   function saveOffline(){if(!start("save"))return;try{localStorage.setItem(`offline-plan:${token}`,JSON.stringify({plan,version:ver,savedAt:new Date().toISOString()}));setMessage({key:"planSaved"})}catch{setMessage({key:"offlineSaveFailed"})}finally{finish()}}
@@ -157,11 +162,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
   }
   function queueReplacementSearch(id:string,value:string){setSearchText(value);if(searchTimer.current)clearTimeout(searchTimer.current);if(value.trim().length<2){searchGeneration.current+=1;setSuggestions([]);setSearchStatus("idle");return}searchTimer.current=setTimeout(()=>{void searchReplacements(id,value)},300)}
   async function deleteSlot(slot: Slot) {
-    if (
-      !window.confirm(t("deletePlaceConfirm", { place: slot.ten_dia_diem })) ||
-      !start("swipe")
-    )
-      return;
+    if (!start("swipe")) return;
     const session = getSession();
     try {
       const response = await request(`${API_URL}/api/plans/${token}/slots`, {
@@ -195,9 +196,11 @@ export default function PlanView({initial,token,version,constraints:initialConst
       setSelectedId((current) =>
         current === slot.dia_diem_id ? remaining[0]?.dia_diem_id : current,
       );
+      setDeleteFor(null);
       setChangeFor(null);
       setCustomSearch(false);setSearchText("");setSuggestions([]);setSearchStatus("idle");searchGeneration.current+=1;
       setMessage({ key: "deletePlaceSuccess" });
+      requestAnimationFrame(()=>document.querySelector<HTMLButtonElement>(".itinerary-panel .slot-select")?.focus());
     } catch {
       fail("actionFailed");
     } finally {
@@ -230,6 +233,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                       type="button" disabled={disabled} aria-expanded={changeFor === slot.dia_diem_id}
                       aria-controls={`change-${slot.dia_diem_id}`}
                       onClick={() => {
+                        setDeleteFor(null);
                         setChangeFor((current) =>
                           current === slot.dia_diem_id
                             ? null
@@ -240,7 +244,8 @@ export default function PlanView({initial,token,version,constraints:initialConst
                         setSearchStatus("idle");searchGeneration.current+=1;
                       }}
                     >
-                      ↝ {t("changePlace")}
+                      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="m4 4 5 5"/></svg>
+                      {t("changePlace")}
                     </button>
                     <button
                       className="icon-action delete-place"
@@ -250,14 +255,15 @@ export default function PlanView({initial,token,version,constraints:initialConst
                       aria-label={t("deletePlaceLabel", {
                         place: slot.ten_dia_diem,
                       })}
-                      onClick={() => {
-                        void deleteSlot(slot);
-                      }}
+                      aria-expanded={deleteFor===slot.dia_diem_id}
+                      aria-controls={`delete-${slot.dia_diem_id}`}
+                      onClick={(event) => {deleteTrigger.current=event.currentTarget;setChangeFor(null);setDeleteFor(current=>current===slot.dia_diem_id?null:slot.dia_diem_id)}}
                     >
                         <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v5M14 11v5" />
                         </svg>
                     </button>
+                    {deleteFor===slot.dia_diem_id&&<div className="delete-menu" style={deletePosition} id={`delete-${slot.dia_diem_id}`} role="dialog" aria-modal="true" aria-label={t("deletePlaceLabel",{place:slot.ten_dia_diem})}><p>{t("deletePlaceConfirm",{place:slot.ten_dia_diem})}</p><div><button type="button" className="secondary" autoFocus onClick={closeDelete}>{t("deletePlaceCancel")}</button><button type="button" className="danger" onClick={()=>void deleteSlot(slot)}>{t("deletePlace")}</button></div></div>}
                   </div>
                   {changeFor === slot.dia_diem_id && (
                     <div

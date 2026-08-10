@@ -221,6 +221,13 @@ def test_explicit_replacement_rejects_unknown_id():
     assert unknown.status_code == 422
 
 
+def test_auto_replacement_ranks_similarity_before_distance():
+    rejected = Place("old", "Old", "museum", "Ba Đình", 21.0, 105.8, 0, 60, ("history", "indoor"))
+    close_wrong = Place("close", "Close", "cafe", "Ba Đình", 21.0001, 105.8001, 0, 60, ("coffee",))
+    similar = Place("similar", "Similar", "museum", "Hoàn Kiếm", 21.02, 105.82, 0, 60, ("history", "indoor"))
+    assert min((close_wrong, similar), key=lambda place: plans_router._replacement_rank(place, rejected)) is similar
+
+
 def test_free_text_replacement_verifies_and_labels_ai_estimates(monkeypatch):
     result = _generated_plan()
     target = result["plan"]["ngay"][0]["khoang_gio"][0]

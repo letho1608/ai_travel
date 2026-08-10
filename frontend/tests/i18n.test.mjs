@@ -183,8 +183,12 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/ten_dia_diem_thay_the:replacementText\?\.trim\(\)\|\|undefined/);
   assert.match(planViewSource,/role="combobox" aria-autocomplete="list"/);
   assert.match(planViewSource,/void swipe\(slot\.dia_diem_id,undefined,searchText\)/);
-  assert.match(globalsSource,/\.slot-actions\{grid-column:1\/-1;[^}]*justify-self:start/);
+  assert.match(globalsSource,/\.slot-actions\{grid-column:1\/-1;[^}]*justify-self:end/);
   assert.match(globalsSource,/\.change-menu\{position:fixed/);
+  assert.match(globalsSource,/\.delete-menu\{position:fixed/);
+  assert.doesNotMatch(planViewSource,/window\.confirm/);
+  assert.match(planViewSource,/className="delete-menu"/);
+  assert.match(planViewSource,/viewBox="0 0 24 24"[^>]*><path d="M16 3h5v5"/);
   assert.match(planViewSource,/quickActions\.map/);
   assert.match(planViewSource,/applyRefine\(prompt\)/);
   assert.doesNotMatch(planViewSource,/<article role="button"/);
