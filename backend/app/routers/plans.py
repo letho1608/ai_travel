@@ -439,12 +439,21 @@ def regenerate(
         raise HTTPException(429, "Bạn đã làm lại quá nhiều lần")
     try:
         store.reserve_cost(0.0, settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd)
-        first_slot = next(
-            (slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])),
-            None,
-        )
-        excluded = {first_slot["dia_diem_id"]} if first_slot else set()
+        excluded = {
+            slot["dia_diem_id"]
+            for day in item.plan.get("ngay", [])
+            for slot in day.get("khoang_gio", [])
+            if slot.get("dia_diem_id")
+        }
         plan = build_plan(PlanRequest.model_validate(item.request), excluded)
+        regenerated_ids = {
+            slot["dia_diem_id"]
+            for day in plan.get("ngay", [])
+            for slot in day.get("khoang_gio", [])
+            if slot.get("dia_diem_id")
+        }
+        if not regenerated_ids or regenerated_ids == excluded:
+            raise RuntimeError("Không đủ địa điểm để tạo một kế hoạch khác")
         _append_turn(plan, "user", "Làm lại từ đầu")
         _append_turn(plan, "assistant", "Đã tạo lại lịch trình mới từ đầu với cùng yêu cầu ban đầu.")
         store.update(item, item.version, plan, item.request, "Làm lại")

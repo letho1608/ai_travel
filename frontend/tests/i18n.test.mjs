@@ -12,6 +12,7 @@ const exploreSource=readFileSync(new URL("../app/explore/page.tsx",import.meta.u
 const roadtripSource=readFileSync(new URL("../lib/roadtrip-translations.ts",import.meta.url),"utf8");
 const roadtripPageSource=readFileSync(new URL("../app/roadtrip/page.tsx",import.meta.url),"utf8");
 const planViewSource=readFileSync(new URL("../components/PlanView.tsx",import.meta.url),"utf8");
+const globalsSource=readFileSync(new URL("../app/globals.css",import.meta.url),"utf8");
 const adminPageSource=readFileSync(new URL("../app/admin/page.tsx",import.meta.url),"utf8");
 const historyPageSource=readFileSync(new URL("../app/history/page.tsx",import.meta.url),"utf8");
 const supportPageSource=readFileSync(new URL("../app/support/page.tsx",import.meta.url),"utf8");
@@ -156,6 +157,12 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/localStorage\.setItem\(`offline-plan:/);
   assert.match(planViewSource,/function saveOffline\(\)\{if\(!start\("save"\)\)return/);
   assert.match(planViewSource,/setMessage\(\{key:"planSaved"\}\)/);
+  assert.match(planViewSource,/className=\{`action-toast \$\{errorMessageKeys\.has\(message\.key\)\?"error":"success"\}`\} role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(planViewSource,/setMessage\(current=>current\?\?\{key:"commentsFailed"\}\)/);
+  assert.match(planViewSource,/body:JSON\.stringify\(\{ma_phien:session,nonce\}\)\},90000/);
+  assert.match(planViewSource,/setMessage\(\{key:"regenerateSuccess"\}\)/);
+  assert.match(globalsSource,/\.action-toast\{position:fixed/);
+  assert.match(globalsSource,/\.action-toast\.error\{[^}]*background:#9f2f20/);
   assert.doesNotMatch(planViewSource,/className="itinerary-summary"/);
   assert.equal((planViewSource.match(/className="itinerary-panel card"/g)||[]).length,1);
   assert.match(planViewSource,/className="itinerary-card-hero"/);
@@ -176,6 +183,10 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/currentToken\.current!==requestToken/);
   assert.match(planViewSource,/const active=\(\)=>mounted\.current&&currentToken\.current===token/);
   assert.match(planViewSource,/if\(!active\(\)\)return/);
+  for(const locale of locales){
+    assert.equal(typeof workspace.workspaceTranslations[locale].regenerateSuccess,"string");
+    assert.ok(workspace.workspaceTranslations[locale].regenerateSuccess.length>0);
+  }
 });
 
 test("admin console exposes provider diagnostics without secrets",()=>{

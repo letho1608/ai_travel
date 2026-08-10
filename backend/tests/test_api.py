@@ -219,6 +219,11 @@ def test_regenerate_stays_in_place_and_preserves_version_chain():
     import json
     result = json.loads(next(line for line in generated.text.splitlines() if line.startswith("data: {\"type\""))[6:])
     token = result["token"]
+    original_ids = {
+        slot["dia_diem_id"]
+        for day in result["plan"]["ngay"]
+        for slot in day["khoang_gio"]
+    }
     regenerated = client.post(
         f"/api/plans/{token}/regenerate",
         json={"ma_phien": PAYLOAD["ma_phien"], "nonce": "in-place-nonce"},
@@ -226,6 +231,14 @@ def test_regenerate_stays_in_place_and_preserves_version_chain():
     assert regenerated.status_code == 200
     assert regenerated.json()["token"] == token
     assert regenerated.json()["phien_ban"] == 2
+    regenerated_ids = {
+        slot["dia_diem_id"]
+        for day in regenerated.json()["ke_hoach"]["ngay"]
+        for slot in day["khoang_gio"]
+    }
+    assert regenerated_ids
+    assert regenerated_ids != original_ids
+    assert regenerated_ids.isdisjoint(original_ids)
     versions = client.get(
         f"/api/plans/{token}/versions",
         headers={"X-Session-Id": PAYLOAD["ma_phien"]},
