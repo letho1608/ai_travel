@@ -12,6 +12,8 @@ const exploreSource=readFileSync(new URL("../app/explore/page.tsx",import.meta.u
 const roadtripSource=readFileSync(new URL("../lib/roadtrip-translations.ts",import.meta.url),"utf8");
 const roadtripPageSource=readFileSync(new URL("../app/roadtrip/page.tsx",import.meta.url),"utf8");
 const planViewSource=readFileSync(new URL("../components/PlanView.tsx",import.meta.url),"utf8");
+const mapViewSource=readFileSync(new URL("../components/MapView.tsx",import.meta.url),"utf8");
+const roadTripMapSource=readFileSync(new URL("../components/RoadTripMap.tsx",import.meta.url),"utf8");
 const globalsSource=readFileSync(new URL("../app/globals.css",import.meta.url),"utf8");
 const adminPageSource=readFileSync(new URL("../app/admin/page.tsx",import.meta.url),"utf8");
 const historyPageSource=readFileSync(new URL("../app/history/page.tsx",import.meta.url),"utf8");
@@ -23,6 +25,17 @@ const compiled=ts.transpileModule(coreSource,{compilerOptions:{module:ts.ModuleK
 const core=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
 const compiledApi=ts.transpileModule(apiSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const api=await import(`data:text/javascript;base64,${Buffer.from(compiledApi).toString("base64")}`);
+
+test("rendered brand palette uses Hanoi green without legacy purple",()=>{
+  const controlled=[globalsSource,mapViewSource,roadTripMapSource].join("\n").toLowerCase();
+  for(const green of ["#086b27","#075a22","#5fa858","#e3efe0","#f3faf1","#063b1b"])assert.match(controlled,new RegExp(green),`missing green ${green}`);
+  for(const purple of ["#7d4fb8","#ae86f7","#cdb3ff","#efe7fd","#f7f3fe","#4b2c82","#926cd6"])assert.doesNotMatch(controlled,new RegExp(purple),`legacy purple ${purple}`);
+  assert.match(mapViewSource,/#bb4d45/);
+  assert.match(roadTripMapSource,/#bb4d45/);
+  assert.match(globalsSource,/:root\{--brand:#086b27;--brand-hover:#075a22;--accent-2:#086b27;--muted-2:#596b59\}/);
+  assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{[\s\S]*--paper:#0d1710;[\s\S]*--surface:#132419;[\s\S]*--green-soft:#173528/);
+  assert.match(globalsSource,/--danger:#bb4d45;--danger-soft:#f0dad7;--info:#536fac;--info-soft:#dde3ee/);
+});
 const compiledWorkspace=ts.transpileModule(workspaceSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const workspace=await import(`data:text/javascript;base64,${Buffer.from(compiledWorkspace).toString("base64")}`);
 const compiledInventory=ts.transpileModule(inventorySource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;

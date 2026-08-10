@@ -34,7 +34,7 @@ export default function MapView({ slots, selectedId, onSelect }: { slots: Slot[]
     const layers: L.Layer[] = [];
     points.forEach((point, index) => {
       const slot = slots[index];
-      const marker = L.circleMarker(point, { radius: slot.dia_diem_id === selectedId ? 12 : 8, color: slot.dia_diem_id === selectedId ? "#bb4d45" : "#7d4fb8", fillOpacity: 1 })
+      const marker = L.circleMarker(point, { radius: slot.dia_diem_id === selectedId ? 12 : 8, color: slot.dia_diem_id === selectedId ? "#bb4d45" : "#086b27", fillOpacity: 1 })
         .bindTooltip(`${index + 1}. ${slot.ten_dia_diem}`)
         .on("click", () => onSelectRef.current?.(slot.dia_diem_id));
       if (slot.anh) {
@@ -46,7 +46,7 @@ export default function MapView({ slots, selectedId, onSelect }: { slots: Slot[]
       layers.push(marker);
       marker.addTo(map);
     });
-    const line = L.polyline(points, { color: "#7d4fb8", weight: 4 });
+    const line = L.polyline(points, { color: "#086b27", weight: 4 });
     layers.push(line);
     line.addTo(map);
     if (points.length) map.fitBounds(points, { padding: [30, 30] });
