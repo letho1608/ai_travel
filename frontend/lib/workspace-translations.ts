@@ -52,5 +52,7 @@ const actionTranslationsVi={changePlace:"Thay đổi",changePlaceOptions:"Bạn 
 
 const closeTranslationsEn={changePlaceClose:"Close replacement popup"};
 const closeTranslationsVi={changePlaceClose:"Đóng popup thay đổi"};
+const resultTranslationsEn={backToChat:"Back to chat",aiFinished:"AI has finished",itinerarySuggestionTitle:"Your suggested itinerary",itinerarySuggestionLead:"Your itinerary is ready. Review the details below or return to chat to refine it."};
+const resultTranslationsVi={backToChat:"Trở lại chat",aiFinished:"AI đã tạo xong",itinerarySuggestionTitle:"Gợi ý lịch trình cho bạn",itinerarySuggestionLead:"Lịch trình phù hợp đã sẵn sàng. Bạn có thể xem chi tiết bên dưới hoặc trở lại chat để tinh chỉnh."};
 
-export const workspaceTranslations=Object.fromEntries((Object.keys(workspaceTranslationsBase) as Locale[]).map(locale=>[locale,{...workspaceTranslationsBase[locale],...summaryTranslations[locale],...actionTranslationsEn,...closeTranslationsEn,...(locale==="vi"?{...actionTranslationsVi,...closeTranslationsVi}:{})}])) as Record<Locale,Record<WorkspaceTranslationKey,string>>;
+export const workspaceTranslations=Object.fromEntries((Object.keys(workspaceTranslationsBase) as Locale[]).map(locale=>[locale,{...workspaceTranslationsBase[locale],...summaryTranslations[locale],...actionTranslationsEn,...closeTranslationsEn,...resultTranslationsEn,...(locale==="vi"?{...actionTranslationsVi,...closeTranslationsVi,...resultTranslationsVi}:{})}])) as Record<Locale,Record<WorkspaceTranslationKey,string>>;
