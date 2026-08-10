@@ -509,12 +509,17 @@ def _is_evening_place(place: Place) -> bool:
         return True
     if open_hour >= 17:
         return True
-    return bool({"cho_dem", "night_market"}.intersection(tags))
+    return _is_night_market(place)
 
 
 def _is_night_market(place: Place) -> bool:
-    """Return whether a place has explicit night-market semantics."""
-    return bool({"cho_dem", "night_market"}.intersection(place.tags))
+    """Recognize explicit tags and untagged provider records named as night markets."""
+    if {"cho_dem", "night_market"}.intersection(place.tags):
+        return True
+    if place.kind != "cho":
+        return False
+    name_key = _place_name_key(place)
+    return "cho dem" in name_key or "night market" in name_key
 
 
 def _choose_midday_rest(

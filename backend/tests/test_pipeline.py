@@ -141,6 +141,38 @@ def test_each_night_market_tag_has_hard_evening_floor_in_normal_and_relax():
         assert meal_bounds[0] >= day_start.replace(hour=18)
 
 
+def test_untagged_osm_night_market_name_still_has_evening_floor():
+    market = next(place for place in PLACES if place.id == "osm-node-4489385889")
+    assert market.tags == ("attraction",)
+    assert planner._is_evening_place(market)
+    day_start = planner.datetime(2026, 8, 10, 8)
+
+    for relax in (False, True):
+        bounds = planner._compute_slot_bounds(
+            market,
+            None,
+            day_start,
+            day_start,
+            day_start.replace(hour=22),
+            request(),
+            relax=relax,
+        )
+
+        assert bounds is not None
+        assert bounds[0] >= day_start.replace(hour=18)
+
+    english_market = replace(market, id="english-night-market", name="Weekend Night Market")
+    assert planner._is_night_market(english_market)
+
+    restaurant = replace(
+        market,
+        id="restaurant-at-night-market",
+        name="Bánh Xèo Bizon - Chợ Đêm Đồng Xuân",
+        kind="nha_hang",
+    )
+    assert not planner._is_night_market(restaurant)
+
+
 def test_night_market_is_skipped_when_evening_window_is_too_short():
     market = replace(
         PLACES[0],
