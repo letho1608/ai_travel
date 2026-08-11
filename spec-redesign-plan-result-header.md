@@ -10,11 +10,11 @@ route: 'one-shot'
 
 ## Intent
 
-**Problem:** The result intro and trip summary area felt visually disconnected: the ready message was a large standalone card, while the trip title and facts below were loose and oversized.
+**Problem:** The generated-result intro needed to match the approved mockup: a small back-to-chat pill above a clean “AI finished” suggestion card.
 
-**Approach:** Move the back-to-chat action into the ready card, style the ready state as a compact horizontal panel, and wrap the trip title/summary facts into one cohesive trip header card while preserving all existing plan-page behavior.
+**Approach:** Keep the back-to-chat action in its own top row, render no app name on the right, style the “AI finished / suggested itinerary” block as a white rounded card beneath it, and preserve the plan title/summary facts in a compact card below.
 
 ## Suggested Review Order
 
-1. [`frontend/components/PlanView.tsx`](frontend/components/PlanView.tsx) — confirm only the result intro/trip header markup changed and existing actions remain.
-2. [`frontend/app/globals.css`](frontend/app/globals.css) — confirm the new ready/header card styles, mobile stacking, and dark-mode compatibility.
+1. [`frontend/components/PlanView.tsx`](frontend/components/PlanView.tsx) — confirm the result topbar and ready card match the mockup without a right-side app label while retaining plan-specific summary content.
+2. [`frontend/app/globals.css`](frontend/app/globals.css) — confirm the back pill, ready card, compact summary card, mobile spacing, and dark-mode compatibility.
