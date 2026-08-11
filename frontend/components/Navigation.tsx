@@ -28,6 +28,7 @@ export default function Navigation() {
   return (
     <nav className="nav" aria-label="Main">
       <Link className="brand" href="/">
+        <img src="/brand/logo-mark.png" alt="" aria-hidden="true" />
         Mình Đi Đâu Thế
       </Link>
       <div className="nav-links">

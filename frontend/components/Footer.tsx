@@ -10,7 +10,7 @@ export default function Footer() {
       <div className="shell">
         <div className="footer-grid">
           <div>
-            <div className="footer-brand">Mình Đi Đâu Thế</div>
+            <div className="footer-brand"><img src="/brand/logo-mark.png" alt="" aria-hidden="true" />Mình Đi Đâu Thế</div>
             <p className="disclaimer">{t("footerTagline")}</p>
           </div>
           <div className="footer-col">
