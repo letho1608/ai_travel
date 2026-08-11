@@ -59,6 +59,7 @@ test("site logo uses the provided travel assistant image",()=>{
 
 test("login navigation action matches the account pill treatment",()=>{
   assert.match(navigationSource,/className="nav-cta"[\s\S]*className="nav-account-icon"[\s\S]*t\("login"\)/);
+  assert.match(globalsSource,/\.nav\{[^}]*z-index:900/);
   assert.match(globalsSource,/\.nav-links a\.nav-cta\{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;[\s\S]*background:#086b27;[\s\S]*border-radius:var\(--radius-full\)/);
   assert.match(globalsSource,/\.nav-account-icon\{width:17px;height:17px;[\s\S]*stroke:currentColor/);
   assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{\.nav-links a\.nav-cta\{border-color:var\(--brand\)\}\.nav-links a\.nav-cta:hover\{border-color:var\(--brand-hover\)\}\}/);
@@ -227,12 +228,15 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/onClick=\{regenerate\} disabled=\{disabled\}/);
   assert.doesNotMatch(planViewSource,/data\.detail|error\.message/);
   assert.match(planViewSource,/className="slot-select"/);
+  assert.match(globalsSource,/\.map-panel\{[^}]*min-width:0;position:relative;z-index:0\}\.map-panel \.map\{[^}]*position:relative;z-index:0;isolation:isolate/);
   assert.match(planViewSource,/ten_dia_diem_thay_the:replacementText\?\.trim\(\)\|\|undefined/);
   assert.match(planViewSource,/role="combobox" aria-autocomplete="list"/);
   assert.match(planViewSource,/void swipe\(slot\.dia_diem_id,undefined,searchText\)/);
   assert.match(globalsSource,/\.slot-actions\{grid-column:1\/-1;[^}]*justify-self:end/);
   assert.match(globalsSource,/\.change-menu\{position:fixed/);
+  assert.match(globalsSource,/\.change-menu\{[^}]*z-index:1000/);
   assert.match(globalsSource,/\.delete-menu\{position:fixed/);
+  assert.match(globalsSource,/\.delete-menu\{[^}]*z-index:1010/);
   assert.doesNotMatch(planViewSource,/window\.confirm/);
   assert.match(planViewSource,/className="delete-menu"/);
   assert.match(planViewSource,/createPortal\(\s*<div\s+className="change-menu"[\s\S]*?<\/div>,document\.body\s*\)/);
