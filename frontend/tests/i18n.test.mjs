@@ -208,6 +208,13 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(globalsSource,/\.itinerary-summary-actions \.secondary\{[^}]*background:#f3f2ee/);
   assert.match(globalsSource,/\.itinerary-summary-actions \.primary>span\{background-image:url\("data:image\/svg\+xml[^}]*M6\.75/);
   assert.match(globalsSource,/\.itinerary-summary-actions \.secondary>span\{background-image:url\("data:image\/svg\+xml[^}]*circle/);
+  assert.match(planViewSource,/className="itinerary-export-actions"[\s\S]*itinerary\.pdf[\s\S]*t\("downloadPdf"\)[\s\S]*calendar\.ics[\s\S]*t\("addCalendar"\)[\s\S]*className="itinerary-summary-actions"/);
+  assert.doesNotMatch(planViewSource,/className="trip-actions export-actions"/);
+  assert.match(globalsSource,/\.itinerary-export-actions,\.itinerary-summary-actions\{display:grid;grid-template-columns:1fr 1fr;gap:10px\}/);
+  assert.match(globalsSource,/\.itinerary-export-actions \.button-link\{[^}]*min-height:44px;[^}]*border:1px solid var\(--line-2\);[^}]*background:var\(--surface\);[^}]*color:var\(--ink\)/);
+  assert.match(globalsSource,/\.itinerary-export-actions \.button-link:hover\{border-color:var\(--brand\);background:var\(--green-soft\);color:var\(--brand\);transform:none\}/);
+  assert.match(globalsSource,/\.itinerary-export-actions svg\{[^}]*stroke:currentColor/);
+  assert.match(planViewSource,/viewBox="0 0 24 24"[\s\S]*M6 3h9l3 3v15H6z[\s\S]*viewBox="0 0 24 24"[\s\S]*M8 2v4M16 2v4M3 9h18/);
   assert.doesNotMatch(planViewSource,/className="itinerary-summary"/);
   assert.equal((planViewSource.match(/className="itinerary-panel card"/g)||[]).length,1);
   assert.match(planViewSource,/className="itinerary-card-hero"/);
