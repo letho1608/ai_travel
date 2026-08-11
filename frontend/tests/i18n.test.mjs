@@ -12,6 +12,7 @@ const exploreSource=readFileSync(new URL("../app/explore/page.tsx",import.meta.u
 const roadtripSource=readFileSync(new URL("../lib/roadtrip-translations.ts",import.meta.url),"utf8");
 const roadtripPageSource=readFileSync(new URL("../app/roadtrip/page.tsx",import.meta.url),"utf8");
 const planViewSource=readFileSync(new URL("../components/PlanView.tsx",import.meta.url),"utf8");
+const navigationSource=readFileSync(new URL("../components/Navigation.tsx",import.meta.url),"utf8");
 const mapViewSource=readFileSync(new URL("../components/MapView.tsx",import.meta.url),"utf8");
 const roadTripMapSource=readFileSync(new URL("../components/RoadTripMap.tsx",import.meta.url),"utf8");
 const globalsSource=readFileSync(new URL("../app/globals.css",import.meta.url),"utf8");
@@ -35,6 +36,12 @@ test("rendered brand palette uses Hanoi green without legacy purple",()=>{
   assert.match(globalsSource,/:root\{--brand:#086b27;--brand-hover:#075a22;--accent-2:#086b27;--muted-2:#596b59\}/);
   assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{[\s\S]*--paper:#0d1710;[\s\S]*--surface:#132419;[\s\S]*--green-soft:#173528/);
   assert.match(globalsSource,/--danger:#bb4d45;--danger-soft:#f0dad7;--info:#536fac;--info-soft:#dde3ee/);
+});
+test("login navigation action matches the account pill treatment",()=>{
+  assert.match(navigationSource,/className="nav-cta"[\s\S]*className="nav-account-icon"[\s\S]*t\("login"\)/);
+  assert.match(globalsSource,/\.nav-links a\.nav-cta\{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;[\s\S]*background:#086b27;[\s\S]*border-radius:var\(--radius-full\)/);
+  assert.match(globalsSource,/\.nav-account-icon\{width:17px;height:17px;[\s\S]*stroke:currentColor/);
+  assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{\.nav-links a\.nav-cta\{border-color:var\(--brand\)\}\.nav-links a\.nav-cta:hover\{border-color:var\(--brand-hover\)\}\}/);
 });
 const compiledWorkspace=ts.transpileModule(workspaceSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
 const workspace=await import(`data:text/javascript;base64,${Buffer.from(compiledWorkspace).toString("base64")}`);

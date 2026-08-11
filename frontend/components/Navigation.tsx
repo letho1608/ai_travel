@@ -42,7 +42,12 @@ export default function Navigation() {
           </span>
         )}
         <Link href="/login" className="nav-cta">
-          {t("login")}
+          <svg className="nav-account-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" />
+            <circle cx="12" cy="9.5" r="2.5" />
+            <path d="M7.8 17.1c.9-2.2 2.3-3.3 4.2-3.3s3.3 1.1 4.2 3.3" />
+          </svg>
+          <span>{t("login")}</span>
         </Link>
       </div>
     </nav>
