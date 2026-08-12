@@ -159,6 +159,8 @@ def build_itinerary_pdf(plan: dict, locale: str = "vi") -> bytes:
         story.append(Paragraph(copy[10], day_style))
         for note in plan["luu_y"]:
             story.append(Paragraph(f"• {escape(note)}", body))
-    footer = lambda canvas, doc: _footer(canvas, doc, copy)
+    def footer(canvas, doc):
+        _footer(canvas, doc, copy)
+
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     return output.getvalue()

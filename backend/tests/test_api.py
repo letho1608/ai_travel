@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from app.data import Place
 from app.main import app
 from app.pipeline.planner import AI_FALLBACK_NOTE
-from app.routers.auth import DEMO_USERS
 from app.routers import plans as plans_router
+from app.routers.auth import DEMO_USERS
 from app.services.rate_limit import limiter
 from app.services.store import store
 

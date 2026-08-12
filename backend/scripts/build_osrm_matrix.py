@@ -1,10 +1,9 @@
 """Build a real OSRM distance matrix for selected imported places."""
 
 import argparse
+import datetime as _dt
 import json
 import urllib.request
-
-import datetime as _dt
 
 if not hasattr(_dt, "UTC"):
     _dt.UTC = _dt.timezone.utc

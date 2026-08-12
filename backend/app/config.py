@@ -45,6 +45,7 @@ class Settings:
     amadeus_client_secret: str | None = None
     support_admin_token: str | None = None
     osrm_base_url: str = "https://router.project-osrm.org"
+    plan_route_geometry: bool = True
     max_request_body_bytes: int = 256 * 1024
 
     def validate_production(self) -> None:
@@ -183,6 +184,8 @@ class Settings:
             osrm_base_url=os.getenv(
                 "OSRM_BASE_URL", "https://router.project-osrm.org"
             ).strip().rstrip("/"),
+            plan_route_geometry=os.getenv("PLAN_ROUTE_GEOMETRY", "1").lower()
+            not in {"0", "false", "off"},
             max_request_body_bytes=int(os.getenv("MAX_REQUEST_BODY_BYTES", str(256 * 1024))),
         )
 

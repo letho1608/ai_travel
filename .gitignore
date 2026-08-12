@@ -19,3 +19,4 @@ tmp/
 output/
 __pycache__/
 .pytest_cache/
+backend/data/plan_routes.json

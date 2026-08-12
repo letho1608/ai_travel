@@ -292,7 +292,7 @@ class OpenAICompatibleAIAdapter:
                 payload = json.loads(content)
                 places = payload.get("places")
                 if not isinstance(places, list):
-                    raise ValueError("AI không trả danh sách places")
+                    raise TypeError("AI không trả danh sách places")
                 result = [
                     item
                     for item in places

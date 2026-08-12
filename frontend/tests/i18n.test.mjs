@@ -39,7 +39,8 @@ test("rendered brand palette uses Hanoi green without legacy purple",()=>{
   for(const purple of ["#7d4fb8","#ae86f7","#cdb3ff","#efe7fd","#f7f3fe","#4b2c82","#926cd6"])assert.doesNotMatch(controlled,new RegExp(purple),`legacy purple ${purple}`);
   assert.match(mapViewSource,/#bb4d45/);
   assert.match(roadTripMapSource,/#bb4d45/);
-  assert.match(globalsSource,/:root\{--brand:#086b27;--brand-hover:#075a22;--accent-2:#086b27;--muted-2:#596b59\}/);
+  assert.match(globalsSource,/:root\{--ink:#063b1b;/);
+  assert.doesNotMatch(globalsSource,/:root\{--brand:#086b27;--brand-hover:#075a22;--accent-2:#086b27;--muted-2:#596b59\}/);
   assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{[\s\S]*--paper:#0d1710;[\s\S]*--surface:#132419;[\s\S]*--green-soft:#173528/);
   assert.match(globalsSource,/--danger:#bb4d45;--danger-soft:#f0dad7;--info:#536fac;--info-soft:#dde3ee/);
   assert.match(globalsSource,/--container:none/);

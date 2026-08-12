@@ -8,7 +8,7 @@ from fastapi.responses import Response
 from redis.exceptions import RedisError
 
 from app.config import settings
-from app.data import DISTANCE_METADATA, PLACES, PLACE_METADATA
+from app.data import DISTANCE_METADATA, PLACE_METADATA, PLACES
 from app.pipeline.planner import AI_FALLBACK_NOTE
 from app.services.ai import breaker_status
 from app.services.rate_limit import limiter
