@@ -34,7 +34,7 @@ SIGHT_KINDS = frozenset({"dia_danh", "bao_tang", "cong_vien", "cho"})
 # (start_hour, start_min, end_hour, end_min) — khung giờ ăn / nghỉ mục tiêu
 MEAL_WINDOWS: dict[str, tuple[int, int, int, int]] = {
     "sang": (7, 30, 9, 30),
-    "trua": (11, 0, 13, 30),
+    "trua": (11, 30, 13, 30),
     "nghi": (12, 30, 14, 30),
     "toi": (18, 0, 21, 0),
     "dem": (19, 0, 22, 30),
@@ -1026,8 +1026,9 @@ def _compute_slot_bounds(
         earliest = max(earliest, _at_clock(arrive, 18, 0))
     latest_end = min(closing, preferred_close if meal_type else closing, day_end)
     if meal_type:
-        # Soft meal window: allow a little earlier than classic lunch/dinner.
-        earliest = max(earliest, _at_clock(arrive, pref_start, 0))
+        # Meal slots are semantic commitments: lunch stays at lunch time,
+        # dinner stays at dinner time. Do not relax them into another daypart.
+        earliest = max(earliest, preferred_open)
         latest_end = min(latest_end, preferred_close)
     elif not relax:
         # Keep visits inside researched preferred windows when possible.
@@ -1058,11 +1059,10 @@ def _compute_slot_bounds(
     ):
         ideal = max(earliest, _at_clock(arrive, 15, 0))
     idle = (ideal - arrive).total_seconds() / 60
-    strict = night_market or (
+    strict = night_market or bool(meal_type) or (
         (not relax)
         and (
             _is_morning_only(place)
-            or bool(meal_type)
             or (
                 _is_outdoor_place(place)
                 and not meal_type
@@ -1078,7 +1078,7 @@ def _compute_slot_bounds(
         start = ideal
 
     if start + timedelta(minutes=MIN_VISIT_MINUTES) > latest_end:
-        if relax:
+        if relax and not meal_type and not night_market:
             latest_end = min(closing, day_end)
         if start + timedelta(minutes=MIN_VISIT_MINUTES) > latest_end:
             return None

@@ -83,6 +83,30 @@ def test_full_day_plan_includes_scheduled_dining():
     assert all(slot.get("nhan_bua") for slot in dining)
 
 
+def test_lunch_cannot_be_relaxed_into_evening():
+    place = replace(
+        PLACES[0],
+        id="late-lunch-place",
+        name="Late lunch place",
+        kind="nha_hang",
+        open_hour=8,
+        close_hour=23,
+        duration_min=60,
+    )
+    day_start = planner.datetime(2026, 8, 10, 8)
+    arrive = day_start.replace(hour=19, minute=30)
+
+    assert planner._compute_slot_bounds(
+        place,
+        "trua",
+        arrive,
+        day_start,
+        day_start.replace(hour=22),
+        request(),
+        relax=True,
+    ) is None
+
+
 def test_full_day_has_midday_rest_and_evening_after_dinner():
     plan = build_plan(
         request().model_copy(
