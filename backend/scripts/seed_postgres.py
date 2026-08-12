@@ -27,21 +27,40 @@ def main() -> None:
     matrix_ids = matrix_payload["place_ids"]
     durations = matrix_payload["durations_seconds"]
     distances = matrix_payload["distances_meters"]
+
+    # Imported lazily so this script never triggers app.data's Postgres branch
+    # at import time; only the pure image/name helpers are needed here.
+    from app.data import (
+        CURATED_HANOI_ANCHORS,
+        CURATED_HANOI_DINING,
+        PLACE_IMAGE_CREDITS_BY_NAME,
+        PLACE_IMAGE_URLS_BY_NAME,
+        place_name_key,
+    )
+
+    def recorded_image(item: dict) -> tuple[str | None, str | None]:
+        """Source image_url/credit, falling back to the curated name-keyed map."""
+        url = item.get("image_url") or PLACE_IMAGE_URLS_BY_NAME.get(place_name_key(item["name"]))
+        credit = item.get("image_credit") or PLACE_IMAGE_CREDITS_BY_NAME.get(place_name_key(item["name"]))
+        return url, credit
+
     ids: dict[str, str] = {}
     with psycopg.connect(os.getenv("URL_CSDL_POSTGRES", DEFAULT_URL)) as connection:
         for place in places:
+            image_url, image_credit = recorded_image(place)
             row = connection.execute(
                 """
                 INSERT INTO dia_diem(
                   ten,ten_bo_dau,loai,khu_vuc,dia_chi,gia_trung_binh,tags,
-                  phong_cach,gio_mo_cua,toa_do,mo_ta,hinh_anh,nguon,nguon_url,
-                  ma_nguon,thoi_luong_phut
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s)
+                  phong_cach,gio_mo_cua,toa_do,mo_ta,hinh_anh,hinh_anh_nguon,
+                  nguon,nguon_url,ma_nguon,thoi_luong_phut
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT(nguon_url) DO UPDATE SET
                   ten=EXCLUDED.ten, loai=EXCLUDED.loai, khu_vuc=EXCLUDED.khu_vuc,
                   dia_chi=EXCLUDED.dia_chi, tags=EXCLUDED.tags,
                   gio_mo_cua=EXCLUDED.gio_mo_cua, toa_do=EXCLUDED.toa_do,
-                  ma_nguon=EXCLUDED.ma_nguon,
+                  ma_nguon=EXCLUDED.ma_nguon, hinh_anh=EXCLUDED.hinh_anh,
+                  hinh_anh_nguon=EXCLUDED.hinh_anh_nguon,
                   thoi_luong_phut=EXCLUDED.thoi_luong_phut, ngay_tao=now()
                 RETURNING id
                 """,
@@ -54,12 +73,47 @@ def main() -> None:
                          "raw": place.get("opening_hours_raw")}
                     ), json.dumps(
                         {"lat": place["lat"], "lng": place["lng"]}
-                    ), None, None, place.get("source", "OpenStreetMap"),
+                    ), None, image_url, image_credit,
+                    place.get("source", "OpenStreetMap"),
                     place.get("source_url"),
                     place.get("id"), place.get("duration_min", 60),
                 ),
             ).fetchone()
             ids[str(place["id"])] = str(row[0])
+
+        # Seed the curated Hanoi anchors/dining so the same stops exist in
+        # production (ids = `curated-*`, images from the curated maps).
+        curated_upserted = 0
+        for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING):
+            image_url, image_credit = recorded_image(
+                {"name": curated.name, "image_url": curated.image_url, "image_credit": curated.image_credit}
+            )
+            row = connection.execute(
+                """
+                INSERT INTO dia_diem(
+                  ten,ten_bo_dau,loai,khu_vuc,dia_chi,gia_trung_binh,tags,
+                  phong_cach,gio_mo_cua,toa_do,mo_ta,hinh_anh,hinh_anh_nguon,
+                  nguon,nguon_url,ma_nguon,thoi_luong_phut
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT(nguon_url) DO UPDATE SET
+                  ten=EXCLUDED.ten, loai=EXCLUDED.loai, khu_vuc=EXCLUDED.khu_vuc,
+                  tags=EXCLUDED.tags, gio_mo_cua=EXCLUDED.gio_mo_cua,
+                  toa_do=EXCLUDED.toa_do, hinh_anh=EXCLUDED.hinh_anh,
+                  hinh_anh_nguon=EXCLUDED.hinh_anh_nguon,
+                  thoi_luong_phut=EXCLUDED.thoi_luong_phut, ngay_tao=now()
+                RETURNING id
+                """,
+                (
+                    curated.name, curated.name, curated.kind, curated.area,
+                    None, curated.cost, list(curated.tags),
+                    [], json.dumps({"open": curated.open_hour, "close": curated.close_hour}),
+                    json.dumps({"lat": curated.lat, "lng": curated.lng}),
+                    None, image_url, image_credit,
+                    "curated", f"curated:{curated.id}", curated.id, curated.duration_min,
+                ),
+            ).fetchone()
+            ids[curated.id] = str(row[0])
+            curated_upserted += 1
 
         inserted = 0
         for origin_index, origin in enumerate(matrix_ids):
@@ -85,7 +139,8 @@ def main() -> None:
                      datetime.now(UTC)),
                 )
                 inserted += 1
-    print(f"Seeded {len(ids)} OSM places and {inserted} OSRM routes.")
+    print(f"Seeded {len(ids)} OSM places and {inserted} OSRM routes; "
+          f"{curated_upserted} curated anchors upserted.")
 
 
 if __name__ == "__main__":

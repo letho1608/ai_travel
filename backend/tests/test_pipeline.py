@@ -519,7 +519,13 @@ def test_hanoi_evening_intent_includes_old_quarter_night_stops():
     slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
     place_names = {slot["ten_dia_diem"] for slot in slots}
     assert "Phố cổ Hà Nội" in place_names
-    assert {"Chợ đêm Hàng Đào – Đồng Xuân", "Phố Tạ Hiện"}.intersection(place_names)
+    normalized = {
+        planner._place_name_key(replace(PLACES[0], name=name)) for name in place_names
+    }
+    assert {
+        planner._name_key("Chợ Đêm Hàng Đào – Đồng Xuân"),
+        planner._name_key("Phố Tạ Hiện"),
+    }.intersection(normalized)
     assert any(slot["bat_dau"] >= "17:00" for slot in slots)
 
 
@@ -561,7 +567,22 @@ def test_planner_uses_ai_to_select_places_before_scheduling(monkeypatch):
     place_ids = {
         slot["dia_diem_id"] for day in plan["ngay"] for slot in day["khoang_gio"]
     }
-    assert {"curated-ho-tay", "curated-lang-bac", "curated-ho-guom"} <= place_ids
+    place_names = {
+        slot["ten_dia_diem"] for day in plan["ngay"] for slot in day["khoang_gio"]
+    }
+    # The AI's curated picks must be planned. After catalogue merge the curated
+    # twins can be dropped for a same-name OSM row, so match by normalized name
+    # (e.g. Lăng Bác may appear as `osm-way-37625751`).
+    normalized = {
+        planner._place_name_key(replace(PLACES[0], name=name)) for name in place_names
+    }
+    expected = {
+        planner._name_key("Hồ Tây"),
+        planner._name_key("Lăng Chủ tịch Hồ Chí Minh"),
+        planner._name_key("Hồ Gươm"),
+    }
+    assert {"curated-ho-tay", "curated-ho-guom"} <= place_ids or expected <= normalized
+    assert expected <= normalized
 
 
 def test_planner_can_use_llm_first_places_after_osm_verification(monkeypatch):
@@ -735,3 +756,51 @@ def test_planner_passes_all_supported_locales_to_weather_adapter(monkeypatch):
         plan = build_plan(request().model_copy(update={"ngon_ngu": locale}))
         assert plan["thoi_tiet"]["tinh_trang"] == WEATHER_COPY[locale][0]
     assert set(seen) == set(locales)
+
+
+def test_meals_never_schedule_out_of_order_across_contexts():
+    for nonce in ("nonce-meal-order-0001", "nonce-meal-order-0002", "nonce-meal-order-0003"):
+        plan = build_plan(
+            request().model_copy(
+                update={
+                    "context": "du lịch Hà Nội cả ngày, tham quan và ăn ngon",
+                    "thoi_luong": "ca_ngay",
+                    "nonce": nonce,
+                }
+            )
+        )
+        slots = plan["ngay"][0]["khoang_gio"]
+        meals = [slot for slot in slots if slot.get("bua_an")]
+        assert meals, "full-day plan must contain meals"
+        priorities = [
+            planner.MEAL_PRECEDENCE[slot["bua_an"]]
+            for slot in meals
+            if slot["bua_an"] in planner.MEAL_PRECEDENCE
+        ]
+        assert priorities == sorted(priorities), "meal order violated"
+        for slot in meals:
+            if slot["bua_an"] == "trua":
+                assert slot["ket_thuc"] <= "14:30", f"lunch ended too late: {slot['bat_dau']}-{slot['ket_thuc']}"
+            if slot["bua_an"] == "toi":
+                assert slot["bat_dau"] >= "18:00"
+
+
+def test_every_slot_explains_visit_time_basis():
+    plan = build_plan(request().model_copy(update={"thoi_luong": "ca_ngay"}))
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    assert slots
+    for slot in slots:
+        assert slot.get("thoi_gian_ly_do"), f"missing time basis for {slot['dia_diem_id']}"
+        assert "phút" in slot["thoi_gian_ly_do"]
+
+
+def test_guidance_covers_major_catalog_places():
+    from app.pipeline.visit_guidance import VISIT_GUIDANCE_BY_NAME, duration_guidance_for
+
+    covered = 0
+    for place in PLACES:
+        if duration_guidance_for(place.id, planner._place_name_key(place), place.kind):
+            covered += 1
+    assert covered >= len(PLACES) * 0.8, f"duration basis covers only {covered}/{len(PLACES)}"
+    assert VISIT_GUIDANCE_BY_NAME["hoang thanh thang long"].duration_min == 90
+    assert VISIT_GUIDANCE_BY_NAME["serein cafe lounge"].source == "West Lake café guides"

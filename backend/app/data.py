@@ -6,6 +6,8 @@ from pathlib import Path
 import psycopg
 from psycopg.rows import dict_row
 
+from app.text_utils import ascii_fold
+
 
 @dataclass(frozen=True)
 class Place:
@@ -26,57 +28,86 @@ class Place:
     image_credit: str | None = None
 
 
+def place_name_key(name: str) -> str:
+    """Stable normalized identity for a place name across catalogue modes.
+
+    Vietnamese diacritics are folded away, en/em dashes are normalized to
+    hyphens, and whitespace is collapsed so an OSM import row and its curated
+    anchor carry the same key regardless of spelling/casing differences.
+    """
+    return " ".join(ascii_fold(name).replace("\u2013", "-").replace("\u2014", "-").split())
+
+
 PLACE_IMAGE_URLS: dict[str, str] = {
-    "ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hoan_Kiem.jpg?width=800",
-    "van-mieu": "https://commons.wikimedia.org/wiki/Special:FilePath/V%C4%83n_Mi%E1%BA%BFu_Street%2C_Hanoi.jpg?width=800",
-    "chua-tran-quoc": "https://commons.wikimedia.org/wiki/Special:FilePath/Ch%C3%B9a_Tr%E1%BA%A5n_Qu%E1%BB%91c%2C_H%C3%A0_N%E1%BB%99i.jpg?width=800",
-    "long-bien": "https://commons.wikimedia.org/wiki/Special:FilePath/Long_bien_bridge.jpg?width=800",
     "bao-tang-phu-nu": "https://commons.wikimedia.org/wiki/Special:FilePath/Vietnamese_Women%27s_Museum_Building.JPG?width=800",
-    "curated-ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hoan_Kiem.jpg?width=800",
-    "curated-ho-tay": "https://commons.wikimedia.org/wiki/Special:FilePath/H%E1%BB%93_T%C3%A2y_ho%C3%A0ng_h%C3%B4n_-_NKS.jpg?width=800",
-    "curated-lang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/L%C4%83ng_B%C3%A1c_-_NKS.jpg?width=800",
-    "curated-pho-co-ha-noi": "https://commons.wikimedia.org/wiki/Special:FilePath/T%E1%BA%A1_Hi%E1%BB%87n_Street%2C_Hanoi%2C_Vietnam_14.jpg?width=800",
-    "curated-cho-dem-dong-xuan": "https://commons.wikimedia.org/wiki/Special:FilePath/Ch%E1%BB%A3_%C4%90%E1%BB%93ng_Xu%C3%A2n_-_NKS.jpg?width=800",
-    "curated-pho-ta-hien": "https://commons.wikimedia.org/wiki/Special:FilePath/T%E1%BA%A1_Hi%E1%BB%87n_Street%2C_Hanoi%2C_Vietnam_14.jpg?width=800",
-    "curated-hang-dao": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-gai": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-ma": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-duong": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-ngang": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-buom": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-dau": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-khay": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hang-trong": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_shophouse_2.jpg?width=800",
-    "curated-hoang-thanh-thang-long": "https://commons.wikimedia.org/wiki/Special:FilePath/Central_Sector_of_the_Imperial_Citadel_of_Thang_Long_-_Hanoi.jpg?width=800",
-    "curated-nha-hat-lon": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi_Opera_House_1.jpg?width=800",
+    "curated-ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/August%202003%20Hoan%20Kiem%20.jpg?width=800",
+    "curated-ho-tay": "https://commons.wikimedia.org/wiki/Special:FilePath/H%E1%BB%93%20T%C3%A2y.png?width=800",
+    "curated-lang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi%20Vietnam%20Mausoleum-of-Ho-Chi-Minh-01.jpg?width=800",
+    "curated-pho-co-ha-noi": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi%20old%20quarter%20shophouse.jpg?width=800",
+    "curated-cho-dem-dong-xuan": "https://commons.wikimedia.org/wiki/Special:FilePath/Ch%E1%BB%A3%20%C4%90%E1%BB%93ng%20Xu%C3%A2n%2C%20Le%20grand%20march%C3%A9%2C%20H%C3%A0%20N%E1%BB%99i%2C%201926.jpg?width=800",
+    "curated-pho-ta-hien": "https://commons.wikimedia.org/wiki/Special:FilePath/20190923%20095622Ph%E1%BB%91%20T%E1%BA%A1%20Hi%E1%BB%87n%20H%C3%A0%20N%E1%BB%99i.jpg?width=800",
+    "curated-hang-dao": "https://commons.wikimedia.org/wiki/Special:FilePath/Balloon%20seller%2C%20Hanoi%20%284856307014%29.jpg?width=800",
+    "curated-hang-gai": "https://commons.wikimedia.org/wiki/Special:FilePath/Crossroad%20in%20Hanoi.jpg?width=800",
+    "curated-hang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/Bovloj%20%C4%B5us%20lavitaj%20kaj%20lasitaj%20sur%20trotuaro%20en%20Hanojo%2001.jpg?width=800",
+    "curated-hang-ma": "https://commons.wikimedia.org/wiki/Special:FilePath/H%C3%A0ng%20M%C3%A3%20Street%2C%20Hanoi.jpg?width=800",
+    "curated-hang-duong": "https://commons.wikimedia.org/wiki/Special:FilePath/2024-11-03%20H%C3%A0ng%20%C4%90%C6%B0%E1%BB%9Dng%20Street%2C%20Hanoi.jpg?width=800",
+    "curated-hang-ngang": "https://commons.wikimedia.org/wiki/Special:FilePath/Street%20corner%20in%20Hanoi.JPG?width=800",
+    "curated-hang-buom": "https://commons.wikimedia.org/wiki/Special:FilePath/A%20Chinese%20temple%20in%20the%20Hanoi%20old%20quarter%202016-11-01%20%28flickr31416950736%29.jpg?width=800",
+    "curated-hang-dau": "https://commons.wikimedia.org/wiki/Special:FilePath/H%C3%A0ng%20D%E1%BA%A7u%20Street%2C%20Hanoi%2C%2020240204%201340%205780.jpg?width=800",
+    "curated-hang-khay": "https://commons.wikimedia.org/wiki/Special:FilePath/DAI%20BO%20%28%20HOANG%20KIEM%20LAKE%29%20-%20panoramio.jpg?width=800",
+    "curated-hang-trong": "https://commons.wikimedia.org/wiki/Special:FilePath/Five%20tigers%2C%20Hang%20Trong%20painting%2C%20Hanoi%2C%20paper%2C%20view%201%20-%20Vietnam%20National%20Museum%20of%20Fine%20Arts%20-%20Hanoi%2C%20Vietnam%20-%20DSC05281.JPG?width=800",
+    "curated-bun-cha-dac-kim": "https://commons.wikimedia.org/wiki/Special:FilePath/Bun%20cha.jpg?width=800",
+    "curated-bun-cha-huong-lien": "https://commons.wikimedia.org/wiki/Special:FilePath/Bun%20cha%20Hanoi.jpg?width=800",
+    "curated-cafe-dinh": "https://commons.wikimedia.org/wiki/Special:FilePath/C%C3%80%20PH%C3%8A%20KEM%20TR%E1%BB%A8NG%20%28Egg%20cream%20coffee%29.jpg?width=800",
+    "curated-cha-ca-thang-long": "https://commons.wikimedia.org/wiki/Special:FilePath/Cha%20ca%20La%20Vong.jpg?width=800",
+    "curated-pho-bat-dan": "https://commons.wikimedia.org/wiki/Special:FilePath/Pho%20Ha%20Noi.jpg?width=800",
 }
 
 PLACE_IMAGE_CREDITS: dict[str, str] = {
-    "ho-guom": "Wikimedia Commons (Hoan_Kiem.jpg)",
-    "van-mieu": "Wikimedia Commons (Văn Miếu Street, Hanoi)",
-    "chua-tran-quoc": "Wikimedia Commons (Chùa Trấn Quốc, Hà Nội)",
-    "long-bien": "Wikimedia Commons (Long_bien_bridge.jpg)",
     "bao-tang-phu-nu": "Wikimedia Commons (Vietnamese Women's Museum Building)",
-    "curated-ho-guom": "Wikimedia Commons (Hoan_Kiem.jpg)",
-    "curated-ho-tay": "Wikimedia Commons (Hồ Tây hoàng hôn – NKS)",
-    "curated-lang-bac": "Wikimedia Commons (Lăng Bác – NKS)",
-    "curated-pho-co-ha-noi": "Wikimedia Commons (Tạ Hiện Street, Hanoi)",
-    "curated-cho-dem-dong-xuan": "Wikimedia Commons (Chợ Đồng Xuân – NKS)",
-    "curated-pho-ta-hien": "Wikimedia Commons (Tạ Hiện Street, Hanoi)",
-    "curated-hoang-thanh-thang-long": "Wikimedia Commons (Imperial Citadel of Thang Long)",
-    "curated-nha-hat-lon": "Wikimedia Commons (Hanoi Opera House 1)",
+    "curated-ho-guom": "Wikimedia Commons (August 2003 Hoan Kiem .jpg)",
+    "curated-ho-tay": "Wikimedia Commons (Hồ Tây.png)",
+    "curated-lang-bac": "Wikimedia Commons (Hanoi Vietnam Mausoleum-of-Ho-Chi-Minh-01.jpg)",
+    "curated-pho-co-ha-noi": "Wikimedia Commons (Hanoi old quarter shophouse.jpg)",
+    "curated-cho-dem-dong-xuan": "Wikimedia Commons (Chợ Đồng Xuân, Le grand marché, Hà Nội, 1926.jpg)",
+    "curated-pho-ta-hien": "Wikimedia Commons (20190923 095622Phố Tạ Hiện Hà Nội.jpg)",
+    "curated-hang-dao": "Wikimedia Commons (Balloon seller, Hanoi (4856307014).jpg)",
+    "curated-hang-gai": "Wikimedia Commons (Crossroad in Hanoi.jpg)",
+    "curated-hang-bac": "Wikimedia Commons (Bovloj ĵus lavitaj kaj lasitaj sur trotuaro en Hanojo 01.jpg)",
+    "curated-hang-ma": "Wikimedia Commons (Hàng Mã Street, Hanoi.jpg)",
+    "curated-hang-duong": "Wikimedia Commons (2024-11-03 Hàng Đường Street, Hanoi.jpg)",
+    "curated-hang-ngang": "Wikimedia Commons (Street corner in Hanoi.JPG)",
+    "curated-hang-buom": "Wikimedia Commons (A Chinese temple in the Hanoi old quarter 2016-11-01 (flickr31416950736).jpg)",
+    "curated-hang-dau": "Wikimedia Commons (Hàng Dầu Street, Hanoi, 20240204 1340 5780.jpg)",
+    "curated-hang-khay": "Wikimedia Commons (DAI BO ( HOANG KIEM LAKE) - panoramio.jpg)",
+    "curated-hang-trong": "Wikimedia Commons (Five tigers, Hang Trong painting, Hanoi, paper, view 1 - Vietnam National Museum of Fine Arts - Hanoi, Vietnam - DSC05281.JPG)",
+    "curated-bun-cha-dac-kim": "Wikimedia Commons (Bun cha.jpg)",
+    "curated-bun-cha-huong-lien": "Wikimedia Commons (Bun cha Hanoi.jpg)",
+    "curated-cafe-dinh": "Wikimedia Commons (CÀ PHÊ KEM TRỨNG (Egg cream coffee).jpg)",
+    "curated-cha-ca-thang-long": "Wikimedia Commons (Cha ca La Vong.jpg)",
+    "curated-pho-bat-dan": "Wikimedia Commons (Pho Ha Noi.jpg)",
 }
 
 
 def image_for(place: "Place") -> tuple[str | None, str | None]:
+    """Resolve a place's image (URL, credit) in any catalogue mode.
+
+    Order: the place's own recorded image (OSM import / Postgres row), then the
+    id-keyed curated map, then the name-keyed map so a catalogue row whose
+    normalized name matches a curated/demo place still surfaces its image even
+    when the catalogue runs on `ma_nguon` ids (Postgres mode).
+    """
     if place.image_url:
-        return place.image_url, place.image_credit
+        credit = place.image_credit or PLACE_IMAGE_CREDITS_BY_NAME.get(place_name_key(place.name))
+        return place.image_url, credit
     url = PLACE_IMAGE_URLS.get(place.id)
-    return url, PLACE_IMAGE_CREDITS.get(place.id)
+    if url:
+        return url, PLACE_IMAGE_CREDITS.get(place.id)
+    key = place_name_key(place.name)
+    return PLACE_IMAGE_URLS_BY_NAME.get(key), PLACE_IMAGE_CREDITS_BY_NAME.get(key)
 
 
-PLACES = [
+DEMO_PLACES = [
     Place("ho-guom", "Hồ Hoàn Kiếm", "dia_danh", "Hoàn Kiếm", 21.0287, 105.8522, 0, 60, ("di_bo", "chill", "ngoai_troi"), 5, 23),
     Place("bao-tang-phu-nu", "Bảo tàng Phụ nữ Việt Nam", "bao_tang", "Hoàn Kiếm", 21.0235, 105.8515, 40_000, 75, ("van_hoa", "trong_nha"), 8, 17),
     Place("van-mieu", "Văn Miếu – Quốc Tử Giám", "dia_danh", "Đống Đa", 21.0277, 105.8355, 70_000, 75, ("van_hoa", "checkin"), 8, 17),
@@ -114,8 +145,30 @@ def _load_imported_places() -> tuple[list[Place], dict]:
 
 
 IMPORTED_PLACES, PLACE_METADATA = _load_imported_places()
-if IMPORTED_PLACES:
-    PLACES = IMPORTED_PLACES
+
+
+def finalize_catalogue(rows: list[Place]) -> list[Place]:
+    """Merge catalogue rows with the curated Hanoi anchors/dining.
+
+    Catalogue rows always win a name collision (they carry OSM verification and
+    route-matrix ids); a curated anchor is only appended when no row shares its
+    normalized name. This single step keeps the local (places.json/demo) and
+    Postgres (`ma_nguon`) catalogues consistent, so planning logic sees the
+    same curated stops in every mode.
+    """
+    merged = list(rows)
+    seen_ids = {place.id for place in merged}
+    seen_names = {place_name_key(place.name) for place in merged}
+    for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING):
+        if curated.id in seen_ids:
+            continue
+        key = place_name_key(curated.name)
+        if key in seen_names:
+            continue
+        merged.append(curated)
+        seen_ids.add(curated.id)
+        seen_names.add(key)
+    return merged
 
 
 CURATED_HANOI_ANCHORS = [
@@ -299,12 +352,54 @@ CURATED_HANOI_DINING = [
     ),
 ]
 
-_existing_place_ids = {place.id for place in PLACES}
-PLACES = [
-    *PLACES,
-    *(place for place in CURATED_HANOI_ANCHORS if place.id not in _existing_place_ids),
-    *(place for place in CURATED_HANOI_DINING if place.id not in _existing_place_ids),
-]
+# Canonical id -> display name for every curated/demo place, so planning code
+# can resolve a `curated-*`/demo id against a Postgres-style catalogue by name.
+KNOWN_PLACE_NAMES_BY_ID: dict[str, str] = {
+    place.id: place.name
+    for place in (*DEMO_PLACES, *CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING)
+}
+
+_CURATED_NAME_KEYS = {place_name_key(name) for name in KNOWN_PLACE_NAMES_BY_ID.values()}
+
+
+def is_curated_named(place: "Place") -> bool:
+    """True when a place carries a canonical curated/demo name.
+
+    Used by routing so the OSM twin that finalize_catalogue keeps in place of a
+    dropped curated anchor (Postgres-style catalogues have no `curated-*` rows)
+    stays routable — the same physical stop in every catalogue mode.
+    """
+    return (
+        place.id in KNOWN_PLACE_NAMES_BY_ID
+        or place_name_key(place.name) in _CURATED_NAME_KEYS
+    )
+
+
+def _build_name_image_maps() -> tuple[dict[str, str], dict[str, str]]:
+    """Project the id-keyed image maps onto normalized place names.
+
+    Name keys are the stable identity that survives catalogue-mode switches
+    (an OSM row whose name matches a curated anchor keeps its image even when
+    its id is `ma_nguon`-based), which is how image parity is achieved.
+    """
+    urls: dict[str, str] = {}
+    credits: dict[str, str] = {}
+    for place_id, url in PLACE_IMAGE_URLS.items():
+        name = KNOWN_PLACE_NAMES_BY_ID.get(place_id)
+        if not name:
+            continue
+        key = place_name_key(name)
+        urls[key] = url
+        if place_id in PLACE_IMAGE_CREDITS:
+            credits[key] = PLACE_IMAGE_CREDITS[place_id]
+    return urls, credits
+
+
+PLACE_IMAGE_URLS_BY_NAME, PLACE_IMAGE_CREDITS_BY_NAME = _build_name_image_maps()
+
+# Local catalogue: imported OSM rows (or the demo list when places.json is
+# absent), merged with the curated anchors once the curated lists exist above.
+PLACES = finalize_catalogue(IMPORTED_PLACES if IMPORTED_PLACES else DEMO_PLACES)
 
 
 def _load_postgres_places() -> tuple[list[Place], dict]:
@@ -314,8 +409,8 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
     with psycopg.connect(database_url, row_factory=dict_row, connect_timeout=3) as connection:
         rows = connection.execute(
             "SELECT ten,loai,khu_vuc,gia_trung_binh,tags,gio_mo_cua,toa_do,"
-            "nguon,nguon_url,ma_nguon,thoi_luong_phut,hinh_anh FROM dia_diem "
-            "WHERE trang_thai='active' AND ma_nguon IS NOT NULL"
+            "nguon,nguon_url,ma_nguon,thoi_luong_phut,hinh_anh,hinh_anh_nguon "
+            "FROM dia_diem WHERE trang_thai='active' AND ma_nguon IS NOT NULL"
         ).fetchall()
     if not rows:
         raise RuntimeError("PostgreSQL catalogue is empty; run scripts/seed_postgres.py")
@@ -328,7 +423,7 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
             open_hour=int((row["gio_mo_cua"] or {}).get("open", 7)),
             close_hour=int((row["gio_mo_cua"] or {}).get("close", 22)),
             source=row["nguon"], source_url=row["nguon_url"],
-            image_url=row["hinh_anh"],
+            image_url=row["hinh_anh"], image_credit=row["hinh_anh_nguon"],
         )
         for row in rows
     ]
@@ -337,6 +432,9 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
 
 if os.getenv("APP_ENV", "local") != "local":
     PLACES, PLACE_METADATA = _load_postgres_places()
+    # Postgres ids are `ma_nguon` values, so the curated anchors are merged in
+    # the same way as the local path (deduped by normalized name).
+    PLACES = finalize_catalogue(PLACES)
 
 
 def _load_distance_metadata() -> dict:

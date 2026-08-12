@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from app.config import settings
-from app.data import DISTANCE_METADATA, PLACES, Place, image_for
-from app.pipeline.visit_guidance import VisitGuidance, guidance_for
+from app.data import DISTANCE_METADATA, KNOWN_PLACE_NAMES_BY_ID, PLACES, Place, image_for
+from app.pipeline.visit_guidance import VisitGuidance, duration_guidance_for, guidance_for
 from app.pipeline.routing import (
     haversine_km,
     is_routable,
@@ -40,6 +40,8 @@ MEAL_WINDOWS: dict[str, tuple[int, int, int, int]] = {
     "dem": (19, 0, 22, 30),
 }
 MEAL_DURATION = {"sang": 45, "trua": 60, "nghi": 50, "toi": 75, "dem": 75}
+# Hard sequencing: each meal must be placed before every later meal in this order.
+MEAL_PRECEDENCE = {"sang": 0, "trua": 1, "nghi": 2, "toi": 3, "dem": 4}
 MEAL_PREFERRED_START = {
     "sang": (7, 45),
     "trua": (11, 30),
@@ -254,16 +256,14 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     explicit_anchor = tags.intersection({"ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh"})
     wants_hanoi_highlights = bool(generic_tourism or explicit_anchor)
     wants_night = bool(tags.intersection(INTENT_PROFILES["night"]["terms"]))
-    by_id = {place.id: place for place in PLACES}
     place_ids = [
         *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
         *((*HANOI_NIGHT_IDS,) if wants_night else ()),
     ]
     return [
         place
-        for place_id in place_ids
-        if (place := by_id.get(place_id))
-        and place.id not in excluded
+        for place in _resolve_by_id(place_ids)
+        if place.id not in excluded
         and place.cost <= request.ngan_sach
         and is_routable(place)
     ]
@@ -283,8 +283,35 @@ def _is_sight_place(place: Place, *, allow_cafe: bool = False) -> bool:
     return allow_cafe and place.kind == "cafe"
 
 
+def _name_key(name: str) -> str:
+    return " ".join(_ascii_fold(name).split())
+
+
 def _place_name_key(place: Place) -> str:
-    return " ".join(_ascii_fold(place.name).split())
+    return _name_key(place.name)
+
+
+def _resolve_by_id(place_ids: tuple[str, ...]) -> list[Place]:
+    """Resolve curated/demo ids against the live catalogue.
+
+    Matches by id first (local mode keeps the `curated-*` entries), then falls
+    back to the id's canonical place name so a Postgres-style catalogue whose
+    ids are `ma_nguon` values still surfaces the same curated stops.
+    """
+    by_id = {place.id: place for place in PLACES}
+    by_name = {_place_name_key(place): place for place in PLACES}
+    resolved: list[Place] = []
+    seen: set[str] = set()
+    for place_id in place_ids:
+        place = by_id.get(place_id)
+        if place is None:
+            canonical_name = KNOWN_PLACE_NAMES_BY_ID.get(place_id)
+            if canonical_name:
+                place = by_name.get(_name_key(canonical_name))
+        if place is not None and place.id not in seen:
+            resolved.append(place)
+            seen.add(place.id)
+    return resolved
 
 
 def _prefer_place(left: Place, right: Place) -> Place:
@@ -507,6 +534,14 @@ def _is_evening_place(place: Place) -> bool:
     tags = set(place.tags)
     if place.id in EVENING_PLACE_IDS:
         return True
+    # Postgres-style catalogues drop the curated twin for a same-name OSM row;
+    # match the canonical evening-stop names so those rows stay evening-only.
+    if any(
+        _name_key(KNOWN_PLACE_NAMES_BY_ID[known_id]) == _place_name_key(place)
+        for known_id in EVENING_PLACE_IDS
+        if known_id in KNOWN_PLACE_NAMES_BY_ID
+    ):
+        return True
     if open_hour >= 17:
         return True
     return _is_night_market(place)
@@ -576,14 +611,11 @@ def _choose_evening_place(
     budget_per_person: int,
     excluded_names: set[str] | None = None,
 ) -> Place | None:
-    by_id = {place.id: place for place in PLACES}
-
     def pick(ids: tuple[str, ...]) -> Place | None:
         pool = [
             place
-            for place_id in ids
-            if (place := by_id.get(place_id))
-            and place.id not in excluded
+            for place in _resolve_by_id(ids)
+            if place.id not in excluded
             and not ((key := _place_name_key(place)) and key in (excluded_names or set()))
             and place.cost <= budget_per_person
             and is_routable(place)
@@ -861,6 +893,19 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
     return max(MIN_VISIT_MINUTES, minutes)
 
 
+def _visit_time_reason(place: Place, meal_type: str | None, minutes: int, labels: dict[str, str]) -> str:
+    """Explain the basis for the displayed visit duration (Vietnamese label)."""
+    if meal_type and labels:
+        meal_label = labels.get(meal_type)
+        if meal_label:
+            return f"Thời lượng {minutes} phút cho bữa {meal_label} theo biểu thời lượng bữa ăn mặc định."
+    tip = duration_guidance_for(place.id, _place_name_key(place), place.kind)
+    if tip and tip.duration_min:
+        source = tip.source or "hướng dẫn địa phương"
+        return f"Thời lượng {minutes} phút theo gợi ý tham quan từ {source}."
+    return f"Thời lượng {minutes} phút ước tính theo catalog địa điểm (loại {place.kind})."
+
+
 def _preference_score(place: Place, meal_type: str | None, hour: float) -> float:
     if _is_night_market(place):
         open_hour, close_hour = _effective_hours(place)
@@ -977,7 +1022,7 @@ def _compute_slot_bounds(
         start = ideal
 
     if start + timedelta(minutes=MIN_VISIT_MINUTES) > latest_end:
-        if relax:
+        if relax and not meal_type:
             latest_end = min(closing, day_end)
         if start + timedelta(minutes=MIN_VISIT_MINUTES) > latest_end:
             return None
@@ -1026,6 +1071,28 @@ def _pack_day_slots(
             best_score = -1e9
             best_bounds = None
             for index, (place, meal_type) in enumerate(remaining):
+                if meal_type is not None:
+                    later = MEAL_PRECEDENCE.get(meal_type, -1)
+                    earlier_pending = [
+                        (other_place, other_mt)
+                        for other_place, other_mt in remaining
+                        if other_mt is not None
+                        and MEAL_PRECEDENCE.get(other_mt, -1) < later
+                    ]
+                    blocked_by_earlier = False
+                    for earlier_place, earlier_mt in earlier_pending:
+                        earlier_travel = travel_minutes(previous, earlier_place) if previous else 0
+                        earlier_arrive = cursor + timedelta(minutes=earlier_travel)
+                        earlier_bounds = _compute_slot_bounds(
+                            earlier_place, earlier_mt, earlier_arrive, day_start, day_end, request, relax=False
+                        ) or _compute_slot_bounds(
+                            earlier_place, earlier_mt, earlier_arrive, day_start, day_end, request, relax=True
+                        )
+                        if earlier_bounds:
+                            blocked_by_earlier = True
+                            break
+                    if blocked_by_earlier:
+                        continue
                 travel = travel_minutes(previous, place) if previous else 0
                 arrive = cursor + timedelta(minutes=travel)
                 bounds = _compute_slot_bounds(
@@ -1072,6 +1139,7 @@ def _pack_day_slots(
         start, end, _visit = best_bounds
         mo_ta, ghi_chu = _slot_copy(place, request, copy, llm_details_by_id.get(place.id), meal_type, labels)
         image_url, image_credit = image_for(place)
+        visit_minutes = int((end - start).total_seconds() // 60)
         slot = {
             "bat_dau": start.strftime("%H:%M"),
             "ket_thuc": end.strftime("%H:%M"),
@@ -1079,6 +1147,7 @@ def _pack_day_slots(
             "ten_dia_diem": place.name,
             "loai": place.kind,
             "mo_ta": mo_ta,
+            "thoi_gian_ly_do": _visit_time_reason(place, meal_type, visit_minutes, labels),
             "chi_phi": place.cost * request.so_nguoi,
             "toa_do": {"lat": place.lat, "lng": place.lng},
             "nguon": place.source,
@@ -1249,6 +1318,7 @@ def _backfill_day_gaps(
             candidate, request, copy, llm_details_by_id.get(candidate.id), None, labels
         )
         image_url, image_credit = image_for(candidate)
+        visit_minutes = int((end - start).total_seconds() // 60)
         slot = {
             "bat_dau": start.strftime("%H:%M"),
             "ket_thuc": end.strftime("%H:%M"),
@@ -1256,6 +1326,7 @@ def _backfill_day_gaps(
             "ten_dia_diem": candidate.name,
             "loai": candidate.kind,
             "mo_ta": mo_ta,
+            "thoi_gian_ly_do": _visit_time_reason(candidate, None, visit_minutes, labels),
             "chi_phi": candidate.cost * request.so_nguoi,
             "toa_do": {"lat": candidate.lat, "lng": candidate.lng},
             "nguon": candidate.source,
@@ -1295,6 +1366,7 @@ def _schedule_stop(
     start, end, _visit = bounds
     mo_ta, ghi_chu = _slot_copy(place, request, copy, llm_detail, meal_type, labels)
     image_url, image_credit = image_for(place)
+    visit_minutes = int((end - start).total_seconds() // 60)
     slot = {
         "bat_dau": start.strftime("%H:%M"),
         "ket_thuc": end.strftime("%H:%M"),
@@ -1302,6 +1374,7 @@ def _schedule_stop(
         "ten_dia_diem": place.name,
         "loai": place.kind,
         "mo_ta": mo_ta,
+        "thoi_gian_ly_do": _visit_time_reason(place, meal_type, visit_minutes, labels),
         "chi_phi": place.cost * request.so_nguoi,
         "toa_do": {"lat": place.lat, "lng": place.lng},
         "nguon": place.source,
@@ -1421,8 +1494,18 @@ def validate_plan(
     for day in plan.get("ngay", []):
         previous_end = "00:00"
         previous_place: Place | None = None
+        seen_meal_priority = -1
         for slot in day.get("khoang_gio", []):
             place = by_id.get(slot.get("dia_diem_id"))
+            meal_type = slot.get("bua_an")
+            if meal_type is not None:
+                priority = MEAL_PRECEDENCE.get(meal_type, -1)
+                if priority >= 0 and priority < seen_meal_priority:
+                    errors.append(f"Bữa ăn sai thứ tự: {slot['dia_diem_id']} ({meal_type})")
+                if meal_type == "trua" and _parse_slot_clock(slot["ket_thuc"]) > 14 * 60 + 30:
+                    errors.append(f"Bữa trưa kết thúc quá muộn: {slot['dia_diem_id']}")
+                if priority >= 0:
+                    seen_meal_priority = max(seen_meal_priority, priority)
             if slot["bat_dau"] < previous_end or slot["bat_dau"] >= slot["ket_thuc"]:
                 errors.append(f"Khung giờ không tuần tự: {slot['dia_diem_id']}")
             if place:

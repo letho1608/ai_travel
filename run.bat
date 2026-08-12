@@ -71,15 +71,26 @@ if "%API_KEY_DEEPSEEK%"=="" (
 
 :AI_MODE_DONE
 
+set "USE_DURABLE_LOCAL=false"
+set "URL_CSDL_POSTGRES="
+set "URL_CSDL_REDIS="
 where docker >nul 2>nul
-if errorlevel 1 goto DOCKER_MISSING
+if errorlevel 1 goto NO_DOCKER
+docker version --format "{{.Server.Version}}" >nul 2>nul
+if errorlevel 1 goto NO_DOCKER
+echo Docker daemon running: dung PostgreSQL/Redis that (durable).
 docker compose up -d
 if errorlevel 1 goto DOCKER_FAILED
-
+set "USE_DURABLE_LOCAL=true"
 set "URL_CSDL_POSTGRES=postgresql://postgres:postgres@localhost:5432/minhdidauthe"
 set "URL_CSDL_REDIS=redis://localhost:6379/0"
 "%PYTHON_EXE%" "%PROJECT_ROOT%\backend\scripts\ensure_local_data.py"
 if errorlevel 1 goto DATA_FAILED
+goto MODE_SELECTED
+
+:NO_DOCKER
+echo Docker khong chay: dung MemoryStore, du lieu se mat khi restart.
+:MODE_SELECTED
 
 set "BACKEND_PORT=8000"
 :CHECK_BACKEND_PORT
@@ -100,7 +111,7 @@ goto BACKEND_STARTED
 :BACKEND_PORT_READY
 echo Starting durable Backend: http://localhost:%BACKEND_PORT%
 if defined RUN_BAT_CHECK_ONLY goto BACKEND_STARTED
-start "Minh Di Dau The - Backend" /D "%PROJECT_ROOT%\backend" cmd /k "set "USE_DURABLE_LOCAL=true"&& set "URL_CSDL_POSTGRES=%URL_CSDL_POSTGRES%"&& set "URL_CSDL_REDIS=%URL_CSDL_REDIS%"&& set "AI_MODE=%AI_MODE%"&& set "API_KEY_GROQ=%API_KEY_GROQ%"&& set "TEN_MODEL_GROQ=%TEN_MODEL_GROQ%"&& set "API_KEY_DEEPSEEK=%API_KEY_DEEPSEEK%"&& set "TEN_MODEL_DEEPSEEK=%TEN_MODEL_DEEPSEEK%"&& set "AI_BASE_URL=%AI_BASE_URL%"&& "%PYTHON_EXE%" -m uvicorn app.main:app --reload --port %BACKEND_PORT%"
+start "Minh Di Dau The - Backend" /D "%PROJECT_ROOT%\backend" cmd /k "set "USE_DURABLE_LOCAL=%USE_DURABLE_LOCAL%"&& set "URL_CSDL_POSTGRES=%URL_CSDL_POSTGRES%"&& set "URL_CSDL_REDIS=%URL_CSDL_REDIS%"&& set "AI_MODE=%AI_MODE%"&& set "API_KEY_GROQ=%API_KEY_GROQ%"&& set "TEN_MODEL_GROQ=%TEN_MODEL_GROQ%"&& set "API_KEY_DEEPSEEK=%API_KEY_DEEPSEEK%"&& set "TEN_MODEL_DEEPSEEK=%TEN_MODEL_DEEPSEEK%"&& set "AI_BASE_URL=%AI_BASE_URL%"&& "%PYTHON_EXE%" -m uvicorn app.main:app --reload --port %BACKEND_PORT%"
 
 :BACKEND_STARTED
 set "FRONTEND_PORT=3000"
@@ -132,11 +143,6 @@ exit /b 0
 echo Launcher check OK. Backend port %BACKEND_PORT%, frontend port %FRONTEND_PORT%.
 endlocal
 exit /b 0
-
-:DOCKER_MISSING
-echo [ERROR] Khong tim thay Docker. Can Docker Desktop de chay PostgreSQL va Redis that.
-pause
-exit /b 1
 
 :DOCKER_FAILED
 echo [ERROR] Khong khoi dong duoc PostgreSQL/Redis. Hay mo Docker Desktop va thu lai.

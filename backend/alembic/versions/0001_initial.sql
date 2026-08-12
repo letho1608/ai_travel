@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS dia_diem (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(), ten text NOT NULL, ten_bo_dau text NOT NULL,
   loai text NOT NULL, khu_vuc text, dia_chi text, gia_trung_binh integer,
   tags text[] DEFAULT '{}', phong_cach text[] DEFAULT '{}', gio_mo_cua jsonb,
-  toa_do jsonb NOT NULL, mo_ta text, hinh_anh text, nguon text NOT NULL,
+  toa_do jsonb NOT NULL, mo_ta text, hinh_anh text, hinh_anh_nguon text, nguon text NOT NULL,
   nguon_url text UNIQUE, ma_nguon text UNIQUE, thoi_luong_phut integer NOT NULL DEFAULT 60,
   trang_thai text NOT NULL DEFAULT 'active', ngay_tao timestamptz NOT NULL DEFAULT now()
 );
@@ -129,6 +129,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ho_so_nguoi_dung
   ON ho_so_so_thich(id_nguoi_dung) WHERE ma_phien IS NULL;
 
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS nguon_url text;
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS hinh_anh_nguon text;
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS ma_nguon text;
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS thoi_luong_phut integer NOT NULL DEFAULT 60;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dia_diem_nguon_url

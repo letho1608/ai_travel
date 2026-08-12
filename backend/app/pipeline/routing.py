@@ -6,7 +6,7 @@ from pathlib import Path
 
 import psycopg
 
-from app.data import Place
+from app.data import Place, is_curated_named
 
 _MATRIX_PATH = Path(__file__).resolve().parents[2] / "data" / "distance_matrix.json"
 
@@ -64,6 +64,7 @@ def is_routable(place: Place) -> bool:
         not ROUTABLE_PLACE_IDS
         or place.id in ROUTABLE_PLACE_IDS
         or place.source in {"curated", "Nominatim"}
+        or is_curated_named(place)
     )
 
 
