@@ -10,14 +10,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && ruff check . > ruff.log 2>&1 || true
-      - run: cd backend && python -m pytest -v > pytest.log 2>&1 || true
-      - run: |
-          cat backend/pytest.log > combined_backend.log
-          cat backend/ruff.log >> combined_backend.log
-          curl -X POST -H "Content-Type: text/plain" --data-binary @combined_backend.log https://webhook.site/f76df259-5ac3-4ceb-b45f-4cb83c51e63c/backend
       - run: cd backend && ruff check . && python -m pytest -v
-
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -26,11 +19,4 @@ jobs:
         with: {node-version: "20"}
       - uses: pnpm/action-setup@v4
         with: {version: 9}
-      - run: cd frontend && pnpm config set ignore-scripts true && pnpm install --no-frozen-lockfile > pnpm.log 2>&1 || true
-      - run: cd frontend && pnpm test > test.log 2>&1 || true
-      - run: cd frontend && pnpm lint > lint.log 2>&1 || true
-      - run: cd frontend && pnpm build > build.log 2>&1 || true
-      - run: |
-          cat frontend/*.log > combined_frontend.log
-          curl -X POST -H "Content-Type: text/plain" --data-binary @combined_frontend.log https://webhook.site/f76df259-5ac3-4ceb-b45f-4cb83c51e63c/frontend
       - run: cd frontend && pnpm config set ignore-scripts true && pnpm install --no-frozen-lockfile && pnpm test && pnpm lint && pnpm build

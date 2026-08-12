@@ -1338,7 +1338,7 @@ def _lns_reorder_day(
                         candidate, day_start, max_minutes, request, copy, llm_details_by_id, labels
                     )
                     if candidate_slots:
-                        best_slots, best_cost, best_score = candidate_slots
+                        best_slots, _best_cost, best_score = candidate_slots
                     best_order = candidate
                     improved = True
             order_ids = [place.id for place, _ in best_order]
@@ -1353,7 +1353,7 @@ def _lns_reorder_day(
                         swapped, day_start, max_minutes, request, copy, llm_details_by_id, labels
                     )
                     if candidate_slots:
-                        best_slots, best_cost, best_score = candidate_slots
+                        best_slots, _best_cost, best_score = candidate_slots
                     best_order = swapped
                     improved = True
         if not improved:
