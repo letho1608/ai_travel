@@ -1142,6 +1142,14 @@ def _pack_day_slots(
                 score -= travel * 0.15
                 if relax:
                     score -= 5
+                if any(mt == "trua" for _, mt in remaining):
+                    lunch_ready = _at_clock(day_start, 10, 45)
+                    lunch_close = _at_clock(day_start, MEAL_WINDOWS["trua"][2], MEAL_WINDOWS["trua"][3])
+                    if cursor >= lunch_ready:
+                        if meal_type == "trua":
+                            score += 80
+                        elif cursor < lunch_close:
+                            score -= 80
                 if meal_type == "toi" and any(mt == "trua" for _, mt in remaining):
                     score -= 30
                 if meal_type == "nghi" and any(mt == "trua" for _, mt in remaining):
