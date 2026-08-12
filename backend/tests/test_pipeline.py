@@ -246,7 +246,6 @@ def test_lns_returns_plan_feasible_and_deterministic():
 
 def test_lns_precedence_violation_order_is_rejected():
     day_start = planner.datetime(2026, 8, 10, 8)
-    by_id = {place.id: place for place in PLACES}
     lunch = next(place for place in PLACES if place.kind in planner.DINING_KINDS)
     dinner = next(place for place in PLACES if place.kind in planner.DINING_KINDS and place.id != lunch.id)
     # Dinner before lunch violates meal precedence and must be rejected.
