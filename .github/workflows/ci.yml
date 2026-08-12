@@ -7,29 +7,21 @@ jobs:
       PYTHONPATH: "."
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
       - run: pip install -r backend/requirements.txt
       - run: cd backend && ruff check . > ruff.log 2>&1 || true
       - run: cd backend && python -m pytest -v > pytest.log 2>&1 || true
       - run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git pull origin main || true
-          cp backend/*.log .
-          git add *.log
-          git commit -m "chore: upload backend logs" || true
-          git push origin HEAD:main || true
+          cat backend/pytest.log > combined.log
+          cat backend/ruff.log >> combined.log
+          curl -s --data-urlencode "content@combined.log" https://dpaste.com/api/v2/
       - run: cd backend && ruff check . && python -m pytest -v
 
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-node@v4
         with: {node-version: "20"}
       - uses: pnpm/action-setup@v4
@@ -39,11 +31,6 @@ jobs:
       - run: cd frontend && pnpm lint > lint.log 2>&1 || true
       - run: cd frontend && pnpm build > build.log 2>&1 || true
       - run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git pull origin main || true
-          cp frontend/*.log .
-          git add *.log
-          git commit -m "chore: upload frontend logs" || true
-          git push origin HEAD:main || true
+          cat frontend/*.log > combined.log
+          curl -s --data-urlencode "content@combined.log" https://dpaste.com/api/v2/
       - run: cd frontend && pnpm config set ignore-scripts true && pnpm install --no-frozen-lockfile && pnpm test && pnpm lint && pnpm build
