@@ -87,7 +87,7 @@ def _request(params: dict) -> dict:
                 time.sleep(1.5 * attempt + random.uniform(0, 0.3))
                 continue
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - retry any transient network error
             last_exc = exc
             time.sleep(min(2 ** attempt, 6))
     raise last_exc  # type: ignore[misc]
@@ -234,7 +234,7 @@ def main() -> None:
             try:
                 raw = search_candidates(term, used_urls)
                 time.sleep(args.delay)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - one failed terms passes to next
                 failed += 1
                 print(f"  ! {place.get('name')}: {type(exc).__name__}")
                 break
@@ -249,7 +249,7 @@ def main() -> None:
             failed += 1
             continue
 
-        thumb, credit, width, _ = picked
+        thumb, credit, _, _ = picked
         if thumb in used_urls and not args.allow_dup:
             dup_suppressed += 1
             failed += 1

@@ -3,9 +3,9 @@
 import L from "leaflet";
 import { useEffect, useRef } from "react";
 
-import type { Slot } from "@/lib/types";
+import type { Slot, TuyenDuong } from "@/lib/types";
 
-export default function MapView({ slots, selectedId, onSelect }: { slots: Slot[]; selectedId?: string; onSelect?: (id:string)=>void }) {
+export default function MapView({ slots, selectedId, onSelect, tuyenDuong }: { slots: Slot[]; selectedId?: string; onSelect?: (id:string)=>void; tuyenDuong?: TuyenDuong|null }) {
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const onSelectRef = useRef(onSelect);
@@ -46,14 +46,23 @@ export default function MapView({ slots, selectedId, onSelect }: { slots: Slot[]
       layers.push(marker);
       marker.addTo(map);
     });
-    const line = L.polyline(points, { color: "#086b27", weight: 4 });
-    layers.push(line);
-    line.addTo(map);
-    if (points.length) map.fitBounds(points, { padding: [30, 30] });
+    const geometry = tuyenDuong?.type === "LineString" && Array.isArray(tuyenDuong.coordinates) && tuyenDuong.coordinates.length >= 2 ? tuyenDuong.coordinates : null;
+    if (geometry) {
+      const routePoints = geometry.map(([lng, lat]) => [lat, lng] as L.LatLngTuple);
+      const line = L.polyline(routePoints, { color: "#086b27", weight: 4 });
+      layers.push(line);
+      line.addTo(map);
+      map.fitBounds(routePoints.length ? routePoints : points, { padding: [30, 30] });
+    } else {
+      const line = L.polyline(points, { color: "#086b27", weight: 4 });
+      layers.push(line);
+      line.addTo(map);
+      if (points.length) map.fitBounds(points, { padding: [30, 30] });
+    }
     return () => {
       layers.forEach((layer) => map.removeLayer(layer));
     };
-  }, [slots, selectedId]);
+  }, [slots, selectedId, tuyenDuong]);
 
   return <div ref={ref} className="map" aria-label="Bản đồ lịch trình" />;
 }

@@ -109,6 +109,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
     [searchStatus,setSearchStatus]=useState<"idle"|"loading"|"empty"|"error">("idle");
   const busyRef=useRef<BusyAction|null>(null),mounted=useRef(true),previousCompanion=useRef(commentName),controllers=useRef(new Set<AbortController>()),currentToken=useRef(token),verRef=useRef(version),searchGeneration=useRef(0),searchTimer=useRef<ReturnType<typeof setTimeout>|null>(null),changeTrigger=useRef<HTMLButtonElement|null>(null),deleteTrigger=useRef<HTMLButtonElement|null>(null);
   const slots=useMemo(()=>plan.ngay[activeDay]?.khoang_gio??[],[plan,activeDay]);
+  const tuyenDuong=useMemo(()=>plan.ngay[activeDay]?.tuyen_duong??null,[plan,activeDay]);
   const money=useMemo(()=>new Intl.NumberFormat(locale,{style:"currency",currency:"VND",maximumFractionDigits:0}),[locale]);
   const date=useMemo(()=>new Intl.DateTimeFormat(locale,{dateStyle:"medium",timeStyle:"short"}),[locale]);
   const start=(action:BusyAction)=>{if(busyRef.current)return false;busyRef.current=action;setBusy(action);setMessage(null);return true};
@@ -340,7 +341,7 @@ export default function PlanView({initial,token,version,constraints:initialConst
                     </div>,document.body
                   )}
                 </article>))}</div><div className="itinerary-summary-actions"><button className="primary" type="button" onClick={saveOffline} disabled={disabled}><span aria-hidden="true">▯</span> {t("savePlan")}</button><button className="secondary" type="button" onClick={copy} disabled={disabled}><span aria-hidden="true">⌯</span> {t("share")}</button></div><button className="itinerary-regenerate secondary" type="button" onClick={regenerate} disabled={disabled}><span aria-hidden="true">↻</span> {t("regenerate")}</button></div></section>
-      <section className="map-panel"><MapView slots={slots} selectedId={selectedId} onSelect={setSelectedId}/><div className="map-legend card">{t("mapLegend")}</div></section></div>
+      <section className="map-panel"><MapView slots={slots} selectedId={selectedId} onSelect={setSelectedId} tuyenDuong={tuyenDuong}/><div className="map-legend card">{t("mapLegend")}</div></section></div>
     <p className="disclaimer">{t("estimateDisclaimer",{weather:plan.thoi_tiet.ghi_chu})}</p>
   </main>
 }

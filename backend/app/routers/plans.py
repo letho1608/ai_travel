@@ -9,8 +9,14 @@ from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
 from app.data import PLACES, Place, image_for
-from app.pipeline.planner import COPY, PipelineUnavailable, _effective_hours, build_plan, travel_minutes, validate_plan
-from app.services.ai import ai_adapter
+from app.pipeline.planner import (
+    COPY,
+    PipelineUnavailable,
+    _effective_hours,
+    build_plan,
+    travel_minutes,
+    validate_plan,
+)
 from app.routers.auth import resolve_user
 from app.schemas import (
     CommentRequest,
@@ -24,8 +30,10 @@ from app.schemas import (
     SwipeRequest,
     TripFeedbackRequest,
 )
-from app.services.pdf_export import build_itinerary_pdf
+from app.services.ai import ai_adapter
 from app.services.osm_verify import verify_place_name
+from app.services.pdf_export import build_itinerary_pdf
+from app.services.plan_routes import enrich_plan_routes
 from app.services.rate_limit import limiter
 from app.services.store import store
 from app.text_utils import ascii_fold
@@ -124,7 +132,7 @@ async def generate(payload: PlanRequest, request: Request):
                     {
                         "type": "plan", "ma_phien": session_id,
                         "token": existing.token, "phien_ban": existing.version,
-                        "plan": existing.plan,
+                        "plan": enrich_plan_routes(json.loads(json.dumps(existing.plan, ensure_ascii=False))),
                     },
                 )
             return StreamingResponse(replay_stream(), media_type="text/event-stream")
@@ -162,7 +170,7 @@ def get_plan(token: str):
     if not item:
         raise HTTPException(404, "Kế hoạch không tồn tại hoặc đã hết hạn")
     return {
-        "ke_hoach": item.plan,
+        "ke_hoach": enrich_plan_routes(json.loads(json.dumps(item.plan, ensure_ascii=False))),
         "phien_ban": item.version,
         "token": item.token,
         "tham_so": _constraint_echo(PlanRequest.model_validate(item.request)),
@@ -451,7 +459,7 @@ def swipe(
             requested_place = Place(**(requested_place.__dict__ | estimate))
             estimated = True
     external = (requested_place,) if requested_place and requested_place.id not in {place.id for place in PLACES} else ()
-    target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=False, additional=external)
+    _, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=False, additional=external)
     if not candidates:
         raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
     if payload.dia_diem_thay_the or requested_place:
@@ -511,7 +519,7 @@ def swipe(
         if message:
             _append_turn(plan, "user", message)
             _append_turn(plan, "assistant", "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.")
-        store.update(item, payload.phien_ban, plan, item.request, f"Tinh chỉnh: {message or 'Đổi điểm'}")
+        store.update(item, payload.phien_ban, enrich_plan_routes(plan), item.request, f"Tinh chỉnh: {message or 'Đổi điểm'}")
     except ValueError as exc:
         raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
     except PipelineUnavailable as exc:
@@ -563,7 +571,7 @@ def delete_slot(
         raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
     if len(matches) != 1:
         raise HTTPException(409, "Lịch trình chứa địa điểm trùng lặp, vui lòng làm lại")
-    day, removed = matches[0]
+    day, _ = matches[0]
     day["khoang_gio"] = [slot for slot in day["khoang_gio"] if slot.get("dia_diem_id") != payload.dia_diem_id]
     plan_request = PlanRequest.model_validate(item.request)
     plan["tong_chi_phi"] = sum(
@@ -577,7 +585,7 @@ def delete_slot(
     if errors:
         raise HTTPException(503, "; ".join(errors))
     try:
-        store.update(item, payload.phien_ban, plan, item.request, "Xóa địa điểm")
+        store.update(item, payload.phien_ban, enrich_plan_routes(plan), item.request, "Xóa địa điểm")
     except ValueError as exc:
         raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
     store.log(item.session_id, "xoa_dia_diem", {"id_ke_hoach": token, "id_dia_diem": payload.dia_diem_id})

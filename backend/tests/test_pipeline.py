@@ -1,4 +1,5 @@
 from dataclasses import replace
+from itertools import pairwise
 
 from app.data import PLACES, Place
 from app.pipeline import planner
@@ -50,7 +51,7 @@ def test_full_day_schedule_avoids_long_gaps_and_midday_west_lake():
     slots = plan["ngay"][0]["khoang_gio"]
     assert len(slots) >= 4
     # No multi-hour holes between consecutive stops
-    for left, right in zip(slots, slots[1:]):
+    for left, right in pairwise(slots):
         lh, lm = map(int, left["ket_thuc"].split(":"))
         rh, rm = map(int, right["bat_dau"].split(":"))
         assert (rh * 60 + rm) - (lh * 60 + lm) <= 120
@@ -230,6 +231,46 @@ def test_half_day_plan_includes_lunch():
     assert len(dining) == 1
     assert dining[0]["loai"] in {"nha_hang", "quan_an"}
     assert dining[0]["bat_dau"] >= "11:30"
+
+
+def test_lns_returns_plan_feasible_and_deterministic():
+    payload = request().model_copy(
+        update={"context": "du lịch Hà Nội cả ngày, tham quan và ăn ngon", "nonce": "nonce-lns-0001"}
+    )
+    first = build_plan(payload)
+    second = build_plan(payload)
+    assert first == second
+    for day in first["ngay"]:
+        assert validate_plan(first, {slot["dia_diem_id"] for slot in day["khoang_gio"]}) == []
+
+
+def test_lns_precedence_violation_order_is_rejected():
+    day_start = planner.datetime(2026, 8, 10, 8)
+    by_id = {place.id: place for place in PLACES}
+    lunch = next(place for place in PLACES if place.kind in planner.DINING_KINDS)
+    dinner = next(place for place in PLACES if place.kind in planner.DINING_KINDS and place.id != lunch.id)
+    # Dinner before lunch violates meal precedence and must be rejected.
+    result = planner._schedule_fixed_order(
+        [(dinner, "toi"), (lunch, "trua")],
+        day_start,
+        600,
+        request(),
+        COPY["vi"],
+        {},
+        planner._meal_labels("vi"),
+    )
+    assert result is None
+
+
+def test_lns_keeps_same_stop_set_and_budget():
+    payload = request().model_copy(
+        update={"context": "café và đi bộ cuối tuần", "nonce": "nonce-lns-set-0001"}
+    )
+    plan = build_plan(payload)
+    slots = plan["ngay"][0]["khoang_gio"]
+    assert len(slots) >= 3
+    assert len({slot["dia_diem_id"] for slot in slots}) == len(slots)
+    assert plan["chi_phi_moi_nguoi"] <= payload.ngan_sach
 
 
 def test_plan_never_repeats_same_place_name():

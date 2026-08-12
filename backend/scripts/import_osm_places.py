@@ -4,13 +4,12 @@ Usage: python scripts/import_osm_places.py --output data/places.json
 """
 
 import argparse
+import datetime as _dt
 import json
 import time
 import urllib.parse
 import urllib.request
 from collections import Counter
-
-import datetime as _dt
 
 if not hasattr(_dt, "UTC"):
     _dt.UTC = _dt.timezone.utc

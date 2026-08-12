@@ -7,7 +7,6 @@ import httpx
 
 from app.config import settings
 from app.data import DISTANCE_METADATA, KNOWN_PLACE_NAMES_BY_ID, PLACES, Place, image_for
-from app.pipeline.visit_guidance import VisitGuidance, duration_guidance_for, guidance_for
 from app.pipeline.routing import (
     haversine_km,
     is_routable,
@@ -15,9 +14,11 @@ from app.pipeline.routing import (
     travel_minutes,
     two_opt,
 )
+from app.pipeline.visit_guidance import VisitGuidance, duration_guidance_for, guidance_for
 from app.schemas import PlanRequest
 from app.services.ai import ai_adapter
 from app.services.osm_verify import verify_place_name
+from app.services.plan_routes import enrich_plan_routes
 from app.services.weather import WeatherUnavailable, get_daily_weather
 from app.text_utils import ascii_fold
 
@@ -52,6 +53,12 @@ MEAL_PREFERRED_START = {
 MAX_IDLE_MINUTES = 35
 MIN_VISIT_MINUTES = 25
 MAX_GAP_BEFORE_FILL_MINUTES = 55
+
+# Large-neighborhood-search post-pass over each packed day. The greedy packer
+# only ever looks ahead from the current cursor; a small local-search pass that
+# relocates/reverses day stops can fix orderings a one-pass picker misses while
+# keeping feasibility (the same _compute_slot_bounds logic gates every move).
+LNS_MAX_PASSES = 6
 
 EVENING_PLACE_IDS = (
     "curated-cho-dem-dong-xuan",
@@ -206,7 +213,7 @@ def relevant_tags(context: str) -> set[str]:
     phrases = {
         "_".join(words[index : index + size])
         for size in (2, 3)
-        for index in range(0, max(len(words) - size + 1, 0))
+        for index in range(max(len(words) - size + 1, 0))
     }
     return set(re.findall(r"[a-zA-Z_]+", normalized)) | set(words) | phrases
 
@@ -810,7 +817,7 @@ def _is_outdoor_place(place: Place) -> bool:
 
 
 def _is_morning_only(place: Place) -> bool:
-    open_hour, close_hour = _effective_hours(place)
+    _, close_hour = _effective_hours(place)
     tip = _guidance(place)
     if tip and tip.preferred[2] <= 11 and tip.alt_preferred is None:
         return True
@@ -1013,9 +1020,7 @@ def _compute_slot_bounds(
             )
         )
     )
-    if idle > MAX_IDLE_MINUTES and not strict:
-        start = earliest
-    elif idle > MAX_IDLE_MINUTES and meal_type and arrive >= _at_clock(arrive, pref_start, 0):
+    if idle > MAX_IDLE_MINUTES and not strict or idle > MAX_IDLE_MINUTES and meal_type and arrive >= _at_clock(arrive, pref_start, 0):
         start = earliest
     else:
         start = ideal
@@ -1169,8 +1174,191 @@ def _pack_day_slots(
             ]
         cursor = end
         previous = place
+    slots = _lns_reorder_day(
+        slots,
+        day_start,
+        max_minutes,
+        request,
+        copy,
+        llm_details_by_id,
+        labels,
+    )
     slots = _tighten_day_gaps(slots, day_end)
     return slots, total_cost
+
+
+def _score_order(
+    order: list[tuple[Place, str | None]],
+    day_start: datetime,
+    max_minutes: int,
+    request: PlanRequest,
+) -> tuple[float, list[tuple[Place, str | None, datetime, datetime]]] | None:
+    """Cheap feasibility+quality check for one stop order.
+
+    Walks the order through the same bounds logic as packing and returns the
+    total score plus the resolved (place, meal_type, start, end) row per stop,
+    or None when any stop cannot fit. Deliberately does NOT build slot dicts or
+    weather/copy fields — that is expensive and identical for every candidate.
+    """
+    day_end = day_start + timedelta(minutes=max_minutes)
+    cursor = day_start
+    previous: Place | None = None
+    max_priority = -1
+    score = 0.0
+    rows: list[tuple[Place, str | None, datetime, datetime]] = []
+    for place, meal_type in order:
+        if meal_type is not None:
+            priority = MEAL_PRECEDENCE.get(meal_type, -1)
+            if priority >= 0 and priority < max_priority:
+                return None
+            if priority >= 0:
+                max_priority = max(max_priority, priority)
+        travel = travel_minutes(previous, place) if previous else 0
+        arrive = cursor + timedelta(minutes=travel)
+        bounds = _compute_slot_bounds(
+            place, meal_type, arrive, day_start, day_end, request, relax=False
+        ) or _compute_slot_bounds(
+            place, meal_type, arrive, day_start, day_end, request, relax=True
+        )
+        if not bounds:
+            return None
+        start, end, _visit = bounds
+        # Products contract: lunch starts at/after the preferred window, all
+        # other meals at/after their window start. Feasible but too-early meal
+        # placements are rejected so LNS never ships a 11:20 lunch.
+        if meal_type is not None:
+            gates = MEAL_WINDOWS[meal_type][:2]
+            if meal_type == "trua":
+                gates = MEAL_PREFERRED_START["trua"]
+            if start < _at_clock(start, *gates):
+                return None
+        idle = max(0, (start - arrive).total_seconds() / 60)
+        score += _preference_score(place, meal_type, start.hour + start.minute / 60)
+        score -= idle * 0.6
+        score -= travel * 0.15
+        rows.append((place, meal_type, start, end))
+        cursor = end
+        previous = place
+    return score, rows
+
+
+def _schedule_fixed_order(
+    order: list[tuple[Place, str | None]],
+    day_start: datetime,
+    max_minutes: int,
+    request: PlanRequest,
+    copy: tuple[str, ...],
+    llm_details_by_id: dict[str, dict],
+    labels: dict[str, str],
+) -> tuple[list[dict], int, float] | None:
+    """Build the full slot dicts for one feasible stop order.
+
+    Returns (slots, total_cost, score) for a fully feasible order, or None when
+    the order cannot be scheduled at all.
+    """
+    scored = _score_order(order, day_start, max_minutes, request)
+    if scored is None:
+        return None
+    score, rows = scored
+    slots: list[dict] = []
+    total_cost = 0
+    for place, meal_type, start, end in rows:
+        mo_ta, ghi_chu = _slot_copy(place, request, copy, llm_details_by_id.get(place.id), meal_type, labels)
+        image_url, image_credit = image_for(place)
+        visit_minutes = int((end - start).total_seconds() // 60)
+        slot = {
+            "bat_dau": start.strftime("%H:%M"),
+            "ket_thuc": end.strftime("%H:%M"),
+            "dia_diem_id": place.id,
+            "ten_dia_diem": place.name,
+            "loai": place.kind,
+            "mo_ta": mo_ta,
+            "thoi_gian_ly_do": _visit_time_reason(place, meal_type, visit_minutes, labels),
+            "chi_phi": place.cost * request.so_nguoi,
+            "toa_do": {"lat": place.lat, "lng": place.lng},
+            "nguon": place.source,
+            "nguon_url": place.source_url,
+            "anh": image_url,
+            "anh_nguon": image_credit,
+            "ghi_chu": ghi_chu,
+        }
+        if meal_type:
+            slot["bua_an"] = meal_type
+            slot["nhan_bua"] = labels[meal_type]
+        slots.append(slot)
+        total_cost += place.cost * request.so_nguoi
+    return slots, total_cost, score
+
+
+def _lns_reorder_day(
+    slots: list[dict],
+    day_start: datetime,
+    max_minutes: int,
+    request: PlanRequest,
+    copy: tuple[str, ...],
+    llm_details_by_id: dict[str, dict],
+    labels: dict[str, str],
+) -> list[dict]:
+    """Local-search post-pass: relocate/swap day stops to raise plan quality.
+
+    Greedy packing commits to an order one stop at a time and can get stuck with
+    a sub-optimal sequence (e.g. a far afternoon stop chosen too early). This
+    pass repeatedly tries moving each stop to every other position and swapping
+    pairs, re-scheduling each candidate through the same feasibility gate, and
+    keeps the strictly-best-scoring order. Deterministic: fixed iteration order,
+    strict improvement, no randomness. The stop set and per-person cost are
+    unchanged, so budget and cross-day dedupe stay intact.
+    """
+    if len(slots) < 2:
+        return slots
+    by_id = {place.id: place for place in PLACES}
+    order: list[tuple[Place, str | None]] = []
+    for slot in slots:
+        place = by_id.get(slot["dia_diem_id"])
+        if place is None:
+            return slots
+        order.append((place, slot.get("bua_an")))
+    best = _schedule_fixed_order(order, day_start, max_minutes, request, copy, llm_details_by_id, labels)
+    if best is None:
+        return slots
+    best_slots, best_cost, best_score = best
+    best_order = list(order)
+    for _ in range(LNS_MAX_PASSES):
+        improved = False
+        for i in range(len(best_order)):
+            target = best_order[i]
+            rest = best_order[:i] + best_order[i + 1 :]
+            for j in range(len(rest) + 1):
+                candidate = rest[:j] + [target] + rest[j:]
+                if candidate == best_order:
+                    continue
+                evaluated = _score_order(candidate, day_start, max_minutes, request)
+                if evaluated and evaluated[0] > best_score + 1e-9:
+                    candidate_slots = _schedule_fixed_order(
+                        candidate, day_start, max_minutes, request, copy, llm_details_by_id, labels
+                    )
+                    if candidate_slots:
+                        best_slots, best_cost, best_score = candidate_slots
+                    best_order = candidate
+                    improved = True
+            order_ids = [place.id for place, _ in best_order]
+            for k in range(i + 1, len(best_order)):
+                swapped = list(best_order)
+                swapped[i], swapped[k] = swapped[k], swapped[i]
+                if [place.id for place, _ in swapped] == order_ids:
+                    continue
+                evaluated = _score_order(swapped, day_start, max_minutes, request)
+                if evaluated and evaluated[0] > best_score + 1e-9:
+                    candidate_slots = _schedule_fixed_order(
+                        swapped, day_start, max_minutes, request, copy, llm_details_by_id, labels
+                    )
+                    if candidate_slots:
+                        best_slots, best_cost, best_score = candidate_slots
+                    best_order = swapped
+                    improved = True
+        if not improved:
+            break
+    return best_slots
 
 
 def _tighten_day_gaps(slots: list[dict], day_end: datetime) -> list[dict]:
@@ -1991,4 +2179,4 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     errors = validate_plan(plan, trusted_ids, request)
     if errors:
         raise PipelineUnavailable("; ".join(errors))
-    return plan
+    return enrich_plan_routes(plan)

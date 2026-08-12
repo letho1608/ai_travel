@@ -10,10 +10,10 @@ stub `image_for` or re-implement the resolution logic.
 
 from app import data as data_module
 from app.data import (
-    PLACE_IMAGE_CREDITS,
-    PLACE_IMAGE_URLS,
     CURATED_HANOI_ANCHORS,
     CURATED_HANOI_DINING,
+    PLACE_IMAGE_CREDITS,
+    PLACE_IMAGE_URLS,
     Place,
     place_name_key,
 )

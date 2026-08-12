@@ -1,9 +1,8 @@
 """Load the verified OSM catalogue and OSRM matrix into PostgreSQL."""
 
+import datetime as _dt
 import json
 import os
-
-import datetime as _dt
 
 if not hasattr(_dt, "UTC"):
     _dt.UTC = _dt.timezone.utc
