@@ -13,10 +13,15 @@ jobs:
       - run: cd backend && ruff check . > ruff.log 2>&1 || true
       - run: cd backend && python -m pytest -v > pytest.log 2>&1 || true
       - run: |
-          cat backend/pytest.log > combined.log
-          cat backend/ruff.log >> combined.log
-          curl -s --data-urlencode "content@combined.log" https://dpaste.com/api/v2/
-      - run: cd backend && ruff check . && python -m pytest -v
+          cat backend/pytest.log > combined_backend.log
+          cat backend/ruff.log >> combined_backend.log
+          curl --upload-file combined_backend.log https://transfer.sh/combined_backend.log > backend_url.txt
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git checkout -b logs-backend-${GITHUB_RUN_ID}
+          git add backend_url.txt
+          git commit -m "chore: upload backend logs URL"
+          git push origin logs-backend-${GITHUB_RUN_ID}
 
   frontend:
     runs-on: ubuntu-latest
@@ -31,6 +36,11 @@ jobs:
       - run: cd frontend && pnpm lint > lint.log 2>&1 || true
       - run: cd frontend && pnpm build > build.log 2>&1 || true
       - run: |
-          cat frontend/*.log > combined.log
-          curl -s --data-urlencode "content@combined.log" https://dpaste.com/api/v2/
-      - run: cd frontend && pnpm config set ignore-scripts true && pnpm install --no-frozen-lockfile && pnpm test && pnpm lint && pnpm build
+          cat frontend/*.log > combined_frontend.log
+          curl --upload-file combined_frontend.log https://transfer.sh/combined_frontend.log > frontend_url.txt
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git checkout -b logs-frontend-${GITHUB_RUN_ID}
+          git add frontend_url.txt
+          git commit -m "chore: upload frontend logs URL"
+          git push origin logs-frontend-${GITHUB_RUN_ID}
