@@ -15,13 +15,8 @@ jobs:
       - run: |
           cat backend/pytest.log > combined_backend.log
           cat backend/ruff.log >> combined_backend.log
-          curl --upload-file combined_backend.log https://transfer.sh/combined_backend.log > backend_url.txt
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git checkout -b logs-backend-${GITHUB_RUN_ID}
-          git add backend_url.txt
-          git commit -m "chore: upload backend logs URL"
-          git push origin logs-backend-${GITHUB_RUN_ID}
+          curl -T combined_backend.log https://transfer.sh/ai_travel_backend_logs_letho1608.txt
+      - run: cd backend && ruff check . && python -m pytest -v
 
   frontend:
     runs-on: ubuntu-latest
@@ -37,10 +32,5 @@ jobs:
       - run: cd frontend && pnpm build > build.log 2>&1 || true
       - run: |
           cat frontend/*.log > combined_frontend.log
-          curl --upload-file combined_frontend.log https://transfer.sh/combined_frontend.log > frontend_url.txt
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git checkout -b logs-frontend-${GITHUB_RUN_ID}
-          git add frontend_url.txt
-          git commit -m "chore: upload frontend logs URL"
-          git push origin logs-frontend-${GITHUB_RUN_ID}
+          curl -T combined_frontend.log https://transfer.sh/ai_travel_frontend_logs_letho1608.txt
+      - run: cd frontend && pnpm config set ignore-scripts true && pnpm install --no-frozen-lockfile && pnpm test && pnpm lint && pnpm build
