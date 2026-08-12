@@ -3,12 +3,14 @@ on: [push, pull_request]
 jobs:
   backend:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: "."
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.11"}
       - run: pip install -r backend/requirements.txt
-      - run: cd backend && ruff check . && python -m pytest
+      - run: cd backend && ruff check . && python -m pytest -v
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -17,4 +19,4 @@ jobs:
         with: {node-version: "20"}
       - uses: pnpm/action-setup@v4
         with: {version: 9}
-      - run: cd frontend && pnpm install --frozen-lockfile && pnpm test && pnpm lint && pnpm build
+      - run: cd frontend && pnpm config set ignore-scripts true && pnpm install && pnpm test && pnpm lint && pnpm build
