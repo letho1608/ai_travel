@@ -7,7 +7,11 @@ outdoor windows, museum daytime blocks, and evening Old Quarter energy.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
+
+from app.text_utils import ascii_fold
 
 
 @dataclass(frozen=True)
@@ -22,6 +26,99 @@ class VisitGuidance:
     duration_min: int | None = None
     tip: str = ""
     source: str = ""
+
+
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+GENERATED_GUIDANCE_PATH = DATA_DIR / "visit_guidance.json"
+
+
+def _name_key(value: str) -> str:
+    return " ".join(ascii_fold(value).split())
+
+
+def _clock_window(value: object) -> tuple[int, int, int, int] | None:
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        return None
+    try:
+        start_h, start_m, end_h, end_m = (int(item) for item in value)
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= start_h <= 23 and 0 <= end_h <= 24):
+        return None
+    if not (0 <= start_m <= 59 and 0 <= end_m <= 59):
+        return None
+    if start_h * 60 + start_m >= end_h * 60 + end_m:
+        return None
+    return start_h, start_m, end_h, end_m
+
+
+def _guidance_from_item(item: object) -> VisitGuidance | None:
+    if not isinstance(item, dict):
+        return None
+    preferred = _clock_window(item.get("preferred"))
+    if preferred is None:
+        return None
+    alt_preferred = _clock_window(item.get("alt_preferred"))
+
+    def optional_int(key: str, lower: int, upper: int) -> int | None:
+        raw = item.get(key)
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        if lower <= value <= upper:
+            return value
+        return None
+
+    open_hour = optional_int("open_hour", 0, 23)
+    close_hour = optional_int("close_hour", 1, 24)
+    if open_hour is not None and close_hour is not None and open_hour >= close_hour:
+        return None
+    duration_min = optional_int("duration_min", 20, 240)
+    tip = item.get("tip")
+    source = item.get("source")
+    return VisitGuidance(
+        open_hour=open_hour,
+        close_hour=close_hour,
+        preferred=preferred,
+        alt_preferred=alt_preferred,
+        duration_min=duration_min,
+        tip=tip.strip()[:300] if isinstance(tip, str) else "",
+        source=source.strip()[:160] if isinstance(source, str) else "",
+    )
+
+
+def _load_generated_guidance() -> tuple[dict[str, VisitGuidance], dict[str, VisitGuidance]]:
+    if not GENERATED_GUIDANCE_PATH.exists():
+        return {}, {}
+    try:
+        payload = json.loads(GENERATED_GUIDANCE_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}, {}
+    by_id: dict[str, VisitGuidance] = {}
+    by_name: dict[str, VisitGuidance] = {}
+    items = payload.get("items") if isinstance(payload, dict) else None
+    if not isinstance(items, list):
+        return {}, {}
+    for item in items:
+        guidance = _guidance_from_item(item)
+        if not guidance or not isinstance(item, dict):
+            continue
+        place_id = item.get("id")
+        name_key = item.get("name_key")
+        name = item.get("name")
+        if isinstance(place_id, str) and place_id.strip():
+            by_id[place_id.strip()] = guidance
+        normalized_name = ""
+        if isinstance(name_key, str):
+            normalized_name = _name_key(name_key)
+        elif isinstance(name, str):
+            normalized_name = _name_key(name)
+        if normalized_name:
+            by_name[normalized_name] = guidance
+    return by_id, by_name
 
 
 # Keys are ascii-folded lowercase place names (same as planner._place_name_key).
@@ -148,6 +245,13 @@ VISIT_GUIDANCE_BY_ID: dict[str, VisitGuidance] = {
     "bao-tang-phu-nu": VISIT_GUIDANCE_BY_NAME["bao tang phu nu viet nam"],
 }
 
+GENERATED_VISIT_GUIDANCE_BY_ID, GENERATED_VISIT_GUIDANCE_BY_NAME = _load_generated_guidance()
+
 
 def guidance_for(place_id: str, name_key: str) -> VisitGuidance | None:
-    return VISIT_GUIDANCE_BY_ID.get(place_id) or VISIT_GUIDANCE_BY_NAME.get(name_key)
+    return (
+        GENERATED_VISIT_GUIDANCE_BY_ID.get(place_id)
+        or VISIT_GUIDANCE_BY_ID.get(place_id)
+        or GENERATED_VISIT_GUIDANCE_BY_NAME.get(name_key)
+        or VISIT_GUIDANCE_BY_NAME.get(name_key)
+    )

@@ -95,7 +95,10 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def _load_imported_places() -> tuple[list[Place], dict]:
-    path = DATA_DIR / "places.json"
+    configured_path = os.getenv("PLACES_DATA_FILE", "places.json").strip() or "places.json"
+    path = Path(configured_path)
+    if not path.is_absolute():
+        path = DATA_DIR / path
     if not path.exists():
         return [], {}
     payload = json.loads(path.read_text(encoding="utf-8"))

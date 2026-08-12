@@ -16,8 +16,8 @@ HOTEL_AMENITIES = {
 
 
 class Coordinate(BaseModel):
-    lat: float = Field(ge=20.0, le=22.5)
-    lng: float = Field(ge=104.0, le=107.0)
+    lat: float = Field(ge=8.0, le=24.5)
+    lng: float = Field(ge=102.0, le=110.5)
 
 
 class GlobalCoordinate(BaseModel):

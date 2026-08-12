@@ -1,0 +1,5148 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-11T11:38:28.159410+00:00",
+    "mode": "llm",
+    "place_count": 234,
+    "generated_this_run": 50,
+    "skip_existing": true,
+    "note": "Planner loads this file at startup as supplemental visit-time guidance."
+  },
+  "items": [
+    {
+      "id": "osm-way-1019050229",
+      "name": "Bảo tàng Binh chủng Hóa học",
+      "name_key": "bao tang binh chung hoa hoc",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-339936730",
+      "name": "Bảo tàng Dân tộc học Việt Nam",
+      "name_key": "bao tang dan toc hoc viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-409390951",
+      "name": "Trung tâm Lưu trữ và Triển lãm Ảnh Nghệ thuật Việt Nam",
+      "name_key": "trung tam luu tru va trien lam anh nghe thuat viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4499978190",
+      "name": "Bảo tàng Địa chất Việt Nam",
+      "name_key": "bao tang dia chat viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-37933258",
+      "name": "Viện Bảo tàng Cách mạng Việt Nam",
+      "name_key": "vien bao tang cach mang viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-37933256",
+      "name": "Viện Bảo tàng Lịch sử Việt Nam",
+      "name_key": "vien bao tang lich su viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-2810302635",
+      "name": "Bảo tàng Binh chủng Thông tin liên lạc",
+      "name_key": "bao tang binh chung thong tin lien lac",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1019050231",
+      "name": "Bảo tàng Chiến thắng B52",
+      "name_key": "bao tang chien thang b52",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-704134587",
+      "name": "Bảo tàng Công an Hà Nội",
+      "name_key": "bao tang cong an ha noi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-704147333",
+      "name": "Bảo tàng Công an nhân dân",
+      "name_key": "bao tang cong an nhan dan",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1019050228",
+      "name": "Bảo tàng Công binh",
+      "name_key": "bao tang cong binh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9399202172",
+      "name": "Bảo tàng Pháo binh",
+      "name_key": "bao tang phao binh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-704147278",
+      "name": "Bảo tàng Phụ nữ Việt Nam",
+      "name_key": "bao tang phu nu viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-6801247419",
+      "name": "Bảo tàng Thiên nhiên Việt Nam",
+      "name_key": "bao tang thien nhien viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1019040798",
+      "name": "Bảo tàng Tài nguyên rừng Việt Nam",
+      "name_key": "bao tang tai nguyen rung viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1316353973",
+      "name": "Bảo tàng Vũ Khí",
+      "name_key": "bao tang vu khi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-291706038",
+      "name": "Bảo tàng lực lượng Tăng Thiết Giáp",
+      "name_key": "bao tang luc luong tang thiet giap",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1206331027",
+      "name": "Bảo tàng Đặc công",
+      "name_key": "bao tang dac cong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-770328954",
+      "name": "Bảo tàng đường Hồ Chí Minh",
+      "name_key": "bao tang duong ho chi minh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan sớm tránh nắng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13403802770",
+      "name": "Bảo tàng ảo ảnh",
+      "name_key": "bao tang ao anh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khám phá bảo tàng trong thời gian ấm áp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1080023296",
+      "name": "Di tích Pháo đài Láng",
+      "name_key": "di tich phao dai lang",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1519545462",
+      "name": "Di tích ngôi nhà số 5D phố Hàm Long",
+      "name_key": "di tich ngoi nha so 5d pho ham long",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-136247704",
+      "name": "H6 - Nhà truyền thống",
+      "name_key": "h6 - nha truyen thong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1519545465",
+      "name": "Nhà lưu niệm Chủ tịch Hồ Chí Minh",
+      "name_key": "nha luu niem chu tich ho chi minh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-340128580",
+      "name": "Nhà tù Hoả Lò",
+      "name_key": "nha tu hoa lo",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-700840702",
+      "name": "Trung tâm Giao lưu văn hóa phố cổ Hà Nội",
+      "name_key": "trung tam giao luu van hoa pho co ha noi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tham quan buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9846898217",
+      "name": "Trung tâm Tinh hoa làng nghề Việt",
+      "name_key": "trung tam tinh hoa lang nghe viet",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4889087244",
+      "name": "Bảo Tàng Hậu Cần",
+      "name_key": "bao tang hau can",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-208255133",
+      "name": "Bảo tàng Hà Nội",
+      "name_key": "bao tang ha noi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1148571536",
+      "name": "Bảo tàng Lịch sử Quân sự Việt Nam",
+      "name_key": "bao tang lich su quan su viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-37629143",
+      "name": "Bảo tàng Hồ Chí Minh",
+      "name_key": "bao tang ho chi minh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-700145152",
+      "name": "Bảo tàng Mỹ thuật Việt Nam",
+      "name_key": "bao tang my thuat viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-445345255",
+      "name": "Nhà 48 phố Hàng Ngang",
+      "name_key": "nha 48 pho hang ngang",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11681012714",
+      "name": "Bảo tàng Tố Hữu",
+      "name_key": "bao tang to huu",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1219524639",
+      "name": "Bảo tàng Phòng không - Không quân",
+      "name_key": "bao tang phong khong - khong quan",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12896684012",
+      "name": "Bảo tàng Hoàng gia Nam Hồng",
+      "name_key": "bao tang hoang gia nam hong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1282834049",
+      "name": "Bảo tàng Thành phố Từ Sơn",
+      "name_key": "bao tang thanh pho tu son",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-661161561",
+      "name": "Khu tưởng niệm Cố Tổng Bí thư Nguyễn Văn Cừ",
+      "name_key": "khu tuong niem co tong bi thu nguyen van cu",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-480826771",
+      "name": "Bảo tàng Văn học Việt Nam",
+      "name_key": "bao tang van hoc viet nam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222050",
+      "name": "Cafe Xí nghiệp 2",
+      "name_key": "cafe xi nghiep 2",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        18,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thích hợp ngồi cafe buổi tối",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222045",
+      "name": "Couchsurfing Café",
+      "name_key": "couchsurfing cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có cửa sổ ngoài trời mát mẻ, thích hợp cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13635808289",
+      "name": "Friday Milonga Hanoi",
+      "name_key": "friday milonga hanoi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời thoáng mát, lý tưởng cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222052",
+      "name": "Fuurin Cafe",
+      "name_key": "fuurin cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, phù hợp với cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12651916755",
+      "name": "Galbi Roman",
+      "name_key": "galbi roman",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10651129981",
+      "name": "Joma Bakery Cafe",
+      "name_key": "joma bakery cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11563281096",
+      "name": "Nghiền cafe",
+      "name_key": "nghien cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222039",
+      "name": "Quán cà phê Mùa Hè",
+      "name_key": "quan ca phe mua he",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222054",
+      "name": "The Shelter Tây Sơn",
+      "name_key": "the shelter tay son",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222034",
+      "name": "Tiệm Cà Pháo",
+      "name_key": "tiem ca phao",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8337452780",
+      "name": "Coffe Number 1",
+      "name_key": "coffe number 1",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8354821381",
+      "name": "Cà Phê Tam Cấp",
+      "name_key": "ca phe tam cap",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8344563342",
+      "name": "Cà Phê Tom",
+      "name_key": "ca phe tom",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10214404094",
+      "name": "Steel Coffee",
+      "name_key": "steel coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8442251582",
+      "name": "Sữa chua trân châu Hạ Long",
+      "name_key": "sua chua tran chau ha long",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055203",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8906140121",
+      "name": "The Highlands Coffee",
+      "name_key": "the highlands coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8337460766",
+      "name": "The Youth AOF",
+      "name_key": "the youth aof",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8336920144",
+      "name": "Trà chanh Bụi Phố",
+      "name_key": "tra chanh bui pho",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10219271553",
+      "name": "Trà sữa lofi",
+      "name_key": "tra sua lofi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10213645392",
+      "name": "cafe Việt",
+      "name_key": "cafe viet",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11152959978",
+      "name": "cafe tưởng tượng",
+      "name_key": "cafe tuong tuong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10219271554",
+      "name": "coffe chill",
+      "name_key": "coffe chill",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10247214103",
+      "name": "quán trà sữa",
+      "name_key": "quan tra sua",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8345292959",
+      "name": "teafox",
+      "name_key": "teafox",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-423736651",
+      "name": "Cà Phê Kafa",
+      "name_key": "ca phe kafa",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055209",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055211",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055212",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055213",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055214",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055215",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055216",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055217",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7083401152",
+      "name": "Trọng Nghĩa Cà Phê",
+      "name_key": "trong nghia ca phe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5485832236",
+      "name": "Trà Sữa BoBaBop",
+      "name_key": "tra sua bobabop",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-6685528631",
+      "name": "Aventus Coffee",
+      "name_key": "aventus coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11644514823",
+      "name": "Aventus Coffee Trần Thái Tông",
+      "name_key": "aventus coffee tran thai tong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-6696440285",
+      "name": "Cà Phê Ashtray",
+      "name_key": "ca phe ashtray",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8730613332",
+      "name": "Cà Phê Cốt Dừa Cô Hạnh - Cơ Sở Nguyễn Khang",
+      "name_key": "ca phe cot dua co hanh - co so nguyen khang",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4806864570",
+      "name": "Cà Phê Financial",
+      "name_key": "ca phe financial",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12589868465",
+      "name": "Ding Tea",
+      "name_key": "ding tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-792406384",
+      "name": "Gugi",
+      "name_key": "gugi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10272739935",
+      "name": "Highlands Coffee",
+      "name_key": "highlands coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12096628672",
+      "name": "Hoàng Gia 03",
+      "name_key": "hoang gia 03",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5485875291",
+      "name": "Sinh Cafe",
+      "name_key": "sinh cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4566812562",
+      "name": "Snow Island Coffee",
+      "name_key": "snow island coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12235167371",
+      "name": "Sàn gỗ Nguyễn Kim",
+      "name_key": "san go nguyen kim",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222040",
+      "name": "Timeline Coffee",
+      "name_key": "timeline coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5485791236",
+      "name": "Tocotoco",
+      "name_key": "tocotoco",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cửa sổ ngoài trời giúp thư giãn, lý tưởng cho cà phê sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8519952875",
+      "name": "Tous les Jours",
+      "name_key": "tous les jours",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café có không gian ngoài trời mát, thích hợp cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-3440273951",
+      "name": "TwitterBeans Coffee",
+      "name_key": "twitterbeans coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        7,
+        18
+      ],
+      "alt_preferred": [
+        12,
+        15
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-3440266925",
+      "name": "Twitterbeans Coffee",
+      "name_key": "twitterbeans coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mát vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5485825576",
+      "name": "V cafe",
+      "name_key": "v cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        7,
+        18
+      ],
+      "alt_preferred": [
+        10,
+        17
+      ],
+      "duration_min": 60,
+      "tip": "Trang tươi vào buổi tối",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5485852162",
+      "name": "Xưởng Cafe",
+      "name_key": "xuong cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055202",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khuyên dùng buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13033222658",
+      "name": "Chớp Coffee & Tea",
+      "name_key": "chop coffee & tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11372720369",
+      "name": "Highlands Coffee",
+      "name_key": "highlands coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thời điểm tốt nhất là buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10011953034",
+      "name": "Micasa - Tea & Coffee",
+      "name_key": "micasa - tea & coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4258046056",
+      "name": "She Coffe",
+      "name_key": "she coffe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055208",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        7,
+        18
+      ],
+      "alt_preferred": [
+        9,
+        20
+      ],
+      "duration_min": 60,
+      "tip": "Cơ sở quán cà phê",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11468718409",
+      "name": "3am Coffee & Tea",
+      "name_key": "3am coffee & tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11659995712",
+      "name": "Ah Ma Handmade",
+      "name_key": "ah ma handmade",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11625397940",
+      "name": "Aha Cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên đi vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11462471441",
+      "name": "An Coffee",
+      "name_key": "an coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11615961397",
+      "name": "Brobusta Coffee",
+      "name_key": "brobusta coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, cửa sổ ngoài trời thoáng đãng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11662192867",
+      "name": "Bống Cafe & Juice",
+      "name_key": "bong cafe & juice",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café lý tưởng cho buổi sáng thư giãn, không gian mở mát mẻ",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11500070700",
+      "name": "CaCa FeFe",
+      "name_key": "caca fefe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê thơm ngon, cửa sổ ngoài trời giúp thoáng mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11500070705",
+      "name": "Cafe 15",
+      "name_key": "cafe 15",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian mở, thích hợp cho buổi sáng nhẹ nhàng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11482335144",
+      "name": "Cafe 177",
+      "name_key": "cafe 177",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café với cửa sổ ngoài trời, thời gian sáng là điểm cao điểm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11649543053",
+      "name": "Cafe Bánh Mỳ",
+      "name_key": "cafe banh my",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, cửa sổ ngoài trời",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11491305569",
+      "name": "Cafe Hoàng Tùng",
+      "name_key": "cafe hoang tung",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café lý tưởng cho buổi sáng thư giãn, không gian mở",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11500070699",
+      "name": "Cafe Hương",
+      "name_key": "cafe huong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê thơm ngon, cửa sổ ngoài trời giúp thoáng mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12836900460",
+      "name": "Cafe Lan",
+      "name_key": "cafe lan",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian mở, thích hợp cho buổi sáng nhẹ nhàng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11782452955",
+      "name": "Cafe Lộc",
+      "name_key": "cafe loc",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, cửa sổ ngoài trời",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11254919071",
+      "name": "Cafe Mộc",
+      "name_key": "cafe moc",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh, uống cà phê sữa đá vào sáng sớm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11472430142",
+      "name": "Cafe Năng",
+      "name_key": "cafe nang",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cân bằng giữa cà phê và không gian xanh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11505669844",
+      "name": "Cafe Thọ",
+      "name_key": "cafe tho",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Đặt chỗ gần cửa sổ mở để hít hơi mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11591201348",
+      "name": "Café 65",
+      "name_key": "cafe 65",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Uống cà phê đặc sản Hà Nội vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11591740422",
+      "name": "Café Hương",
+      "name_key": "cafe huong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khuôn viên ẩm thực nhỏ, phù hợp ăn sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-904729849",
+      "name": "Cheese Coffee",
+      "name_key": "cheese coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê tươi, không gian tiện lợi",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1236553908",
+      "name": "Chốn",
+      "name_key": "chon",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Đặt chỗ nhanh, phù hợp khách du lịch",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11510364562",
+      "name": "Citi Coffee",
+      "name_key": "citi coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê chất lượng cao, không gian hiện đại",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11649543054",
+      "name": "Coffee 26",
+      "name_key": "coffee 26",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Uống cà phê sữa đá trong không gian mát mẻ",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11472430139",
+      "name": "Coffee Chi",
+      "name_key": "coffee chi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê đặc sản Hà Nội, phù hợp ăn sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11662204172",
+      "name": "Coffee Hải Anh",
+      "name_key": "coffee hai anh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ ngoài trời vào buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11591740418",
+      "name": "Coffee Mạc Tộc",
+      "name_key": "coffee mac toc",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Bắt đầu ngày mới với cà phê thơm ngon, không gian ngoài trời thoáng mát.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11649543062",
+      "name": "Coffee Mặn",
+      "name_key": "coffee man",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thư giãn buổi sáng với cà phê và không gian ngoài trời dễ chịu.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4327649345",
+      "name": "Cà Phê Thái",
+      "name_key": "ca phe thai",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê sáng tại không gian ngoài trời mát mẻ, lý tưởng cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-904729850",
+      "name": "Cà phê 25",
+      "name_key": "ca phe 25",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian ngoài trời thoáng mát vào buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12116589721",
+      "name": "Cà phê Hai Bốn",
+      "name_key": "ca phe hai bon",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Bắt đầu ngày mới với cà phê trong không gian ngoài trời mát mẻ.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1254526558",
+      "name": "Cộng Cà Phê",
+      "name_key": "cong ca phe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thư giãn buổi sáng với cà phê và không gian ngoài trời dễ chịu.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222029",
+      "name": "Dương Cafe",
+      "name_key": "duong cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê sáng tại không gian ngoài trời mát mẻ, lý tưởng cho buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11662192866",
+      "name": "Gia Linh Coffee & Juice",
+      "name_key": "gia linh coffee & juice",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian ngoài trời thoáng mát vào buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12116589723",
+      "name": "Góc Phố Cafe",
+      "name_key": "goc pho cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Bắt đầu ngày mới với cà phê trong không gian ngoài trời mát mẻ.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-708521401",
+      "name": "Highlands Coffee",
+      "name_key": "highlands coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Trang phục nhẹ để tránh nắng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1234955610",
+      "name": "Hisakawa",
+      "name_key": "hisakawa",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Thử boba sữa tươi vào buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1235566735",
+      "name": "Home Việt Coffee",
+      "name_key": "home viet coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Mua cà phê sữa đá tại cửa sổ ngoài trời.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11534643047",
+      "name": "How Cafe",
+      "name_key": "how cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Giữa 8-10h là lúc khách nhiều nhất.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11500070694",
+      "name": "Hùng Xồm Cafe",
+      "name_key": "hung xom cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Hợp tác với quán gần để mua sữa tươi.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11601645102",
+      "name": "Juice Corner",
+      "name_key": "juice corner",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Chọn juice tươi vào buổi sáng.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11254919074",
+      "name": "KOPee coffee",
+      "name_key": "kopee coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Thử cà phê sữa đá đặc sản.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11782452951",
+      "name": "KOPee coffee",
+      "name_key": "kopee coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Giữa 18-22h là lúc iced coffee nổi bật.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11662204177",
+      "name": "Kafa Café",
+      "name_key": "kafa cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Mua sữa tươi từ nhà bếp gần.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11672848998",
+      "name": "Lynh's Coffee & Tea",
+      "name_key": "lynh's coffee & tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mẹo: Thử trà xanh tại cửa sổ ngoài trời.",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11625397939",
+      "name": "Lãm",
+      "name_key": "lam",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh đám đông buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11645156888",
+      "name": "Mixue",
+      "name_key": "mixue",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức kem và trà sữa trong không khí sảng khoái buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1211287036",
+      "name": "Mixue",
+      "name_key": "mixue",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức trà sữa trong không gian mở, tránh đám đông",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11653040789",
+      "name": "Mành Cà phê",
+      "name_key": "manh ca phe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê thơm mát, tránh giờ cao điểm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12116589717",
+      "name": "Neo Cafe",
+      "name_key": "neo cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian yên tĩnh buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11653040784",
+      "name": "O'Coffee",
+      "name_key": "o'coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê trong không gian mở, tránh đám đông buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11591740425",
+      "name": "Peach City",
+      "name_key": "peach city",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh giờ cao điểm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11591201349",
+      "name": "Rosier",
+      "name_key": "rosier",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Trà sữa trong không gian mở, tránh đám đông buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11468718408",
+      "name": "SID Coffee",
+      "name_key": "sid coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê trong không gian mát mẻ, tránh giờ cao điểm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1235442357",
+      "name": "Simin Coffee",
+      "name_key": "simin coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mở, tránh đám đông buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11659995709",
+      "name": "The Alley",
+      "name_key": "the alley",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh, trà sữa ngon",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-6149039485",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        7,
+        0,
+        9,
+        25
+      ],
+      "alt_preferred": [
+        14,
+        0,
+        16,
+        25
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê chất lượng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9669902669",
+      "name": "The Sipping Bar",
+      "name_key": "the sipping bar",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        6,
+        0,
+        8,
+        20
+      ],
+      "alt_preferred": [
+        13,
+        0,
+        15,
+        20
+      ],
+      "duration_min": 60,
+      "tip": "Atmosphere mát mẻ",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11486942534",
+      "name": "Tonkin Coffee",
+      "name_key": "tonkin coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        9,
+        0,
+        11,
+        35
+      ],
+      "alt_preferred": [
+        16,
+        0,
+        18,
+        35
+      ],
+      "duration_min": 60,
+      "tip": "Trà sữa đặc ngon",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11462471452",
+      "name": "Trà Sữa 172",
+      "name_key": "tra sua 172",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Trà sữa 172 nổi bật",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11500070695",
+      "name": "URI Dessert",
+      "name_key": "uri dessert",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        5,
+        0,
+        7,
+        15
+      ],
+      "alt_preferred": [
+        12,
+        0,
+        14,
+        15
+      ],
+      "duration_min": 60,
+      "tip": "Đồ ngọt ngon",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11468643063",
+      "name": "Vintage 1976 Cafe",
+      "name_key": "vintage 1976 cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        7,
+        0,
+        9,
+        25
+      ],
+      "alt_preferred": [
+        14,
+        0,
+        16,
+        25
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê vintage",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11662204173",
+      "name": "Wehome - Ms Tram",
+      "name_key": "wehome - ms tram",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        4,
+        0,
+        6,
+        10
+      ],
+      "alt_preferred": [
+        11,
+        0,
+        13,
+        10
+      ],
+      "duration_min": 60,
+      "tip": "Giữa phố ẩm ướt",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11659995714",
+      "name": "Wheel Coffee Adventure",
+      "name_key": "wheel coffee adventure",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        9,
+        0,
+        11,
+        35
+      ],
+      "alt_preferred": [
+        16,
+        0,
+        18,
+        35
+      ],
+      "duration_min": 60,
+      "tip": "Cà phê trà xanh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11462471455",
+      "name": "Yi He Tang",
+      "name_key": "yi he tang",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Bubble tea tươi",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11534643037",
+      "name": "Đạt Coffee & Tea",
+      "name_key": "dat coffee & tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian yên tĩnh, thoải mái",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5621040322",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café ấm cúng, không gian mở, thích hợp cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-6846162967",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian xanh, thoáng mát, lý tưởng cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7056055194",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café thân thiện, thích hợp cho cà phê sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1233838152",
+      "name": "Cafe Muối",
+      "name_key": "cafe muoi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian mở, thoáng mát, thích hợp cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11449677581",
+      "name": "Caffè Italia",
+      "name_key": "caffe italia",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café ấm cúng, thích hợp cho cà phê sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5004266348",
+      "name": "Cafè Phố Cổ",
+      "name_key": "cafe pho co",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café với món crepe, thích hợp cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1220299340",
+      "name": "Conifer Bốn Mùa – Four Seasons",
+      "name_key": "conifer bon mua four seasons",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian xanh, thoáng mát, thích hợp cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-995391083",
+      "name": "Cà Phê Cosa Nostra",
+      "name_key": "ca phe cosa nostra",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café ấm cúng, thích hợp cho cà phê sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-8563466264",
+      "name": "Cà Phê Gather Wellness Complex",
+      "name_key": "ca phe gather wellness complex",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café thân thiện, thích hợp cho buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10241471509",
+      "name": "Dream Beans Coffee",
+      "name_key": "dream beans coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7162750926",
+      "name": "Halo Coffee & Juices",
+      "name_key": "halo coffee & juices",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1234095163",
+      "name": "Kafebean",
+      "name_key": "kafebean",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11452175808",
+      "name": "Kimmy House",
+      "name_key": "kimmy house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11449243270",
+      "name": "Le Faubourg",
+      "name_key": "le faubourg",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222044",
+      "name": "Quán cà phê Wabi-Sabi",
+      "name_key": "quan ca phe wabi-sabi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9942330783",
+      "name": "Starbucks",
+      "name_key": "starbucks",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-863793823",
+      "name": "The Coffee House",
+      "name_key": "the coffee house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-3678370944",
+      "name": "The Hanoi Social Club",
+      "name_key": "the hanoi social club",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7473461213",
+      "name": "The Little Plan café - Kế Hoạch Nhỏ café",
+      "name_key": "the little plan cafe - ke hoach nho cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát mẻ vào buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222031",
+      "name": "Zeplin",
+      "name_key": "zeplin",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh ngoài trời",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11452175807",
+      "name": "Ăn Vặt Mẹ Sữa",
+      "name_key": "an vat me sua",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thời gian sáng phù hợp",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9738797981",
+      "name": "Chouchi Cafe",
+      "name_key": "chouchi cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Café tiện lợi",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12232415785",
+      "name": "Delícia Coffee & Lounge",
+      "name_key": "delicia coffee & lounge",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nơi uống cà phê ổn định",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13631246203",
+      "name": "1985",
+      "name_key": "1985",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Dịch vụ nhanh chóng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11865412258",
+      "name": "1998 Coffee",
+      "name_key": "1998 coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Giữa bữa sáng ổn định",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11609629180",
+      "name": "80+ coffee roastery",
+      "name_key": "80+ coffee roastery",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nơi trà xanh chất lượng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13638561208",
+      "name": "9.0cafe",
+      "name_key": "9.0cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thời gian mở rộng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9847863117",
+      "name": "@fifi",
+      "name_key": "@fifi",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nơi ẩm thực đa dạng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13272057352",
+      "name": "A Ga Đông Dương",
+      "name_key": "a ga dong duong",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Cơ sở ổn định",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11637243469",
+      "name": "A Mó Re Coffe n Cakey",
+      "name_key": "a mo re coffe n cakey",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10715935205",
+      "name": "ACID8 Speciality Coffee",
+      "name_key": "acid8 speciality coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9811836129",
+      "name": "AHA Cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11521920518",
+      "name": "AHA Cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13110584901",
+      "name": "AHA Cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-7176890504",
+      "name": "AU",
+      "name_key": "au",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12651070191",
+      "name": "Adrenaline",
+      "name_key": "adrenaline",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10120064768",
+      "name": "Aha",
+      "name_key": "aha",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-14074419963",
+      "name": "Aha",
+      "name_key": "aha",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-904135121",
+      "name": "Aha Cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Mát lạnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13039615005",
+      "name": "Aha Café",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12055579963",
+      "name": "Aha Coffee",
+      "name_key": "aha coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1329845837",
+      "name": "Aha Coffee",
+      "name_key": "aha coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11039425484",
+      "name": "Aha Văn Khê",
+      "name_key": "aha van khe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13003770803",
+      "name": "Aha cafe",
+      "name_key": "aha cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13390919015",
+      "name": "Amoring café",
+      "name_key": "amoring cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-14033302445",
+      "name": "An An",
+      "name_key": "an an",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12768414701",
+      "name": "An Café",
+      "name_key": "an cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11534643044",
+      "name": "An Cà Phê",
+      "name_key": "an ca phe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10718073305",
+      "name": "Ardor",
+      "name_key": "ardor",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ghé buổi sáng cho mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-9805222030",
+      "name": "Auden Coffee",
+      "name_key": "auden coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Nên ngồi ban công thoáng mát",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12151158201",
+      "name": "BREAD FACTORY",
+      "name_key": "bread factory",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thích hợp ăn sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13617875701",
+      "name": "Bac Cafe",
+      "name_key": "bac cafe",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê truyền thống",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12683994801",
+      "name": "Bao Minh",
+      "name_key": "bao minh",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Ăn sáng nhanh gọn",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5042413525",
+      "name": "Barista Frank Coffee Bar",
+      "name_key": "barista frank coffee bar",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian yên tĩnh buổi sáng",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1489328680",
+      "name": "Beany Tea & Coffee",
+      "name_key": "beany tea & coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Tránh giờ cao điểm",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-4709222689",
+      "name": "Bestea House",
+      "name_key": "bestea house",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thích hợp giải nhiệt",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-5035941024",
+      "name": "Biblio Cafe Sach",
+      "name_key": "biblio cafe sach",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Không gian đọc sách yên tĩnh",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13264236601",
+      "name": "Bina coffee",
+      "name_key": "bina coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Khởi đầu ngày mới",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12981698362",
+      "name": "Bingxue",
+      "name_key": "bingxue",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Ăn nhẹ buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13414965017",
+      "name": "Bingxue",
+      "name_key": "bingxue",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1329845915",
+      "name": "Bingxue",
+      "name_key": "bingxue",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1448606799",
+      "name": "Boka",
+      "name_key": "boka",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-13535945401",
+      "name": "Bridge Coffee",
+      "name_key": "bridge coffee",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-way-1464442945",
+      "name": "Bunny Tea",
+      "name_key": "bunny tea",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-10258564248",
+      "name": "Bụi phố",
+      "name_key": "bui pho",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12245679311",
+      "name": "C.O.C Flavor",
+      "name_key": "c.o.c flavor",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-14054791601",
+      "name": "C.O.C Legacy",
+      "name_key": "c.o.c legacy",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-12101841706",
+      "name": "CAFE & BAR",
+      "name_key": "cafe & bar",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    },
+    {
+      "id": "osm-node-11885987569",
+      "name": "COC Roastery",
+      "name_key": "coc roastery",
+      "open_hour": 7,
+      "close_hour": 22,
+      "preferred": [
+        8,
+        0,
+        10,
+        30
+      ],
+      "alt_preferred": [
+        15,
+        0,
+        17,
+        30
+      ],
+      "duration_min": 60,
+      "tip": "Thưởng thức cà phê trong không gian mát mẻ, tránh nắng gắt vào buổi chiều",
+      "source": "LLM synthesis"
+    }
+  ]
+}

@@ -25,6 +25,7 @@ from app.schemas import (
     TripFeedbackRequest,
 )
 from app.services.pdf_export import build_itinerary_pdf
+from app.services.google_places import enrich_plan_with_google
 from app.services.osm_verify import verify_place_name
 from app.services.rate_limit import limiter
 from app.services.store import store
@@ -144,6 +145,7 @@ async def generate(payload: PlanRequest, request: Request):
         yield sse("status", {"status": "routing_plan"})
         try:
             plan = await to_thread(build_plan, payload)
+            plan = await to_thread(enrich_plan_with_google, plan)
             _append_turn(plan, "user", payload.context)
             item = store.save(session_id, plan, payload.model_dump(mode="json"))
             if generate_nonce:
@@ -508,6 +510,7 @@ def swipe(
         errors = validate_plan(plan, {p.id for p in (*PLACES, *trusted_external)}, plan_request, trusted_places=trusted_external)
         if errors:
             raise PipelineUnavailable("; ".join(errors))
+        plan = enrich_plan_with_google(plan)
         if message:
             _append_turn(plan, "user", message)
             _append_turn(plan, "assistant", "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.")
@@ -612,6 +615,7 @@ def regenerate(
             if slot.get("dia_diem_id")
         }
         plan = build_plan(PlanRequest.model_validate(item.request), excluded)
+        plan = enrich_plan_with_google(plan)
         regenerated_ids = {
             slot["dia_diem_id"]
             for day in plan.get("ngay", [])
@@ -698,6 +702,7 @@ def refine(
     previous = _conversation(item.plan)
     try:
         plan = build_plan(refined)
+        plan = enrich_plan_with_google(plan)
         plan["hoi_thoai"] = [*previous, *plan.get("hoi_thoai", [])][-50:]
         _append_turn(plan, "user", payload.message)
         _append_turn(

@@ -29,6 +29,16 @@ class Settings:
     ai_input_usd_per_million: float = 0.14
     ai_output_usd_per_million: float = 0.28
     google_client_id: str | None = None
+    google_maps_api_key: str | None = None
+    google_places_text_search_daily_cap: int = 300
+    google_places_text_search_monthly_cap: int = 9500
+    google_places_photo_daily_cap: int = 30
+    google_places_photo_monthly_cap: int = 950
+    google_places_hours_daily_cap: int = 20
+    google_places_hours_monthly_cap: int = 900
+    google_places_runtime_per_plan_cap: int = 8
+    google_places_runtime_photos: bool = False
+    google_places_runtime_hours: bool = False
     app_jwt_secret: str | None = None
     amadeus_base_url: str = "https://test.api.amadeus.com"
     amadeus_client_id: str | None = None
@@ -129,6 +139,40 @@ class Settings:
             ai_input_usd_per_million=float(os.getenv("AI_INPUT_USD_PER_MILLION", "0.14")),
             ai_output_usd_per_million=float(os.getenv("AI_OUTPUT_USD_PER_MILLION", "0.28")),
             google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
+            google_maps_api_key=os.getenv("GOOGLE_MAPS_API_KEY"),
+            google_places_text_search_daily_cap=int(
+                os.getenv(
+                    "GOOGLE_PLACES_TEXT_SEARCH_DAILY_CAP",
+                    os.getenv("GOOGLE_PLACES_RUNTIME_DAILY_CAP", "300"),
+                )
+            ),
+            google_places_text_search_monthly_cap=int(
+                os.getenv(
+                    "GOOGLE_PLACES_TEXT_SEARCH_MONTHLY_CAP",
+                    os.getenv("GOOGLE_PLACES_RUNTIME_MONTHLY_CAP", "9500"),
+                )
+            ),
+            google_places_photo_daily_cap=int(
+                os.getenv("GOOGLE_PLACES_PHOTO_DAILY_CAP", "30")
+            ),
+            google_places_photo_monthly_cap=int(
+                os.getenv("GOOGLE_PLACES_PHOTO_MONTHLY_CAP", "950")
+            ),
+            google_places_hours_daily_cap=int(
+                os.getenv("GOOGLE_PLACES_HOURS_DAILY_CAP", "20")
+            ),
+            google_places_hours_monthly_cap=int(
+                os.getenv("GOOGLE_PLACES_HOURS_MONTHLY_CAP", "900")
+            ),
+            google_places_runtime_per_plan_cap=int(
+                os.getenv("GOOGLE_PLACES_RUNTIME_PER_PLAN_CAP", "8")
+            ),
+            google_places_runtime_photos=os.getenv(
+                "GOOGLE_PLACES_RUNTIME_PHOTOS", "false"
+            ).lower() == "true",
+            google_places_runtime_hours=os.getenv(
+                "GOOGLE_PLACES_RUNTIME_HOURS", "false"
+            ).lower() == "true",
             app_jwt_secret=os.getenv("APP_JWT_SECRET"),
             amadeus_base_url=os.getenv("AMADEUS_BASE_URL", "https://test.api.amadeus.com"),
             amadeus_client_id=os.getenv("AMADEUS_CLIENT_ID"),

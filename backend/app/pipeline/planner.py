@@ -50,6 +50,22 @@ MEAL_PREFERRED_START = {
 MAX_IDLE_MINUTES = 35
 MIN_VISIT_MINUTES = 25
 MAX_GAP_BEFORE_FILL_MINUTES = 55
+DESTINATION_RADIUS_KM = 45.0
+GENERIC_DESTINATION_NAMES = {
+    "du lich",
+    "tham quan",
+    "di choi",
+    "check in",
+    "checkin",
+}
+DESTINATION_NAME_PREFIXES = (
+    "vinh ",
+    "tp ",
+    "thanh pho ",
+    "khu du lich ",
+    "dao ",
+    "bien ",
+)
 
 EVENING_PLACE_IDS = (
     "curated-cho-dem-dong-xuan",
@@ -121,7 +137,7 @@ class PipelineUnavailable(RuntimeError):
 
 INTENT_PROFILES = {
     "hanoi_highlights": {
-        "terms": {"ha_noi", "hanoi", "du_lich", "tham_quan", "noi_tieng", "lan_dau", "classic", "pho_co"},
+        "terms": {"ha_noi", "hanoi", "pho_co"},
         "kinds": {"dia_danh"},
         "tags": {"hanoi_icon", "ho_guom", "ho_tay", "lang_bac", "pho_co", "van_hoa", "lich_su"},
     },
@@ -228,6 +244,61 @@ def _place_seed(place: Place, seed: int) -> int:
     return int(hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8], 16)
 
 
+def _destination_context(request: PlanRequest) -> tuple[float, float, str | None]:
+    """Infer the trip center from the user's text instead of assuming Hanoi.
+
+    The frontend still sends a default coordinate, so destination intent must be
+    recovered from the prompt. We use only trusted catalog names/areas and prefer
+    travel sights over restaurants/hotels to avoid matches such as food chains
+    containing "Hạ Long" in their brand name.
+    """
+    context = _ascii_fold(request.context).casefold()
+    if not context:
+        return request.location.lat, request.location.lng, None
+    best: tuple[int, float, Place] | None = None
+    for place in PLACES:
+        if _looks_like_non_travel_business(place):
+            continue
+        name = _ascii_fold(place.name).casefold()
+        area = _ascii_fold(place.area).casefold()
+        if name in GENERIC_DESTINATION_NAMES:
+            continue
+        name_aliases = {name}
+        for prefix in DESTINATION_NAME_PREFIXES:
+            if name.startswith(prefix):
+                name_aliases.add(name.removeprefix(prefix).strip())
+        name_match = any(alias and len(alias) >= 4 and alias in context for alias in name_aliases)
+        area_match = bool(
+            area
+            and area not in {"viet nam", "vietnam"}
+            and len(area) >= 4
+            and area in context
+        )
+        if not name_match and not area_match:
+            continue
+        score = 0
+        if name_match:
+            score += 12
+        if area_match:
+            score += 7
+        if place.kind in SIGHT_KINDS or place.kind in {"di_tich", "bai_bien", "hang_dong", "nui"}:
+            score += 6
+        if place.kind in DINING_KINDS or place.kind in {"cafe", "khach_san", "nha_nghi", "homestay"}:
+            score -= 7
+        if place.source == "curated":
+            score += 2
+        distance = haversine_km(request.location.lat, request.location.lng, place.lat, place.lng)
+        candidate = (score, -distance, place)
+        if best is None or candidate > best:
+            best = candidate
+    if not best or best[0] < 6:
+        return request.location.lat, request.location.lng, None
+    place = best[2]
+    area_key = _ascii_fold(place.area).casefold()
+    label = place.area if area_key not in {"viet nam", "vietnam"} else place.name
+    return place.lat, place.lng, label or place.name
+
+
 def _intent_profiles(tags: set[str]) -> list[dict[str, set[str]]]:
     return [
         profile
@@ -250,9 +321,9 @@ def _intent_score(place: Place, profiles: list[dict[str, set[str]]]) -> int:
 
 def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     tags = relevant_tags(request.context)
-    generic_tourism = tags.intersection({"du_lich", "tham_quan", "noi_tieng", "lan_dau", "classic"})
-    explicit_anchor = tags.intersection({"ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh"})
-    wants_hanoi_highlights = bool(generic_tourism or explicit_anchor)
+    _, _, destination_label = _destination_context(request)
+    explicit_anchor = tags.intersection({"ha_noi", "hanoi", "pho_co", "ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh"})
+    wants_hanoi_highlights = bool(explicit_anchor and (destination_label is None or tags.intersection({"ha_noi", "hanoi", "pho_co"})))
     wants_night = bool(tags.intersection(INTENT_PROFILES["night"]["terms"]))
     by_id = {place.id: place for place in PLACES}
     place_ids = [
@@ -778,6 +849,18 @@ def _is_outdoor_place(place: Place) -> bool:
     )
 
 
+def _weather_discourages_midday_outdoor(weather: dict | None) -> bool:
+    if not weather:
+        return False
+    temperature = weather.get("nhiet_do_max")
+    rain = weather.get("xac_suat_mua")
+    return (
+        isinstance(temperature, (int, float)) and temperature >= 33
+    ) or (
+        isinstance(rain, (int, float)) and rain >= 60
+    )
+
+
 def _is_morning_only(place: Place) -> bool:
     open_hour, close_hour = _effective_hours(place)
     tip = _guidance(place)
@@ -861,7 +944,12 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
     return max(MIN_VISIT_MINUTES, minutes)
 
 
-def _preference_score(place: Place, meal_type: str | None, hour: float) -> float:
+def _preference_score(
+    place: Place,
+    meal_type: str | None,
+    hour: float,
+    weather: dict | None = None,
+) -> float:
     if _is_night_market(place):
         open_hour, close_hour = _effective_hours(place)
         return 12 if max(open_hour, 18) <= hour < close_hour else -50
@@ -887,6 +975,8 @@ def _preference_score(place: Place, meal_type: str | None, hour: float) -> float
     if _is_morning_only(place):
         return 15 - abs(hour - 8.5) if hour < 12 else -20
     if _is_outdoor_place(place):
+        if _weather_discourages_midday_outdoor(weather) and 11 <= hour < 15:
+            return -35
         if 7 <= hour < 10.5:
             return 14
         if 14 <= hour <= 18:
@@ -920,6 +1010,7 @@ def _compute_slot_bounds(
     request: PlanRequest,
     *,
     relax: bool = False,
+    weather: dict | None = None,
 ) -> tuple[datetime, datetime, int] | None:
     open_hour, close_hour = _effective_hours(place)
     opening = _at_clock(arrive, open_hour, 0)
@@ -945,17 +1036,27 @@ def _compute_slot_bounds(
     ideal = max(earliest, preferred_open)
     # Outdoor without explicit dual guidance: morning if early, else afternoon cool window.
     tip = _guidance(place)
+    adverse_outdoor_weather = _weather_discourages_midday_outdoor(weather)
     if not meal_type and _is_outdoor_place(place) and not tip and not relax:
         arrive_hour = arrive.hour + arrive.minute / 60
         cool_start, cool_end = _outdoor_afternoon_window(arrive)
+        if adverse_outdoor_weather:
+            cool_start = _at_clock(arrive, 15, 0)
         if arrive_hour < 11:
             ideal = max(earliest, _at_clock(arrive, max(open_hour, 7), 0))
             latest_end = min(latest_end, _at_clock(arrive, 10, 30), closing, day_end)
         elif cool_start + timedelta(minutes=MIN_VISIT_MINUTES) <= min(cool_end, closing, day_end):
             if (cool_start - arrive).total_seconds() / 60 > 60:
-                cool_start = max(arrive, _at_clock(arrive, 14, 0))
+                cool_start = max(arrive, cool_start)
             ideal = max(earliest, cool_start)
-            latest_end = min(latest_end, cool_end, closing, day_end)
+            latest_end = min(cool_end, closing, day_end)
+    elif (
+        not meal_type
+        and adverse_outdoor_weather
+        and _is_outdoor_place(place)
+        and 11 <= (arrive.hour + arrive.minute / 60) < 15
+    ):
+        ideal = max(earliest, _at_clock(arrive, 15, 0))
     idle = (ideal - arrive).total_seconds() / 60
     strict = night_market or (
         (not relax)
@@ -1001,6 +1102,7 @@ def _pack_day_slots(
     labels: dict[str, str],
     scheduled_ids: set[str],
     scheduled_names: set[str],
+    weather: dict | None = None,
     max_slots: int = 10,
 ) -> tuple[list[dict], int]:
     day_end = day_start + timedelta(minutes=max_minutes)
@@ -1029,13 +1131,13 @@ def _pack_day_slots(
                 travel = travel_minutes(previous, place) if previous else 0
                 arrive = cursor + timedelta(minutes=travel)
                 bounds = _compute_slot_bounds(
-                    place, meal_type, arrive, day_start, day_end, request, relax=relax
+                    place, meal_type, arrive, day_start, day_end, request, relax=relax, weather=weather
                 )
                 if not bounds:
                     continue
                 start, end, _visit = bounds
                 idle = max(0, (start - arrive).total_seconds() / 60)
-                score = _preference_score(place, meal_type, start.hour + start.minute / 60)
+                score = _preference_score(place, meal_type, start.hour + start.minute / 60, weather)
                 score -= idle * 0.6
                 score -= travel * 0.15
                 if relax:
@@ -1176,6 +1278,7 @@ def _backfill_day_gaps(
     remaining_budget: int,
     seed: int,
     max_slots: int,
+    weather: dict | None = None,
 ) -> tuple[list[dict], int]:
     """Insert nearby attractions into long idle gaps between packed stops."""
     if len(slots) < 1 or len(slots) >= max_slots:
@@ -1229,9 +1332,9 @@ def _backfill_day_gaps(
             travel = travel_minutes(prev_place, option)
             arrive = cursor + timedelta(minutes=travel)
             option_bounds = _compute_slot_bounds(
-                option, None, arrive, day_start, day_end, request
+                option, None, arrive, day_start, day_end, request, weather=weather
             ) or _compute_slot_bounds(
-                option, None, arrive, day_start, day_end, request, relax=True
+                option, None, arrive, day_start, day_end, request, relax=True, weather=weather
             )
             if not option_bounds:
                 continue
@@ -1324,7 +1427,7 @@ def _wants_old_quarter(request: PlanRequest) -> bool:
     tags = relevant_tags(request.context)
     return bool(
         tags.intersection(OLD_QUARTER_TERMS)
-        or tags.intersection(INTENT_PROFILES["hanoi_highlights"]["terms"])
+        or tags.intersection({"ha_noi", "hanoi", "pho_co"})
         or _wants_night(request)
     )
 
@@ -1337,12 +1440,17 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     wants_night = _wants_night(request)
     wants_coffee = _wants_coffee(request)
     seed = _request_seed(request)
+    destination_lat, destination_lng, destination_label = _destination_context(request)
     candidates = [
         p for p in PLACES
         if p.id not in excluded
         and p.cost <= request.ngan_sach
         and is_routable(p)
         and not _looks_like_non_travel_business(p)
+        and (
+            destination_label is None
+            or haversine_km(destination_lat, destination_lng, p.lat, p.lng) <= DESTINATION_RADIUS_KM
+        )
         and not (
             p.source == "curated"
             and {"pho_co", "old_quarter", "hang_pho"}.intersection(p.tags)
@@ -1363,7 +1471,7 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
             -int(p.kind in {"dia_danh", "bao_tang"}),
             -int(p.source == "curated"),
             -len(tags.intersection(p.tags)),
-            haversine_km(request.location.lat, request.location.lng, p.lat, p.lng),
+            haversine_km(destination_lat, destination_lng, p.lat, p.lng),
             p.cost,
             _place_seed(p, seed),
         ),
@@ -1469,6 +1577,7 @@ def _select_within_budget(candidates: list[Place], count: int, budget_per_person
 
 
 def _candidate_payload(candidates: list[Place], request: PlanRequest) -> list[dict]:
+    destination_lat, destination_lng, _ = _destination_context(request)
     return [
         {
             "id": place.id,
@@ -1481,7 +1590,7 @@ def _candidate_payload(candidates: list[Place], request: PlanRequest) -> list[di
             "open_hour": place.open_hour,
             "close_hour": place.close_hour,
             "distance_km": round(
-                haversine_km(request.location.lat, request.location.lng, place.lat, place.lng),
+                haversine_km(destination_lat, destination_lng, place.lat, place.lng),
                 2,
             ),
         }
@@ -1540,7 +1649,8 @@ def _select_llm_first_places(
     details_by_id: dict[str, dict] = {}
     seen: set[str] = set()
     seen_names: set[str] = set()
-    origin = (request.location.lat, request.location.lng)
+    destination_lat, destination_lng, _ = _destination_context(request)
+    origin = (destination_lat, destination_lng)
     for item in suggestions:
         name = item.get("name") if isinstance(item, dict) else None
         if not isinstance(name, str) or not name.strip():
@@ -1765,13 +1875,14 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     sight_total = _sight_total(count, meals_total, request.thoi_luong)
     max_slots = _max_plan_slots(request.thoi_luong)
     min_slots = _min_plan_slots(request.thoi_luong)
+    destination_lat, destination_lng, destination_label = _destination_context(request)
     candidates = choose_candidates(request, excluded)
     sight_chosen, llm_details_by_id = _select_sight_places(candidates, sight_total, request)
     sight_chosen = _dedupe_places(sight_chosen)
     if len(sight_chosen) < min(sight_total, 2):
         raise PipelineUnavailable("Không đủ địa điểm tham quan tin cậy trong ngân sách")
 
-    origin = (request.location.lat, request.location.lng)
+    origin = (destination_lat, destination_lng)
     ordered_sights = _ordered_route(sight_chosen, origin)
     split_index = (len(ordered_sights) + 1) // 2
     sight_by_day = (
@@ -1791,7 +1902,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     if settings.weather_enabled:
         try:
             weather = get_daily_weather(
-                request.location.lat, request.location.lng, trip_date, request.ngon_ngu
+                destination_lat, destination_lng, trip_date, request.ngon_ngu
             )
         except (WeatherUnavailable, ValueError, httpx.HTTPError):
             weather["ghi_chu"] = copy[2]
@@ -1854,6 +1965,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             labels,
             scheduled_ids,
             scheduled_names,
+            weather,
             max_slots=max_slots,
         )
         slots, fill_cost = _backfill_day_gaps(
@@ -1870,6 +1982,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             remaining_budget,
             seed + day_index,
             max_slots,
+            weather,
         )
         total_cost += day_cost + fill_cost
         remaining_budget -= fill_cost // max(request.so_nguoi, 1)
@@ -1885,7 +1998,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     scheduled_ids = {slot["dia_diem_id"] for day in days for slot in day["khoang_gio"]}
     trusted_ids = scheduled_ids | {place.id for place in candidates} | {place.id for place in PLACES}
     draft = {
-        "tieu_de": f"Hà Nội · {request.context[:48]}",
+        "tieu_de": f"{destination_label or 'Việt Nam'} · {request.context[:48]}",
         "tom_tat": copy[6].format(people=request.so_nguoi),
         "thoi_luong": request.thoi_luong,
         "ngay_di": trip_date.isoformat(),

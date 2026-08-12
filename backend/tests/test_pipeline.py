@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from app.data import PLACES, Place
 from app.pipeline import planner
+from app.pipeline import visit_guidance
 from app.pipeline.planner import COPY, build_plan, validate_plan
 from app.schemas import PlanRequest, UserPreferencesRequest
 from app.services.weather import WEATHER_COPY
@@ -735,3 +736,50 @@ def test_planner_passes_all_supported_locales_to_weather_adapter(monkeypatch):
         plan = build_plan(request().model_copy(update={"ngon_ngu": locale}))
         assert plan["thoi_tiet"]["tinh_trang"] == WEATHER_COPY[locale][0]
     assert set(seen) == set(locales)
+
+
+def test_hot_weather_pushes_outdoor_midday_after_three_pm():
+    place = replace(
+        PLACES[0],
+        id="hot-outdoor",
+        name="Điểm ngoài trời nóng",
+        kind="cong_vien",
+        tags=("ngoai_troi", "view_dep"),
+        open_hour=6,
+        close_hour=20,
+        duration_min=45,
+    )
+    day_start = planner.datetime(2026, 8, 12, 8, 0)
+    arrive = day_start.replace(hour=12, minute=0)
+    bounds = planner._compute_slot_bounds(
+        place,
+        None,
+        arrive,
+        day_start,
+        day_start.replace(hour=20),
+        request(),
+        weather={"nhiet_do_max": 35, "xac_suat_mua": 10},
+    )
+    assert bounds is not None
+    assert bounds[0] >= day_start.replace(hour=15, minute=0)
+
+
+def test_rainy_weather_penalizes_outdoor_midday_score():
+    place = replace(
+        PLACES[0],
+        id="rainy-outdoor",
+        name="Điểm ngoài trời mưa",
+        kind="cong_vien",
+        tags=("ngoai_troi",),
+    )
+    clear = planner._preference_score(place, None, 12.0, {"nhiet_do_max": 28, "xac_suat_mua": 20})
+    rainy = planner._preference_score(place, None, 12.0, {"nhiet_do_max": 28, "xac_suat_mua": 70})
+    assert rainy < clear
+
+
+def test_generated_visit_guidance_json_is_loaded():
+    assert visit_guidance.GENERATED_GUIDANCE_PATH.name == "visit_guidance.json"
+    assert visit_guidance.GENERATED_VISIT_GUIDANCE_BY_ID
+    guidance = next(iter(visit_guidance.GENERATED_VISIT_GUIDANCE_BY_ID.values()))
+    assert guidance.preferred[0] < guidance.preferred[2]
+    assert guidance.source

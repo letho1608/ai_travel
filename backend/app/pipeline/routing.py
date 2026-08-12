@@ -60,11 +60,9 @@ def travel_minutes(a: Place, b: Place) -> int:
 
 
 def is_routable(place: Place) -> bool:
-    return (
-        not ROUTABLE_PLACE_IDS
-        or place.id in ROUTABLE_PLACE_IDS
-        or place.source in {"curated", "Nominatim"}
-    )
+    if not (-90 <= place.lat <= 90 and -180 <= place.lng <= 180):
+        return False
+    return True
 
 
 def nearest_neighbor(places: list[Place], origin: tuple[float, float]) -> list[Place]:

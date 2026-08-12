@@ -22,7 +22,7 @@ export default function Footer() {
           </div>
           <div className="footer-col">
             <h4>{t("footerCompany")}</h4>
-            <Link href="/login">{t("login")}</Link>
+            <Link href="/">{t("footerAbout")}</Link>
             <Link href="/support">Support</Link>
           </div>
           <div className="footer-col">
