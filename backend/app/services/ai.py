@@ -74,6 +74,9 @@ def _apply_copy(draft: dict, payload: dict, trusted_ids: set[str]) -> dict:
 class MockAIAdapter:
     cost_per_call_usd = 0.0
 
+    def extract_request_intent(self, context: str, locale: str = "vi") -> dict:
+        return {}
+
     def propose_place_ids(
         self,
         context: str,
@@ -111,6 +114,77 @@ class OpenAICompatibleAIAdapter:
             timeout=httpx.Timeout(10, connect=2),
         )
         self.provider = settings.ai_mode
+
+    def extract_request_intent(self, context: str, locale: str = "vi") -> dict:
+        if not breaker.allow():
+            raise RuntimeError("Cầu dao AI đang mở")
+        language = {
+            "vi": "Vietnamese", "en": "English", "ar": "Arabic", "bg": "Bulgarian",
+            "de": "German", "es": "Spanish", "fr": "French", "he": "Hebrew",
+            "hi": "Hindi", "it": "Italian", "ja": "Japanese", "nl": "Dutch",
+            "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
+            "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
+        }[locale]
+        prompt = {
+            "yeu_cau": (
+                f"Extract only qualitative travel intent from this user text in {language}. "
+                "Do not invent missing facts. Do not infer people, budget or trip duration unless the text says it. "
+                "Return JSON only. Every extracted value must have short evidence copied or paraphrased from the user text."
+            ),
+            "text": context,
+            "json_mau": {
+                "destination_text": {"value": "string|null", "evidence": "string|null"},
+                "preferences": [{"value": "string", "evidence": "string"}],
+                "dislikes": [{"value": "string", "evidence": "string"}],
+                "constraints": [{"value": "string", "evidence": "string"}],
+                "must_visit": [{"value": "string", "evidence": "string"}],
+            },
+        }
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                response = self.client.post(
+                    "/chat/completions",
+                    json={
+                        "model": settings.ai_model,
+                        "messages": [
+                            {"role": "system", "content": "Only return a valid JSON object."},
+                            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.0,
+                        "max_tokens": 700,
+                    },
+                )
+                response.raise_for_status()
+                body = response.json()
+                choice = body["choices"][0]
+                if choice.get("finish_reason") != "stop":
+                    raise ValueError("AI intent extraction was incomplete")
+                content = choice["message"].get("content")
+                if not content:
+                    raise ValueError("AI returned empty intent extraction")
+                payload = json.loads(content)
+                if not isinstance(payload, dict):
+                    raise TypeError("AI intent extraction is not an object")
+                usage = body.get("usage", {})
+                input_tokens = int(usage.get("prompt_tokens", 0))
+                output_tokens = int(usage.get("completion_tokens", 0))
+                amount = (
+                    input_tokens * settings.ai_input_usd_per_million
+                    + output_tokens * settings.ai_output_usd_per_million
+                ) / 1_000_000
+                store.record_ai_usage(
+                    getattr(self, "provider", settings.ai_mode), settings.ai_model,
+                    input_tokens, output_tokens, amount,
+                    settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
+                )
+                breaker.record_success()
+                return payload
+            except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+                breaker.record_failure()
+        raise RuntimeError(f"AI không bóc tách được yêu cầu an toàn: {last_error}") from last_error
 
     def estimate_place_metadata(self, name: str, kind: str, area: str) -> dict:
         if not breaker.allow():

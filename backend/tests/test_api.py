@@ -125,6 +125,24 @@ def test_generate_sse_and_shared_read_only():
     assert denied.status_code == 403
 
 
+def test_generate_logs_input_extraction_for_quality_measurement():
+    response = client.post(
+        "/api/plan/generate",
+        json=PAYLOAD | {"ma_phien": "extract-log-session", "context": "du lịch Hà Nội, thích cafe, không thích quá đông"},
+    )
+    assert response.status_code == 200
+    extraction_events = [
+        event for event in store.events
+        if event["ma_phien"] == "extract-log-session" and event["su_kien"] == "boc_tach_yeu_cau"
+    ]
+    assert extraction_events
+    extracted = extraction_events[0]["du_lieu"]
+    assert extracted["schema_version"] == "input-understanding-v1"
+    assert extracted["so_nguoi"]["nguon"] == "form_chat"
+    assert extracted["ngan_sach"]["nguon"] == "form_chat"
+    assert extracted["hanh_dong_tiep_theo"] == "du_dieu_kien_lap_lich"
+
+
 def test_plan_locale_is_persisted_and_reused_by_swipe_and_regenerate():
     payload = PAYLOAD | {"ngon_ngu": "en", "ma_phien": "locale-session"}
     generated = client.post("/api/plan/generate", json=payload)

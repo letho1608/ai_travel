@@ -150,6 +150,8 @@ async def generate(payload: PlanRequest, request: Request):
             item = store.save(session_id, plan, payload.model_dump(mode="json"))
             if generate_nonce:
                 store.set_nonce(GENERATE_NONCE_SCOPE, generate_nonce, item.token)
+            if isinstance(plan.get("dau_vao_da_hieu"), dict):
+                store.log(session_id, "boc_tach_yeu_cau", plan["dau_vao_da_hieu"])
             store.log(session_id, "tao_ke_hoach_thanh_cong", {"id_ke_hoach": item.token})
             yield sse("result", {"type": "plan", "ma_phien": session_id, "token": item.token, "phien_ban": 1, "plan": plan})
         except (PipelineUnavailable, RuntimeError) as exc:

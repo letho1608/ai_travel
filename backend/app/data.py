@@ -61,6 +61,9 @@ PLACE_IMAGE_URLS: dict[str, str] = {
     "curated-cafe-dinh": "https://commons.wikimedia.org/wiki/Special:FilePath/C%C3%80%20PH%C3%8A%20KEM%20TR%E1%BB%A8NG%20%28Egg%20cream%20coffee%29.jpg?width=800",
     "curated-cha-ca-thang-long": "https://commons.wikimedia.org/wiki/Special:FilePath/Cha%20ca%20La%20Vong.jpg?width=800",
     "curated-pho-bat-dan": "https://commons.wikimedia.org/wiki/Special:FilePath/Pho%20Ha%20Noi.jpg?width=800",
+    "curated-nha-trang-beach": "https://commons.wikimedia.org/wiki/Special:FilePath/Nha%20Trang%2C%20Kh%C3%A1nh%20H%C3%B2a.png?width=800",
+    "curated-vinh-nha-trang": "https://commons.wikimedia.org/wiki/Special:FilePath/Nha%20Trang%20Bay.jpg?width=800",
+    "curated-hon-tre": "https://commons.wikimedia.org/wiki/Special:FilePath/Hon%20Tre%20island%2C%20Nha%20Trang.jpg?width=800",
 }
 
 PLACE_IMAGE_CREDITS: dict[str, str] = {
@@ -86,6 +89,9 @@ PLACE_IMAGE_CREDITS: dict[str, str] = {
     "curated-cafe-dinh": "Wikimedia Commons (CÀ PHÊ KEM TRỨNG (Egg cream coffee).jpg)",
     "curated-cha-ca-thang-long": "Wikimedia Commons (Cha ca La Vong.jpg)",
     "curated-pho-bat-dan": "Wikimedia Commons (Pho Ha Noi.jpg)",
+    "curated-nha-trang-beach": "Wikimedia Commons (Nha Trang, Khánh Hòa.png)",
+    "curated-vinh-nha-trang": "Wikimedia Commons (Nha Trang Bay.jpg)",
+    "curated-hon-tre": "Wikimedia Commons (Hon Tre island, Nha Trang.jpg)",
 }
 
 
@@ -126,12 +132,14 @@ DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def _load_imported_places() -> tuple[list[Place], dict]:
-    configured_path = os.getenv("PLACES_DATA_FILE", "places.json").strip() or "places.json"
+    configured_path = os.getenv("PLACES_DATA_FILE", "").strip()
+    if not configured_path:
+        configured_path = "vietnam_places.json" if (DATA_DIR / "vietnam_places.json").exists() else "places.json"
     path = Path(configured_path)
     if not path.is_absolute():
         path = DATA_DIR / path
     if not path.exists():
-        return [], {}
+        return [], {"configured_path": configured_path, "resolved_path": str(path), "exists": False}
     payload = json.loads(path.read_text(encoding="utf-8"))
     places = [
         Place(
@@ -144,7 +152,15 @@ def _load_imported_places() -> tuple[list[Place], dict]:
         )
         for item in payload.get("places", [])
     ]
-    return places, payload.get("metadata", {})
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return places, {
+        **metadata,
+        "configured_path": configured_path,
+        "resolved_path": str(path),
+        "exists": True,
+    }
 
 
 IMPORTED_PLACES, PLACE_METADATA = _load_imported_places()
@@ -162,7 +178,7 @@ def finalize_catalogue(rows: list[Place]) -> list[Place]:
     merged = list(rows)
     seen_ids = {place.id for place in merged}
     seen_names = {place_name_key(place.name) for place in merged}
-    for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING):
+    for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING, *CURATED_NHA_TRANG_ANCHORS):
         if curated.id in seen_ids:
             continue
         key = place_name_key(curated.name)
@@ -355,11 +371,28 @@ CURATED_HANOI_DINING = [
     ),
 ]
 
+CURATED_NHA_TRANG_ANCHORS = [
+    Place("curated-nha-trang-beach", "Bãi biển Nha Trang", "bai_bien", "Nha Trang", 12.2388, 109.1967, 0, 90, ("nha_trang_icon", "beach", "bien", "chill", "ngoai_troi", "view_dep", "checkin"), 5, 22, "curated", None),
+    Place("curated-thap-ba-ponagar", "Tháp Bà Ponagar", "di_tich", "Nha Trang", 12.2653, 109.1951, 30_000, 75, ("nha_trang_icon", "lich_su", "van_hoa", "di_tich", "temple", "heritage", "checkin"), 8, 18, "curated", None),
+    Place("curated-hon-chong", "Hòn Chồng", "dia_danh", "Nha Trang", 12.2730, 109.2067, 30_000, 75, ("nha_trang_icon", "bien", "view_dep", "ngoai_troi", "checkin", "chill"), 7, 18, "curated", None),
+    Place("curated-vien-hai-duong-hoc", "Viện Hải dương học Nha Trang", "bao_tang", "Nha Trang", 12.2068, 109.2147, 40_000, 90, ("nha_trang_icon", "bao_tang", "gia_dinh", "trong_nha", "bien", "van_hoa"), 8, 17, "curated", None),
+    Place("curated-nha-tho-da-nha-trang", "Nhà thờ Đá Nha Trang", "den_chua", "Nha Trang", 12.2486, 109.1849, 0, 45, ("nha_trang_icon", "kien_truc", "van_hoa", "checkin", "di_tich"), 7, 18, "curated", None),
+    Place("curated-chua-long-son", "Chùa Long Sơn", "den_chua", "Nha Trang", 12.2522, 109.1806, 0, 60, ("nha_trang_icon", "den_chua", "phat_giao", "van_hoa", "yen_tinh", "checkin"), 7, 18, "curated", None),
+    Place("curated-vinh-nha-trang", "Vịnh Nha Trang", "dia_danh", "Nha Trang", 12.2200, 109.2500, 0, 90, ("nha_trang_icon", "bay", "bien", "view_dep", "ngoai_troi", "chill"), 6, 18, "curated", None),
+    Place("curated-hon-tre", "Hòn Tre", "dia_danh", "Nha Trang", 12.2167, 109.2430, 0, 120, ("nha_trang_icon", "dao", "bien", "view_dep", "giai_tri", "checkin"), 7, 21, "curated", None),
+    Place("curated-vinwonders-nha-trang", "VinWonders Nha Trang", "giai_tri", "Nha Trang", 12.2175, 109.2411, 950_000, 180, ("nha_trang_icon", "giai_tri", "gia_dinh", "dao", "bien", "checkin"), 8, 21, "curated", None),
+    Place("curated-hon-mun", "Hòn Mun", "dia_danh", "Nha Trang", 12.1667, 109.3000, 0, 150, ("nha_trang_icon", "dao", "bien", "lan_bien", "ngoai_troi", "view_dep"), 7, 17, "curated", None),
+    Place("curated-hon-tam", "Hòn Tằm", "dia_danh", "Nha Trang", 12.1900, 109.2450, 0, 150, ("nha_trang_icon", "dao", "bien", "nghi_duong", "chill", "view_dep"), 7, 18, "curated", None),
+    Place("curated-bai-dai-cam-ranh", "Bãi Dài Cam Ranh", "bai_bien", "Cam Ranh", 12.0499, 109.2226, 0, 120, ("nha_trang_icon", "beach", "bien", "ngoai_troi", "chill", "view_dep"), 6, 18, "curated", None),
+    Place("curated-dao-khi-nha-trang", "Đảo Khỉ Nha Trang", "dia_danh", "Nha Trang", 12.3598, 109.2136, 180_000, 120, ("nha_trang_icon", "dao", "gia_dinh", "ngoai_troi", "checkin"), 8, 16, "curated", None),
+    Place("curated-i-resort-nha-trang", "I-Resort Nha Trang", "giai_tri", "Nha Trang", 12.2820, 109.1770, 170_000, 150, ("nha_trang_icon", "suoi_khoang", "nghi_duong", "chill", "spa", "gia_dinh"), 8, 18, "curated", None),
+]
+
 # Canonical id -> display name for every curated/demo place, so planning code
 # can resolve a `curated-*`/demo id against a Postgres-style catalogue by name.
 KNOWN_PLACE_NAMES_BY_ID: dict[str, str] = {
     place.id: place.name
-    for place in (*DEMO_PLACES, *CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING)
+    for place in (*DEMO_PLACES, *CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING, *CURATED_NHA_TRANG_ANCHORS)
 }
 
 _CURATED_NAME_KEYS = {place_name_key(name) for name in KNOWN_PLACE_NAMES_BY_ID.values()}

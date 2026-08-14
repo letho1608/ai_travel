@@ -70,7 +70,7 @@ if "%API_KEY_DEEPSEEK%"=="" (
 )
 
 :AI_MODE_DONE
-if "%PLACES_DATA_FILE%"=="" set "PLACES_DATA_FILE=places.json"
+if "%PLACES_DATA_FILE%"=="" set "PLACES_DATA_FILE=vietnam_places.json"
 
 where docker >nul 2>nul
 if errorlevel 1 goto DOCKER_MISSING
@@ -84,7 +84,7 @@ if errorlevel 1 goto DATA_FAILED
 
 set "BACKEND_PORT=8000"
 :CHECK_BACKEND_PORT
-curl.exe -fsS "http://localhost:%BACKEND_PORT%/health" 2>nul | findstr /C:"postgresql" | findstr /C:"redis" | findstr /C:"%AI_MODE%" >nul
+curl.exe -fsS "http://localhost:%BACKEND_PORT%/health" 2>nul | findstr /C:"postgresql" | findstr /C:"redis" | findstr /C:"%AI_MODE%" | findstr /C:"%PLACES_DATA_FILE%" >nul
 if not errorlevel 1 goto BACKEND_REUSED
 netstat -ano | findstr /R /C:":%BACKEND_PORT% .*LISTENING" >nul
 if errorlevel 1 goto BACKEND_PORT_READY

@@ -12,6 +12,7 @@ from redis.exceptions import RedisError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import settings
+from app.data import PLACE_METADATA, PLACES
 from app.routers import admin, auth, inventory, plans, roadtrip, support
 from app.services.rate_limit import limiter
 from app.services.store import store
@@ -122,6 +123,8 @@ def health():
         "status": "ok", "ai_mode": settings.ai_mode,
         "storage": "postgresql" if store.__class__.__name__ == "PostgresStore" else "memory",
         "rate_limiter": "redis" if limiter.__class__.__name__ == "RedisRateLimiter" else "memory",
+        "places_data_file": PLACE_METADATA.get("configured_path"),
+        "places_count": len(PLACES),
     }
 
 
