@@ -1,5 +1,6 @@
 """Load the verified OSM catalogue and OSRM matrix into PostgreSQL."""
 
+import argparse
 import datetime as _dt
 import json
 import os
@@ -16,13 +17,28 @@ DEFAULT_URL = "postgresql://postgres:postgres@localhost:5432/minhdidauthe"
 
 
 def main() -> None:
-    place_payload = json.loads(
-        (ROOT / "data" / "places.json").read_text(encoding="utf-8")
+    parser = argparse.ArgumentParser(
+        description="Load a places.json-compatible catalogue and route matrix into PostgreSQL."
     )
+    parser.add_argument(
+        "--places",
+        type=Path,
+        default=Path(os.getenv("PLACES_DATA_FILE", "data/vietnam_places.json")),
+        help="Path to a places.json-compatible catalogue. Defaults to PLACES_DATA_FILE or data/vietnam_places.json.",
+    )
+    parser.add_argument(
+        "--matrix",
+        type=Path,
+        default=Path("data/distance_matrix.json"),
+        help="Path to a distance matrix JSON file.",
+    )
+    args = parser.parse_args()
+    places_path = args.places if args.places.is_absolute() else ROOT / args.places
+    matrix_path = args.matrix if args.matrix.is_absolute() else ROOT / args.matrix
+
+    place_payload = json.loads(places_path.read_text(encoding="utf-8"))
     places = place_payload["places"]
-    matrix_payload = json.loads(
-        (ROOT / "data" / "distance_matrix.json").read_text(encoding="utf-8")
-    )
+    matrix_payload = json.loads(matrix_path.read_text(encoding="utf-8"))
     matrix_ids = matrix_payload["place_ids"]
     durations = matrix_payload["durations_seconds"]
     distances = matrix_payload["distances_meters"]
@@ -138,8 +154,10 @@ def main() -> None:
                      datetime.now(UTC)),
                 )
                 inserted += 1
-    print(f"Seeded {len(ids)} OSM places and {inserted} OSRM routes; "
-          f"{curated_upserted} curated anchors upserted.")
+    print(
+        f"Seeded {len(ids)} places from {places_path} and {inserted} OSRM routes; "
+        f"{curated_upserted} curated anchors upserted."
+    )
 
 
 if __name__ == "__main__":
