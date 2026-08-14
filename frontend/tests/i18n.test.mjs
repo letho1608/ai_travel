@@ -26,6 +26,7 @@ const nextConfigSource=readFileSync(new URL("../next.config.mjs",import.meta.url
 const backendPlanSource=readFileSync(new URL("../../backend/app/routers/plans.py",import.meta.url),"utf8");
 const backendConfigSource=readFileSync(new URL("../../backend/app/config.py",import.meta.url),"utf8");
 const backendDataSource=readFileSync(new URL("../../backend/app/data.py",import.meta.url),"utf8");
+const backendMainSource=readFileSync(new URL("../../backend/app/main.py",import.meta.url),"utf8");
 const googlePlacesSource=readFileSync(new URL("../../backend/app/services/google_places.py",import.meta.url),"utf8");
 const runBatSource=readFileSync(new URL("../../run.bat",import.meta.url),"utf8");
 const compiled=ts.transpileModule(coreSource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -118,6 +119,8 @@ test("all supported locales contain the complete planner contract",()=>{
     assert.ok(line,`missing planner locale ${locale}`);
     for(const key of plannerKeys)assertKey(line,key,locale);
   }
+  const viLine=source.split("\n").find(value=>value.trimStart().startsWith("vi:{")&&value.includes("heroEyebrow"));
+  assert.match(viLine,/destinationPrompt:"Bạn muốn đi ở đâu\?"/);
 });
 
 test("workspace catalog covers its typed contract and all locales",()=>{
@@ -256,7 +259,11 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(backendConfigSource,/GOOGLE_PLACES_RUNTIME_HOURS/);
   assert.match(backendDataSource,/PLACES_DATA_FILE/);
   assert.match(backendDataSource,/Path\(configured_path\)/);
-  assert.match(runBatSource,/if "%PLACES_DATA_FILE%"=="" set "PLACES_DATA_FILE=places\.json"/);
+  assert.match(backendDataSource,/"configured_path": configured_path/);
+  assert.match(backendMainSource,/places_data_file/);
+  assert.match(backendMainSource,/places_count/);
+  assert.match(runBatSource,/if "%PLACES_DATA_FILE%"=="" set "PLACES_DATA_FILE=vietnam_places\.json"/);
+  assert.match(runBatSource,/findstr \/C:"%PLACES_DATA_FILE%"/);
   assert.match(runBatSource,/set "PLACES_DATA_FILE=%PLACES_DATA_FILE%"/);
   assert.match(mapViewSource,/rel="noopener noreferrer"/);
   assert.match(mapViewSource,/Xem thêm thông tin về địa điểm này trên:/);
@@ -386,7 +393,7 @@ test("interpolation replaces template tokens once without rewriting values",()=>
 });
 
 test("planner keeps its timeout, safe status and request contracts",()=>{
-  assert.match(plannerSource,/setTimeout\(\(\) => controller\.abort\(\), 90000\)/);
+  assert.match(plannerSource,/setTimeout\(\(\) => controller\.abort\(\), 180000\)/);
   assert.match(nextConfigSource,/async rewrites\(\)/);
   assert.match(nextConfigSource,/destination: `\$\{apiOrigin\}\/api\/:path\*`/);
   assert.match(nextConfigSource,/Array\.from\(\{ length: 11 \}/);
@@ -401,14 +408,47 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/setNeedsDuration\(true\)/);
   assert.match(plannerSource,/needsDuration &&/);
   assert.match(plannerSource,/const \[pendingContext, setPendingContext\]/);
+  assert.match(plannerSource,/const \[needsDestination, setNeedsDestination\]/);
+  assert.match(plannerSource,/const \[pendingDuration, setPendingDuration\]/);
+  assert.match(plannerSource,/function hasDestination\(value: string\)/);
+  assert.match(plannerSource,/function answerDestination\(answer: string\)/);
+  assert.match(plannerSource,/setNeedsDestination\(true\)/);
+  assert.match(plannerSource,/needsDestination &&/);
+  assert.match(plannerSource,/role="group" aria-label=\{t\("destinationPrompt"\)\}/);
+  assert.match(plannerSource,/if \(!hasDestination\(requestContext\)\) \{/);
+  assert.match(plannerSource,/if \(!hasDestination\(answer\)\) \{/);
+  assert.match(plannerSource,/const DEFAULT_LOCATION/);
+  assert.match(plannerSource,/const DESTINATION_LOCATIONS/);
+  assert.match(plannerSource,/function destinationLocation\(value: string\)/);
+  assert.match(plannerSource,/location: destinationLocation\(requestContext\)/);
+  assert.match(plannerSource,/lat: 16\.0544, lng: 108\.2022/);
+  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration\)/);
+  assert.match(plannerSource,/Hà Nội/);
+  assert.match(plannerSource,/Hạ Long/);
+  assert.match(plannerSource,/Đà Nẵng/);
   assert.match(plannerSource,/role="log" aria-live="polite"/);
   assert.match(plannerSource,/role="group" aria-label=\{t\("durationLabel"\)\}/);
+  assert.match(plannerSource,/className="chat-composer"/);
+  assert.match(plannerSource,/className="chat-box chat-input-shell"/);
+  assert.match(plannerSource,/className="chat-input-icon" aria-hidden="true"/);
+  assert.match(plannerSource,/className="chat-send"/);
+  assert.match(plannerSource,/const \[needsPeople, setNeedsPeople\]/);
+  assert.match(plannerSource,/function inferPeople\(value: string\)/);
+  assert.match(plannerSource,/function peopleQuestion\(\)/);
+  assert.match(plannerSource,/function answerPeople\(answer: string\)/);
+  assert.match(plannerSource,/if \(needsPeople\) \{/);
+  assert.match(plannerSource,/const bareNumber = normalized\.match/);
+  assert.match(plannerSource,/if \(\!travelers\) \{/);
+  assert.doesNotMatch(plannerSource,/id="planner-people"/);
+  assert.doesNotMatch(plannerSource,/htmlFor="planner-people"/);
+  assert.match(globalsSource,/\.planner \.chat-input-shell\{[^}]*border-radius:999px/);
+  assert.match(globalsSource,/\.planner \.chat-send\{[^}]*border-radius:50%/);
   assert.match(plannerSource,/transcriptEnd\.current\?\.scrollIntoView/);
   assert.match(plannerSource,/if \(needsDuration\) \{/);
   assert.match(plannerSource,/if \(!duration\) \{/);
   assert.match(plannerSource,/const requestContext = `\$\{pendingContext\.trim\(\)\}\\n\$\{answer\.trim\(\)\}`/);
-  assert.match(plannerSource,/void generatePlan\(requestContext, duration\)/);
-  assert.match(plannerSource,/lastRequest\.current = \{ context: requestContext, duration \}/);
+  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration\)/);
+  assert.match(plannerSource,/lastRequest\.current = \{ context: requestContext, duration, people: travelers \}/);
   assert.match(plannerSource,/lastRequest\.current = null/);
   assert.match(plannerSource,/onClick=\{retryGenerate\}/);
   for(const duration of ["vai_gio","nua_ngay","ca_ngay","nhieu_ngay"]) assert.match(plannerSource,new RegExp(`\\[\\"[^\\"]+\\", \\"${duration}\\"\\]`));
