@@ -258,13 +258,14 @@ def checked_google_limit(requested: int, place_count: int) -> int:
     limit = requested or min(DEFAULT_GOOGLE_IMPORT_LIMIT, place_count)
     if limit < 0:
         raise SystemExit("--google-limit must be greater than or equal to 0")
+    effective = min(limit, place_count)
     free_cap = min(GOOGLE_FREE_TEXT_SEARCH_MONTHLY_CAP, GOOGLE_FREE_PHOTO_MONTHLY_CAP)
-    if limit > free_cap:
+    if effective > free_cap:
         raise SystemExit(
-            f"--google-limit {limit} exceeds the guarded free-tier cap {free_cap}. "
+            f"--google-limit {effective} exceeds the guarded free-tier cap {free_cap}. "
             "Run in smaller monthly batches or raise the cap in code after accepting billing risk."
         )
-    return min(limit, place_count)
+    return effective
 
 
 def category(tags: dict[str, str]) -> str | None:

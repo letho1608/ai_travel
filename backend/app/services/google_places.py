@@ -12,7 +12,6 @@ import urllib.parse
 import urllib.request
 from copy import deepcopy
 from datetime import UTC, date, datetime
-from pathlib import Path
 from typing import Any
 
 from app.config import settings

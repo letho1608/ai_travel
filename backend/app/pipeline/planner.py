@@ -575,7 +575,6 @@ def _max_plan_slots(thoi_luong: str) -> int:
 def _is_evening_place(place: Place) -> bool:
     """True only for stops that belong after dinner, not dual-use daytime icons."""
     open_hour, _ = _effective_hours(place)
-    tags = set(place.tags)
     if place.id in EVENING_PLACE_IDS:
         return True
     if open_hour >= 17:
