@@ -7,12 +7,12 @@ from app.data import Place
 from app.main import app
 from app.pipeline.planner import AI_FALLBACK_NOTE
 from app.routers import plans as plans_router
-from app.routers.auth import DEMO_USERS
+from app.routers.auth import LOCAL_USERS
 from app.services.rate_limit import limiter
 from app.services.store import store
 
 client = TestClient(app)
-PAYLOAD = {"context": "đi chơi chill", "location": {"lat": 21.0285, "lng": 105.8542}, "thoi_luong": "ca_ngay", "so_nguoi": 2, "ngan_sach": 1000000, "ma_phien": "api-session"}
+PAYLOAD = {"context": "đi chơi chill Hà Nội", "location": {"lat": 21.0285, "lng": 105.8542}, "thoi_luong": "ca_ngay", "so_nguoi": 2, "ngan_sach": 1000000, "ma_phien": "api-session"}
 
 
 def setup_function():
@@ -27,7 +27,7 @@ def setup_function():
     store.inventory_snapshots.clear()
     store.booking_requests.clear()
     store.reminders_sent.clear()
-    DEMO_USERS.clear()
+    LOCAL_USERS.clear()
     store.available = True
     limiter.hits.clear()
     limiter.available = True
@@ -143,6 +143,27 @@ def test_generate_logs_input_extraction_for_quality_measurement():
     assert extracted["hanh_dong_tiep_theo"] == "du_dieu_kien_lap_lich"
 
 
+def test_generate_asks_for_missing_destination_instead_of_guessing():
+    payload = PAYLOAD | {
+        "context": "đi chơi chill và ăn ngon",
+        "ma_phien": "missing-destination-session",
+        "nonce": "missing-destination-0001",
+    }
+    response = client.post("/api/plan/generate", json=payload)
+    assert response.status_code == 200
+    error_line = next(line for line in response.text.splitlines() if line.startswith('data: {"code"'))
+    body = json.loads(error_line[6:])
+    assert body["code"] == "missing_required_input"
+    assert body["missing_fields"] == ["diem_den"]
+    assert "điểm đến" in body["detail"].lower()
+    extraction_events = [
+        event for event in store.events
+        if event["ma_phien"] == "missing-destination-session" and event["su_kien"] == "boc_tach_yeu_cau"
+    ]
+    assert extraction_events
+    assert extraction_events[0]["du_lieu"]["hanh_dong_tiep_theo"] == "hoi_lai_nguoi_dung"
+
+
 def test_plan_locale_is_persisted_and_reused_by_swipe_and_regenerate():
     payload = PAYLOAD | {"ngon_ngu": "en", "ma_phien": "locale-session"}
     generated = client.post("/api/plan/generate", json=payload)
@@ -183,6 +204,50 @@ def test_plan_locale_is_persisted_and_reused_by_swipe_and_regenerate():
     assert refined.status_code == 200
     assert refined.json()["ke_hoach"]["ngay"][0]["nhan_de"] == "Day 1"
     assert store.get(result["token"]).request["ngon_ngu"] == "en"
+
+
+def test_swipe_updates_versioned_behavior_weights_used_by_next_plan():
+    payload = PAYLOAD | {"ma_phien": "behavior-learning-session", "nonce": "behavior-plan-0001"}
+    generated = client.post("/api/plan/generate", json=payload)
+    result = json.loads(next(
+        line for line in generated.text.splitlines() if line.startswith('data: {"type"')
+    )[6:])
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+
+    swiped = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": payload["ma_phien"]},
+        json={"diem_bi_loai": target, "phien_ban": 1, "ma_phien": payload["ma_phien"]},
+    )
+
+    assert swiped.status_code == 200
+    profile = store.get_behavior_profile(payload["ma_phien"])
+    assert profile["schema_version"] == "behavior-profile-v1"
+    assert profile["version"] == 1
+    assert profile["observation_count"] == 1
+    assert profile["is_active"] is False
+    assert profile["tag_weights"] == {}
+    assert profile["stored_tag_weights"]
+    assert profile["change_log"][0]["reason"] == "user_replaced_place"
+    assert profile["change_log"][0]["tag_deltas"]
+
+    next_plan = _generated_plan(payload | {"nonce": "behavior-plan-0002"})["plan"]
+    assert next_plan["ho_so_hanh_vi"]["version"] == 1
+    assert next_plan["ho_so_hanh_vi"]["dang_ap_dung"] is False
+    first_evidence = next_plan["ngay"][0]["khoang_gio"][0]["bang_chung"]["xep_hang"]
+    assert first_evidence["ho_so_hanh_vi"]["version"] == 1
+    assert "hanh_vi_nguoi_dung" not in first_evidence["thanh_phan"]
+
+    for index in range(4):
+        store.adjust_tag_weights(
+            payload["ma_phien"],
+            {"healing": 5},
+            reason=f"acceptance_signal_{index}",
+        )
+    active_profile = store.get_behavior_profile(payload["ma_phien"])
+    assert active_profile["version"] == 5
+    assert active_profile["is_active"] is True
+    assert active_profile["tag_weights"]["healing"] <= 15
 
 
 def test_swipe_supports_a_slot_on_the_second_day():
@@ -246,17 +311,14 @@ def test_auto_replacement_ranks_similarity_before_distance():
     assert min((close_wrong, similar), key=lambda place: plans_router._replacement_rank(place, rejected)) is similar
 
 
-def test_free_text_replacement_verifies_and_labels_ai_estimates(monkeypatch):
+def test_free_text_replacement_rejects_unverified_external_operational_data(monkeypatch):
     result = _generated_plan()
     target = result["plan"]["ngay"][0]["khoang_gio"][0]
     external = Place("osm-verified-node-987", "Vườn nghệ thuật mới", "dia_danh", "Hà Nội", target["toa_do"]["lat"], target["toa_do"]["lng"], 0, 60, ("osm_verified",), 7, 22, "Nominatim", "https://www.openstreetmap.org/node/987")
     monkeypatch.setattr(plans_router, "verify_place_name", lambda name, origin: external)
-    monkeypatch.setattr(plans_router.ai_adapter, "estimate_place_metadata", lambda *args: {"open_hour": 8, "close_hour": 21, "cost": 25000})
     response = client.patch(f"/api/plans/{result['token']}/swipe", headers={"X-Session-Id": PAYLOAD["ma_phien"]}, json={"diem_bi_loai": target["dia_diem_id"], "ten_dia_diem_thay_the": external.name, "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
-    assert response.status_code == 200
-    replacement = next(slot for day in response.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"] if slot["dia_diem_id"] == external.id)
-    assert replacement["du_lieu_uoc_tinh"] is True
-    assert "AI ước tính" in replacement["ghi_chu"] and "kiểm tra lại" in replacement["ghi_chu"]
+    assert response.status_code == 422
+    assert "không dùng AI" in response.json()["detail"]
 
 
 def test_budget_counter_fails_closed():
@@ -450,7 +512,7 @@ def test_google_login_claims_anonymous_plans_and_issues_session():
     )
     login = client.post(
         "/api/auth/oauth",
-        json={"provider": "google", "token": "mock-google-user-123",
+        json={"provider": "google", "token": "local-google-user-123",
               "ma_phien": PAYLOAD["ma_phien"], "consent": True},
     )
     assert login.status_code == 200
@@ -633,7 +695,7 @@ def test_account_deletion_removes_owned_data_and_revokes_session():
     )
     login = client.post(
         "/api/auth/oauth",
-        json={"provider": "google", "token": "mock-google-delete-user",
+        json={"provider": "google", "token": "local-google-delete-user",
               "ma_phien": PAYLOAD["ma_phien"], "consent": True},
     )
     token = login.json()["token"]
@@ -659,7 +721,7 @@ def test_api_security_headers_and_request_trace_are_always_present():
 
 
 def test_admin_dashboard_requires_token_and_reports_operational_state():
-    store.log("admin-session", "tao_ke_hoach", {"token": "demo"})
+    store.log("admin-session", "tao_ke_hoach", {"token": "local"})
     store.save(
         "admin-session",
         {"tieu_de": "fallback", "tom_tat": "fallback", "ngay": [], "luu_y": [AI_FALLBACK_NOTE["en"]]},
@@ -669,20 +731,20 @@ def test_admin_dashboard_requires_token_and_reports_operational_state():
     assert denied.status_code == 401
 
     response = client.get(
-        "/api/admin/dashboard", headers={"X-Admin-Token": "local-support-demo"}
+        "/api/admin/dashboard", headers={"X-Admin-Token": "local-support-dev"}
     )
     assert response.status_code == 200
     body = response.json()
     assert body["environment"] == "local"
     assert body["providers"][0]["name"] == "AI"
-    assert body["providers"][0]["status"] == "mock"
+    assert body["providers"][0]["status"] == "offline"
     assert body["provider_diagnostics"]["ai"]["api_key_configured"] is False
     assert body["provider_diagnostics"]["ai"]["circuit_breaker"]["state"] == "closed"
-    assert "API_KEY_DEEPSEEK" in body["provider_diagnostics"]["ai"]["required_env"]
+    assert "API_KEY_GROQ" in body["provider_diagnostics"]["ai"]["required_env"]
     assert body["summary"]["events"] == 1
     assert body["limits"]["daily_ai_budget_usd"] == 10.0
     assert body["limits"]["max_request_body_bytes"] == 256 * 1024
-    assert body["ai_quality"]["mode"] == "mock"
+    assert body["ai_quality"]["mode"] == "offline"
     assert body["ai_quality"]["deterministic_mode"] is True
     assert body["ai_quality"]["fallback_plan_count"] == 1
     assert body["ai_quality"]["fallback_rate_percent"] == 100.0
@@ -694,24 +756,38 @@ def test_admin_dashboard_requires_token_and_reports_operational_state():
     assert body["catalog_quality"]["sample_places"][0]["id"]
 
     diagnostics = client.get(
-        "/api/admin/providers/diagnostics", headers={"X-Admin-Token": "local-support-demo"}
+        "/api/admin/providers/diagnostics", headers={"X-Admin-Token": "local-support-dev"}
     )
     assert diagnostics.status_code == 200
     assert diagnostics.json()["ai"]["ready"] is False
 
     quality = client.get(
-        "/api/admin/ai-quality", headers={"X-Admin-Token": "local-support-demo"}
+        "/api/admin/ai-quality", headers={"X-Admin-Token": "local-support-dev"}
     )
     assert quality.status_code == 200
     assert quality.json()["fallback_plan_count"] == 1
     assert quality.json()["deterministic_plan_count"] == 1
 
     catalog_quality = client.get(
-        "/api/admin/catalog/quality", headers={"X-Admin-Token": "local-support-demo"}
+        "/api/admin/catalog/quality", headers={"X-Admin-Token": "local-support-dev"}
     )
     assert catalog_quality.status_code == 200
     assert catalog_quality.json()["place_count"] > 0
     assert catalog_quality.json()["distance_matrix"]["loaded"] is True
+    assert len(catalog_quality.json()["focus_city_counts"]) >= 8
+    assert all(count > 0 for count in catalog_quality.json()["focus_city_counts"].values())
+    fields = catalog_quality.json()["field_coverage"]["fields"]
+    assert {"source_url", "image", "valid_hours", "rating", "review_count", "official_or_enriched_source"}.issubset(fields)
+    assert all(0 <= item["percent"] <= 100 for item in fields.values())
+
+    release = client.get(
+        "/api/admin/release-readiness", headers={"X-Admin-Token": "local-support-dev"}
+    )
+    assert release.status_code == 200
+    release_body = release.json()
+    assert release_body["benchmark"]["version"] == "planner-quality-benchmark-v1"
+    assert release_body["spec_audit"]["problem_count"] == 10
+    assert release_body["release_gate"]["pass"] is False
 
 
 def test_admin_catalog_search_is_authenticated_and_filterable():
@@ -721,7 +797,7 @@ def test_admin_catalog_search_is_authenticated_and_filterable():
     assert client.get("/api/admin/catalog/quality").status_code == 401
     response = client.get(
         "/api/admin/catalog?q=ho&limit=5",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -730,7 +806,7 @@ def test_admin_catalog_search_is_authenticated_and_filterable():
     assert {"id", "name", "source_url", "tags"}.issubset(body["items"][0])
     exported = client.get(
         "/api/admin/catalog/export.csv?q=ho",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("text/csv")
@@ -748,7 +824,7 @@ def test_admin_recent_plans_is_authenticated_and_links_created_plans():
     assert client.get("/api/admin/plans").status_code == 401
     response = client.get(
         "/api/admin/plans?q=api-session",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -761,14 +837,14 @@ def test_admin_users_is_authenticated_filterable_and_counts_owned_records():
     user = store.upsert_user_and_claim(
         "google", "admin-user@example.com", "Admin User", PAYLOAD["ma_phien"], "2026-08-05"
     )
-    store.save(PAYLOAD["ma_phien"], {"tieu_de": "Demo", "tom_tat": "", "ngay": []}, PAYLOAD)
+    store.save(PAYLOAD["ma_phien"], {"tieu_de": "Local", "tom_tat": "", "ngay": []}, PAYLOAD)
     store.claim_session(PAYLOAD["ma_phien"], user["id"])
 
     denied = client.get("/api/admin/users")
     assert denied.status_code == 401
     response = client.get(
         "/api/admin/users?q=admin-user&limit=5",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -784,7 +860,7 @@ def test_admin_ai_usage_is_authenticated_and_reports_recent_calls():
     assert denied.status_code == 401
     response = client.get(
         "/api/admin/ai-usage?limit=5",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -801,7 +877,7 @@ def test_admin_events_is_authenticated_and_searchable():
     assert denied.status_code == 401
     response = client.get(
         "/api/admin/events?q=audit-token&limit=5",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     body = response.json()
@@ -819,7 +895,7 @@ def test_admin_cleanup_expired_is_authenticated_and_logs_removed_count():
     assert denied.status_code == 401
     response = client.post(
         "/api/admin/maintenance/cleanup-expired",
-        headers={"X-Admin-Token": "local-support-demo"},
+        headers={"X-Admin-Token": "local-support-dev"},
     )
     assert response.status_code == 200
     assert response.json()["removed_plans"] == 1

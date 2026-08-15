@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from urllib.error import HTTPError
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 if not hasattr(_dt, "UTC"):
@@ -427,7 +427,7 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
-    fetched_at = datetime.now(UTC).isoformat()
+    fetched_at = datetime.now(timezone.utc).isoformat()
     query_groups = (
         list(DEFAULT_VIETNAM_GROUPS)
         if args.scope == "vietnam" and args.group == "all"

@@ -10,3 +10,4 @@ google-auth[requests]>=2.35,<3
 PyJWT>=2.9,<3
 reportlab>=4.2,<5
 pypdf>=5,<7
+ortools>=9.10,<10

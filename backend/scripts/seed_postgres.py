@@ -68,15 +68,22 @@ def main() -> None:
                 INSERT INTO dia_diem(
                   ten,ten_bo_dau,loai,khu_vuc,dia_chi,gia_trung_binh,tags,
                   phong_cach,gio_mo_cua,toa_do,mo_ta,hinh_anh,hinh_anh_nguon,
-                  nguon,nguon_url,ma_nguon,thoi_luong_phut
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)
+                  nguon,nguon_url,website,ma_nguon,thoi_luong_phut,
+                  diem_danh_gia,so_nhan_xet,google_place_id,google_maps_url
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT(nguon_url) DO UPDATE SET
                   ten=EXCLUDED.ten, loai=EXCLUDED.loai, khu_vuc=EXCLUDED.khu_vuc,
                   dia_chi=EXCLUDED.dia_chi, tags=EXCLUDED.tags,
                   gio_mo_cua=EXCLUDED.gio_mo_cua, toa_do=EXCLUDED.toa_do,
                   ma_nguon=EXCLUDED.ma_nguon, hinh_anh=EXCLUDED.hinh_anh,
                   hinh_anh_nguon=EXCLUDED.hinh_anh_nguon,
-                  thoi_luong_phut=EXCLUDED.thoi_luong_phut, ngay_tao=now()
+                  website=EXCLUDED.website,
+                  thoi_luong_phut=EXCLUDED.thoi_luong_phut,
+                  diem_danh_gia=EXCLUDED.diem_danh_gia,
+                  so_nhan_xet=EXCLUDED.so_nhan_xet,
+                  google_place_id=EXCLUDED.google_place_id,
+                  google_maps_url=EXCLUDED.google_maps_url,
+                  ngay_tao=now()
                 RETURNING id
                 """,
                 (
@@ -90,8 +97,10 @@ def main() -> None:
                         {"lat": place["lat"], "lng": place["lng"]}
                     ), None, image_url, image_credit,
                     place.get("source", "OpenStreetMap"),
-                    place.get("source_url"),
+                    place.get("source_url"), place.get("website"),
                     place.get("id"), place.get("duration_min", 60),
+                    place.get("google_rating"), place.get("google_user_rating_count"),
+                    place.get("google_place_id"), place.get("google_maps_url"),
                 ),
             ).fetchone()
             ids[str(place["id"])] = str(row[0])
@@ -108,14 +117,21 @@ def main() -> None:
                 INSERT INTO dia_diem(
                   ten,ten_bo_dau,loai,khu_vuc,dia_chi,gia_trung_binh,tags,
                   phong_cach,gio_mo_cua,toa_do,mo_ta,hinh_anh,hinh_anh_nguon,
-                  nguon,nguon_url,ma_nguon,thoi_luong_phut
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s)
+                  nguon,nguon_url,website,ma_nguon,thoi_luong_phut,
+                  diem_danh_gia,so_nhan_xet,google_place_id,google_maps_url
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT(nguon_url) DO UPDATE SET
                   ten=EXCLUDED.ten, loai=EXCLUDED.loai, khu_vuc=EXCLUDED.khu_vuc,
                   tags=EXCLUDED.tags, gio_mo_cua=EXCLUDED.gio_mo_cua,
                   toa_do=EXCLUDED.toa_do, hinh_anh=EXCLUDED.hinh_anh,
                   hinh_anh_nguon=EXCLUDED.hinh_anh_nguon,
-                  thoi_luong_phut=EXCLUDED.thoi_luong_phut, ngay_tao=now()
+                  website=EXCLUDED.website,
+                  thoi_luong_phut=EXCLUDED.thoi_luong_phut,
+                  diem_danh_gia=EXCLUDED.diem_danh_gia,
+                  so_nhan_xet=EXCLUDED.so_nhan_xet,
+                  google_place_id=EXCLUDED.google_place_id,
+                  google_maps_url=EXCLUDED.google_maps_url,
+                  ngay_tao=now()
                 RETURNING id
                 """,
                 (
@@ -124,7 +140,8 @@ def main() -> None:
                     [], json.dumps({"open": curated.open_hour, "close": curated.close_hour}),
                     json.dumps({"lat": curated.lat, "lng": curated.lng}),
                     None, image_url, image_credit,
-                    "curated", f"curated:{curated.id}", curated.id, curated.duration_min,
+                    "curated", f"curated:{curated.id}", None, curated.id, curated.duration_min,
+                    None, None, None, None,
                 ),
             ).fetchone()
             ids[curated.id] = str(row[0])

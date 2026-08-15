@@ -1,10 +1,17 @@
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime
 
-from app.data import PLACES, Place, place_name_key
+from app.data import PLACES, Place, place_name_key, source_for
 from app.pipeline import planner
 from app.pipeline import visit_guidance
+from app.pipeline.cp_sat_solver import (
+    optimize_day_schedule_with_cp_sat,
+    optimize_order_with_cp_sat,
+    select_places_with_cp_sat,
+    verify_fixed_schedule_with_cp_sat,
+)
 from app.pipeline.planner import COPY, build_plan, validate_plan
+from app.pipeline.solar import sunset_for_date
 from app.schemas import PlanRequest, UserPreferencesRequest
 from app.services.weather import WEATHER_COPY
 
@@ -180,6 +187,44 @@ def test_llm_place_names_outside_destination_are_ignored(monkeypatch):
     )
 
 
+def test_llm_place_names_outside_catalog_are_ignored(monkeypatch):
+    def draft_external(context: str, count: int, locale: str):
+        return [
+            {"name": "Imaginary Verified Park", "kind": "dia_danh", "why": "not in catalog"}
+            for _ in range(count)
+        ]
+
+    external = Place(
+        "osm-verified-node-999",
+        "Imaginary Verified Park",
+        "dia_danh",
+        "Hà Nội",
+        21.0285,
+        105.8542,
+        0,
+        60,
+        ("osm_verified",),
+        7,
+        22,
+        "Nominatim",
+        "https://www.openstreetmap.org/node/999",
+    )
+    monkeypatch.setattr(planner.ai_adapter, "draft_itinerary_places", draft_external)
+    monkeypatch.setattr(planner, "verify_place_name", lambda name, origin: external)
+
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội cả ngày",
+                "nonce": "nonce-ignore-external-llm-place-0001",
+            }
+        )
+    )
+
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    assert external.id not in {slot["dia_diem_id"] for slot in slots}
+
+
 def test_validate_plan_rejects_slots_outside_requested_destination():
     hanoi_plan = build_plan(
         request().model_copy(
@@ -228,13 +273,118 @@ def test_slots_include_ranking_data_source_and_time_reason():
         "khop_gio_mo_cua",
         "so_nhan_xet",
     }
+    assert evidence["xep_hang"]["ho_so_hanh_vi"]["version"] == 0
+    assert evidence["xep_hang"]["ho_so_hanh_vi"]["tin_hieu_tag"] == 0
     assert evidence["du_lieu"]["nguon"]
     assert evidence["du_lieu"]["co_toa_do"] is True
-    assert evidence["xep_hang"]["thanh_phan"]["diem_danh_gia"] is None
-    assert evidence["xep_hang"]["thanh_phan"]["so_nhan_xet"] is None
+    assert evidence["xep_hang"]["thanh_phan"]["diem_danh_gia"] == 40
+    assert evidence["xep_hang"]["thanh_phan"]["so_nhan_xet"] == 20
     assert {"rating", "so_review"} <= set(evidence["xep_hang"]["du_lieu_thieu"])
     assert evidence["xep_hang"]["du_lieu_thuc_te"] == {"rating": None, "so_nhan_xet": None}
     assert evidence["thoi_diem"]["ly_do"]
+
+
+def test_ranking_evidence_uses_fixed_five_factor_formula_with_missing_fallbacks():
+    req = request().model_copy(update={"context": "thích lịch sử và chữa lành"})
+    profiles = planner._intent_profiles(planner.relevant_tags(req.context))
+    place = Place(
+        id="formula-place",
+        name="Formula Museum",
+        kind="bao_tang",
+        area="Hà Nội",
+        lat=req.location.lat,
+        lng=req.location.lng,
+        cost=50_000,
+        duration_min=90,
+        tags=("lich_su", "healing"),
+        open_hour=8,
+        close_hour=18,
+        source="test",
+    )
+    object.__setattr__(place, "rating", 4.5)
+    object.__setattr__(place, "review_count", 1000)
+
+    evidence = planner._ranking_evidence(
+        place,
+        req,
+        planner.relevant_tags(req.context),
+        profiles,
+        req.location.lat,
+        req.location.lng,
+    )
+
+    assert evidence["thanh_phan"] == {
+        "muc_phu_hop": 100,
+        "diem_danh_gia": 90,
+        "vi_tri_khoang_cach": 100,
+        "khop_gio_mo_cua": 100,
+        "so_nhan_xet": 100,
+    }
+    assert evidence["diem_tong"] == 97.5
+
+    missing_evidence = planner._ranking_evidence(
+        Place(
+            id="missing-place",
+            name="Missing Rating Place",
+            kind="dia_danh",
+            area="Hà Nội",
+            lat=req.location.lat + 0.02,
+            lng=req.location.lng,
+            cost=0,
+            duration_min=60,
+            tags=(),
+            open_hour=8,
+            close_hour=18,
+            source="test",
+        ),
+        req,
+        set(),
+        [],
+        req.location.lat,
+        req.location.lng,
+    )
+    assert missing_evidence["thanh_phan"]["diem_danh_gia"] == 40
+    assert missing_evidence["thanh_phan"]["so_nhan_xet"] == 20
+    assert {"rating", "so_review"} <= set(missing_evidence["du_lieu_thieu"])
+
+
+def test_place_model_keeps_google_rating_review_and_maps_source():
+    req = request()
+    place = Place(
+        id="google-backed-place",
+        name="Google Backed Place",
+        kind="dia_danh",
+        area="Hoàn Kiếm",
+        lat=req.location.lat,
+        lng=req.location.lng,
+        cost=0,
+        duration_min=60,
+        tags=("view_dep",),
+        open_hour=8,
+        close_hour=18,
+        source="OpenStreetMap",
+        source_url="https://www.openstreetmap.org/node/1",
+        rating=4.7,
+        review_count=1200,
+        google_place_id="google-place-1",
+        google_maps_url="https://maps.google.com/?cid=1",
+    )
+
+    evidence = planner._ranking_evidence(
+        place,
+        req,
+        planner.relevant_tags(req.context),
+        planner._intent_profiles(planner.relevant_tags(req.context)),
+        req.location.lat,
+        req.location.lng,
+    )
+    source_url, source_label = source_for(place)
+
+    assert evidence["du_lieu_thuc_te"] == {"rating": 4.7, "so_nhan_xet": 1200}
+    assert "rating" not in evidence["du_lieu_thieu"]
+    assert "so_review" not in evidence["du_lieu_thieu"]
+    assert source_url == "https://maps.google.com/?cid=1"
+    assert source_label == "google_places_source"
 
 
 def test_plan_marks_vietnam_holiday_timing_context():
@@ -250,7 +400,159 @@ def test_plan_marks_vietnam_holiday_timing_context():
 
     timing = plan["tieu_chi_thoi_diem"]
     assert timing["lich_nghi_le"]["ma"] == "quoc_khanh"
+    assert timing["lich_nghi_le"]["gio_mo_cua_can_xac_minh"] is True
     assert "Chợ đêm" in " ".join(timing["quy_tac"])
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    assert all(slot["gio_mo_cua"]["trang_thai_xac_minh"] == "holiday_hours_warning" for slot in slots)
+    assert all(
+        slot["bang_chung"]["thoi_diem"]["lich_nghi_le"]["ma"] == "quoc_khanh"
+        for slot in slots
+    )
+
+
+def test_tet_plan_does_not_treat_normal_hours_as_release_evidence():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội dịp Tết Nguyên đán",
+                "ngay_di": date(2026, 2, 17),
+                "nonce": "nonce-tet-holiday-hours-0001",
+            }
+        )
+    )
+
+    timing = plan["tieu_chi_thoi_diem"]["lich_nghi_le"]
+    assert timing["ma"] == "tet_nguyen_dan"
+    assert timing["khong_dung_gio_thuong_lam_bang_chung_phat_hanh"] is True
+    blockers = plan["danh_gia_chat_luong"]["cong_phat_hanh"]["chan_bo"]
+    assert any("Tết Nguyên đán" in blocker for blocker in blockers)
+    for slot in [slot for day in plan["ngay"] for slot in day["khoang_gio"]]:
+        assert slot["gio_mo_cua"]["trang_thai_xac_minh"] == "holiday_hours_required_before_release"
+        holiday = slot["bang_chung"]["thoi_diem"]["lich_nghi_le"]
+        assert holiday["ma"] == "tet_nguyen_dan"
+        assert holiday["gio_mo_cua_can_xac_minh"] is True
+        assert "giờ mở cửa ngày lễ/Tết cần xác minh" in slot["giai_thich"]
+
+
+def test_seasonal_festival_policy_is_recorded_for_focus_city():
+    plan = build_plan(
+        PlanRequest.model_validate(
+            {
+                "context": "du lịch Đà Nẵng mùa biển",
+                "location": {"lat": 16.0544, "lng": 108.2022},
+                "thoi_luong": "ca_ngay",
+                "so_nguoi": 2,
+                "ngan_sach": 1_000_000,
+                "ma_phien": "test-session",
+                "ngay_di": date(2026, 6, 15),
+                "nonce": "nonce-seasonal-policy-0001",
+            }
+        )
+    )
+
+    seasonal = plan["tieu_chi_thoi_diem"]["mua_vu_le_hoi"]
+    assert seasonal["co_san"] is True
+    assert seasonal["diem_den"] == "Đà Nẵng"
+    assert seasonal["trang_thai"] == "recommended_season"
+    assert seasonal["thang"] == 6
+    assert "lễ hội pháo hoa" in " ".join(seasonal["ghi_chu_le_hoi"]).lower()
+    assert "Mùa vụ/lễ hội" in " ".join(plan["tieu_chi_thoi_diem"]["quy_tac"])
+
+
+def test_sunset_context_is_computed_and_attached_to_timing_evidence():
+    sunset = sunset_for_date(date(2026, 9, 2), 21.0285, 105.8542)
+
+    assert sunset["co_san"] is True
+    assert sunset["nguon"] == "noaa_solar_position_approximation"
+    assert 17 * 60 <= sunset["hoang_hon_phut"] <= 19 * 60
+
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội Hồ Tây ngắm hoàng hôn",
+                "ngay_di": date(2026, 9, 2),
+                "nonce": "nonce-sunset-context-0001",
+            }
+        )
+    )
+
+    timing = plan["tieu_chi_thoi_diem"]
+    assert timing["thien_van"]["co_san"] is True
+    assert timing["thien_van"]["hoang_hon"] == sunset["hoang_hon"]
+    assert "hoàng hôn" in " ".join(timing["quy_tac"])
+    slot_timing = [
+        slot["bang_chung"]["thoi_diem"]
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+    ]
+    assert all(item["thien_van"]["nguon"] == "noaa_solar_position_approximation" for item in slot_timing)
+
+    ho_tay = next(place for place in PLACES if place.id == "curated-ho-tay")
+    sunset_start = datetime(2026, 9, 2, 17, 15)
+    evidence = planner._slot_evidence(ho_tay, request(), sunset_start, None, None, sunset)
+    assert evidence["thoi_diem"]["thien_van"]["gan_hoang_hon"] is True
+    assert "hoàng hôn" in evidence["thoi_diem"]["ly_do"]
+
+
+def test_traffic_peak_policy_is_recorded_in_plan_and_travel_evidence():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội cả ngày, đi lại hợp lý",
+                "nonce": "nonce-traffic-peak-policy-0001",
+            }
+        )
+    )
+
+    peak_policy = plan["tieu_chi_thoi_diem"]["gio_cao_diem"]
+    assert peak_policy["trang_thai"] == "heuristic_no_live_traffic"
+    assert {window["ten"] for window in peak_policy["khung_gio"]} == {
+        "cao_diem_sang",
+        "cao_diem_chieu",
+    }
+
+    legs = [
+        slot["di_chuyen_tu_diem_truoc"]
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+        if slot.get("di_chuyen_tu_diem_truoc")
+    ]
+    assert legs
+    assert all(leg["gio_cao_diem"]["nguon"] == "quy_tac_noi_bo_gio_cao_diem_do_thi_viet_nam" for leg in legs)
+
+    assert planner._traffic_peak_for_clock("08:15")["khung"] == "cao_diem_sang"
+    assert planner._traffic_peak_for_clock("17:30")["khung"] == "cao_diem_chieu"
+    assert planner._traffic_peak_for_clock("11:00")["trong_gio_cao_diem"] is False
+
+
+def test_lodging_coordinates_are_used_as_route_anchor(monkeypatch):
+    captured: dict[str, tuple[float, float]] = {}
+    original_ordered_route = planner._ordered_route
+    lodging = {"lat": 21.0401, "lng": 105.7902}
+
+    def capture_route(places, origin):
+        captured["origin"] = origin
+        return original_ordered_route(places, origin)
+
+    monkeypatch.setattr(planner, "_ordered_route", capture_route)
+    plan = build_plan(
+        PlanRequest.model_validate(
+            request().model_dump(mode="json")
+            | {
+                "context": "du lịch Hà Nội cả ngày",
+                "noi_luu_tru": lodging,
+                "ten_noi_luu_tru": "<b>Khách sạn Hồ Tây</b>",
+                "nonce": "nonce-lodging-anchor-0001",
+            }
+        )
+    )
+
+    assert captured["origin"] == (lodging["lat"], lodging["lng"])
+    lodging_context = plan["rang_buoc_luu_tru"]
+    assert lodging_context["co_noi_luu_tru"] is True
+    assert lodging_context["ten"] == "bKhách sạn Hồ Tây/b"
+    assert lodging_context["toa_do"] == lodging
+    assert lodging_context["nguon"] == "plan_request.noi_luu_tru"
 
 
 def test_schedule_reserves_travel_time_between_stops():
@@ -407,9 +709,9 @@ def test_each_night_market_tag_has_hard_evening_floor_in_normal_and_relax():
         assert meal_bounds[0] >= day_start.replace(hour=18)
 
 
-def test_untagged_osm_night_market_name_still_has_evening_floor():
+def test_osm_night_market_name_still_has_evening_floor():
     market = next(place for place in PLACES if place.id == "osm-node-4489385889")
-    assert market.tags == ("attraction",)
+    assert "attraction" in market.tags
     assert planner._is_evening_place(market)
     day_start = planner.datetime(2026, 8, 10, 8)
 
@@ -557,6 +859,7 @@ def test_extra_candidate_skips_used_name_alias_and_tries_next(monkeypatch):
         source="curated",
     )
     monkeypatch.setattr(planner, "PLACES", [alias, fallback])
+    planner._places_near.cache_clear()
 
     chosen = planner._choose_extra_sight(
         request(),
@@ -569,6 +872,7 @@ def test_extra_candidate_skips_used_name_alias_and_tries_next(monkeypatch):
 
     assert chosen is not None
     assert chosen.id == "different-next"
+    planner._places_near.cache_clear()
 
 
 def test_backfill_tries_next_candidate_when_first_cannot_fit(monkeypatch):
@@ -621,6 +925,155 @@ def test_validator_rejects_hallucinated_place():
     plan = build_plan(request())
     plan["ngay"][0]["khoang_gio"][0]["dia_diem_id"] = "fake"
     assert "Có địa điểm ngoài danh sách tin cậy" in validate_plan(plan, set())
+
+
+def test_cp_sat_feasibility_rejects_missing_travel_gap():
+    a = Place("cp-a", "A", "dia_danh", "Ha Noi", 21.0, 105.8, 0, 60, (), 8, 22, "test")
+    b = Place("cp-b", "B", "dia_danh", "Ha Noi", 21.01, 105.81, 0, 60, (), 8, 22, "test")
+    plan = {
+        "ngay": [
+            {
+                "khoang_gio": [
+                    {"dia_diem_id": "cp-a", "bat_dau": "08:00", "ket_thuc": "09:00"},
+                    {"dia_diem_id": "cp-b", "bat_dau": "09:00", "ket_thuc": "10:00"},
+                ]
+            }
+        ]
+    }
+
+    result = verify_fixed_schedule_with_cp_sat(plan, {"cp-a": a, "cp-b": b}, lambda _a, _b: 30)
+
+    assert result.available is True
+    assert result.feasible is False
+    assert result.blockers == ("cp_sat_infeasible",)
+
+
+def test_cp_sat_candidate_selection_respects_budget_and_count():
+    cheap_good = Place(
+        id="sel-a", name="A", kind="dia_danh", area="Hà Nội", lat=21.0, lng=105.8,
+        cost=20_000, duration_min=60, tags=("view_dep",), source="OpenStreetMap",
+    )
+    expensive_best = Place(
+        id="sel-b", name="B", kind="dia_danh", area="Hà Nội", lat=21.0, lng=105.81,
+        cost=200_000, duration_min=60, tags=("view_dep",), source="OpenStreetMap",
+    )
+    cheap_ok = Place(
+        id="sel-c", name="C", kind="dia_danh", area="Hà Nội", lat=21.0, lng=105.82,
+        cost=30_000, duration_min=60, tags=("view_dep",), source="OpenStreetMap",
+    )
+
+    result = select_places_with_cp_sat(
+        [cheap_good, expensive_best, cheap_ok],
+        2,
+        60_000,
+        {"sel-a": 80, "sel-b": 100, "sel-c": 70},
+    )
+
+    assert result.available is True
+    assert set(result.selected_ids) == {"sel-a", "sel-c"}
+    assert result.objective_score == 150
+
+
+def test_cp_sat_order_optimizer_minimizes_travel_from_origin():
+    a = Place("ord-a", "A", "dia_danh", "Ha Noi", 21.0, 105.8, 0, 60, (), 8, 22, "test")
+    b = Place("ord-b", "B", "dia_danh", "Ha Noi", 21.0, 105.9, 0, 60, (), 8, 22, "test")
+    c = Place("ord-c", "C", "dia_danh", "Ha Noi", 21.0, 106.0, 0, 60, (), 8, 22, "test")
+    origin_minutes = {"ord-a": 1, "ord-b": 50, "ord-c": 60}
+    pair_minutes = {
+        ("ord-a", "ord-b"): 1,
+        ("ord-b", "ord-c"): 1,
+        ("ord-a", "ord-c"): 60,
+        ("ord-c", "ord-b"): 1,
+        ("ord-b", "ord-a"): 1,
+        ("ord-c", "ord-a"): 60,
+    }
+
+    result = optimize_order_with_cp_sat(
+        [c, b, a],
+        (21.0, 105.8),
+        lambda _origin, place: origin_minutes[place.id],
+        lambda left, right: pair_minutes[(left.id, right.id)],
+    )
+
+    assert result.available is True
+    assert result.ordered_ids == ("ord-a", "ord-b", "ord-c")
+    assert result.objective_travel_minutes == 3
+
+
+def test_cp_sat_day_schedule_jointly_selects_times_and_respects_travel_budget():
+    a = Place("day-a", "A", "dia_danh", "Ha Noi", 21.0, 105.8, 20_000, 60, (), 8, 12, "test")
+    b = Place("day-b", "B", "dia_danh", "Ha Noi", 21.0, 105.81, 30_000, 60, (), 9, 18, "test")
+    c = Place("day-c", "C", "dia_danh", "Ha Noi", 21.0, 105.82, 200_000, 60, (), 9, 18, "test")
+
+    result = optimize_day_schedule_with_cp_sat(
+        [a, b, c],
+        8 * 60,
+        12 * 60,
+        {"day-a": 60, "day-b": 60, "day-c": 60},
+        {"day-a": 80, "day-b": 70, "day-c": 100},
+        lambda _left, _right: 30,
+        min_places=2,
+        max_places=2,
+        budget_per_person=60_000,
+    )
+
+    assert result.available is True
+    assert result.feasible is True
+    assert result.selected_ids == ("day-a", "day-b")
+    assert 8 * 60 <= result.starts["day-a"] <= 11 * 60
+    assert result.starts["day-b"] >= result.starts["day-a"] + 90
+
+
+def test_cp_sat_day_schedule_fails_when_time_windows_cannot_fit():
+    a = Place("tight-a", "A", "dia_danh", "Ha Noi", 21.0, 105.8, 0, 90, (), 8, 10, "test")
+    b = Place("tight-b", "B", "dia_danh", "Ha Noi", 21.0, 105.81, 0, 90, (), 8, 10, "test")
+
+    result = optimize_day_schedule_with_cp_sat(
+        [a, b],
+        8 * 60,
+        10 * 60,
+        {"tight-a": 90, "tight-b": 90},
+        {"tight-a": 80, "tight-b": 70},
+        lambda _left, _right: 45,
+        min_places=2,
+        max_places=2,
+        budget_per_person=100_000,
+    )
+
+    assert result.available is True
+    assert result.feasible is False
+    assert result.blockers == ("cp_sat_day_schedule_infeasible",)
+
+
+def test_planner_uses_cp_sat_candidate_selection_when_llm_is_unavailable(monkeypatch):
+    monkeypatch.setattr(planner.ai_adapter, "draft_itinerary_places", None, raising=False)
+    monkeypatch.setattr(planner.ai_adapter, "propose_place_ids", None, raising=False)
+
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội cả ngày văn hóa lịch sử",
+                "nonce": "nonce-cp-sat-selection-plan-0001",
+            }
+        )
+    )
+
+    evidence = plan["bo_giai_chon_ung_vien"]
+    assert evidence["phuong_phap"] in {
+        "ortools_cp_sat_day_joint_selection",
+        "ortools_cp_sat_selection",
+    }
+    assert evidence["thu_vien"] == "ortools.sat.python.cp_model"
+    assert evidence["so_ung_vien_xet"] <= evidence["gioi_han_ung_vien"]
+    if evidence["phuong_phap"] == "ortools_cp_sat_day_joint_selection":
+        assert evidence["gioi_han_ung_vien"] == 80
+        assert "time_window" in evidence["vai_tro"]
+        assert "travel" in evidence["vai_tro"]
+        assert "budget" in evidence["vai_tro"]
+        assert evidence["suggested_starts"]
+    else:
+        assert evidence["sap_thu_tu"]["phuong_phap"] == "ortools_cp_sat_order"
+        assert evidence["sap_thu_tu"]["objective_travel_minutes"] is not None
 
 
 def test_delete_validation_relaxes_only_minimum_cardinality():
@@ -835,7 +1288,7 @@ def test_planner_uses_ai_to_select_places_before_scheduling(monkeypatch):
     assert {"curated-ho-tay", "osm-way-37625751", "curated-ho-guom"} <= place_ids
 
 
-def test_planner_can_use_llm_first_places_after_osm_verification(monkeypatch):
+def test_planner_can_use_llm_first_catalog_places_after_verification(monkeypatch):
     class DraftingAI:
         def draft_itinerary_places(self, context, count, locale):
             return [
@@ -886,7 +1339,8 @@ def test_planner_can_use_llm_first_places_after_osm_verification(monkeypatch):
     place_names = {
         slot["ten_dia_diem"] for day in plan["ngay"] for slot in day["khoang_gio"]
     }
-    assert "LLM Verified Stop" in place_names
+    assert "LLM Verified Stop" not in place_names
+    assert {"Hồ Gươm", "Hồ Tây", "Lăng Chủ tịch Hồ Chí Minh"} <= place_names
 
 
 def test_llm_first_details_are_used_in_slot_copy(monkeypatch):
@@ -894,7 +1348,7 @@ def test_llm_first_details_are_used_in_slot_copy(monkeypatch):
         def draft_itinerary_places(self, context, count, locale):
             return [
                 {
-                    "name": "LLM Verified Stop",
+                    "name": "Hồ Gươm",
                     "kind": "dia_danh",
                     "why": "Start here because it gives the trip a clear story.",
                     "activity": "Spend time on the main walk, photo spot, and nearby side streets.",
@@ -902,7 +1356,6 @@ def test_llm_first_details_are_used_in_slot_copy(monkeypatch):
                     "meal": "Try a nearby street snack.",
                     "transport": "Walk to the next Old Quarter stop.",
                 },
-                {"name": "Hồ Gươm", "kind": "dia_danh", "why": "icon"},
                 {"name": "Hồ Tây", "kind": "dia_danh", "why": "icon"},
                 {"name": "Lăng Chủ tịch Hồ Chí Minh", "kind": "dia_danh", "why": "icon"},
                 {"name": "Cà phê phố cổ", "kind": "cafe", "why": "break"},
@@ -913,25 +1366,7 @@ def test_llm_first_details_are_used_in_slot_copy(monkeypatch):
         def assemble(self, draft, trusted_ids, locale):
             return draft
 
-    verified = planner.Place(
-        "verified-llm-stop",
-        "LLM Verified Stop",
-        "dia_danh",
-        "Hà Nội",
-        21.03,
-        105.85,
-        0,
-        45,
-        ("osm_verified",),
-        7,
-        22,
-        "Nominatim",
-        None,
-    )
-
     def fake_verify(name, origin):
-        if name == "LLM Verified Stop":
-            return verified
         return next((place for place in planner.PLACES if place.name == name), None)
 
     monkeypatch.setattr(planner, "ai_adapter", DraftingAI())
@@ -945,7 +1380,7 @@ def test_llm_first_details_are_used_in_slot_copy(monkeypatch):
         slot
         for day in plan["ngay"]
         for slot in day["khoang_gio"]
-        if slot["dia_diem_id"] == "verified-llm-stop"
+        if slot["ten_dia_diem"] == "Hồ Gươm"
     )
     assert "clear story" in slot["mo_ta"]
     assert "photo spot" in slot["mo_ta"]
@@ -981,7 +1416,7 @@ def test_all_supported_locales_localize_copy_without_translating_names_or_source
         assert plan["ngay"][0]["nhan_de"] == COPY[locale][5].format(day=1)
         assert slot["ten_dia_diem"] == place.name
         assert slot["nguon"] == place.source
-        assert slot["nguon_url"] == place.source_url
+        assert slot["nguon_url"] == source_for(place)[0]
         assert "anh" in slot
         assert "anh_nguon" in slot
         assert place.name in slot["mo_ta"]

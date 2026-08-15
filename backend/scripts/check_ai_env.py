@@ -20,7 +20,7 @@ def load_dotenv(path: Path) -> None:
 
 def main() -> int:
     load_dotenv(ENV_FILE)
-    ai_mode = os.getenv("AI_MODE", "mock").strip().lower()
+    ai_mode = os.getenv("AI_MODE", "groq").strip().lower()
     key_env = "API_KEY_GROQ" if ai_mode == "groq" else "API_KEY_DEEPSEEK"
     model_env = "TEN_MODEL_GROQ" if ai_mode == "groq" else "TEN_MODEL_DEEPSEEK"
     default_model = "llama-3.3-70b-versatile" if ai_mode == "groq" else "deepseek-v4-flash"
@@ -35,13 +35,13 @@ def main() -> int:
     print(f"{model_env}={model}")
     print(f"AI_BASE_URL={base_url}")
 
-    if ai_mode == "mock":
-        print("STATUS=mock")
-        print("NEXT=Set AI_MODE=groq and API_KEY_GROQ in .env, then restart run.bat.")
+    if ai_mode == "offline":
+        print("STATUS=offline")
+        print("NEXT=Offline mode is test/local-only. Set AI_MODE=groq and API_KEY_GROQ in .env, then restart run.bat.")
         return 2
     if ai_mode not in {"groq", "deepseek"}:
         print(f"STATUS=unsupported ({ai_mode})")
-        print("NEXT=Use AI_MODE=mock for local fallback, AI_MODE=groq for Groq, or AI_MODE=deepseek.")
+        print("NEXT=Use AI_MODE=groq for Groq or AI_MODE=deepseek. AI_MODE=offline is only for explicit local tests.")
         return 1
     if not api_key:
         print("STATUS=missing_api_key")

@@ -32,6 +32,8 @@ class PlanRequest(BaseModel):
     so_nguoi: int = Field(default=2, ge=1, le=30)
     ngan_sach: int = Field(default=1_000_000, ge=50_000, le=100_000_000)
     ngay_di: date | None = None
+    noi_luu_tru: Coordinate | None = None
+    ten_noi_luu_tru: str | None = Field(default=None, max_length=120)
     ma_phien: str | None = Field(default=None, max_length=100)
     ngon_ngu: Locale = "vi"
     nonce: str | None = Field(default=None, min_length=8, max_length=100)
@@ -43,6 +45,11 @@ class PlanRequest(BaseModel):
         if not cleaned:
             raise ValueError("Nội dung không hợp lệ")
         return cleaned
+
+    @field_validator("ten_noi_luu_tru")
+    @classmethod
+    def clean_lodging_name(cls, value: str | None) -> str | None:
+        return " ".join(value.replace("<", "").replace(">", "").split()) if value else value
 
 
 class SwipeRequest(BaseModel):

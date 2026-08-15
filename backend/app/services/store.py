@@ -19,6 +19,7 @@ class MemoryStore:
     def __init__(self) -> None:
         self.plans: dict[str, StoredPlan] = {}
         self.profile: dict[str, dict[str, int]] = {}
+        self.profile_log: dict[str, list[dict]] = {}
         self.events: list[dict] = []
         self.cost_usd = 0.0
         self.monthly_cost_usd = 0.0
@@ -404,10 +405,62 @@ class MemoryStore:
         self.log(session_id, "dong_y_chinh_sach", {"phien_ban": policy_version})
         return user
 
+    def get_behavior_profile(self, session_id: str, user_id: str | None = None) -> dict:
+        key = user_id or session_id
+        weights = dict(self.profile.get(key, {}))
+        log = list(self.profile_log.get(key, []))
+        observation_count = len(log)
+        is_active = observation_count >= 5
+        return {
+            "schema_version": "behavior-profile-v1",
+            "owner_key": key,
+            "tag_weights": weights if is_active else {},
+            "stored_tag_weights": weights,
+            "version": observation_count,
+            "observation_count": observation_count,
+            "active_after_observations": 5,
+            "is_active": is_active,
+            "change_log": log[-20:],
+        }
+
+    def adjust_tag_weights(
+        self,
+        session_id: str,
+        tag_deltas: dict[str, int],
+        *,
+        user_id: str | None = None,
+        reason: str = "behavior_update",
+        evidence: dict | None = None,
+    ) -> dict:
+        key = user_id or session_id
+        profile = self.profile.setdefault(key, {})
+        sanitized = {
+            str(tag): max(-5, min(5, int(delta)))
+            for tag, delta in tag_deltas.items()
+            if tag and int(delta) != 0
+        }
+        for tag, delta in sanitized.items():
+            profile[tag] = max(-15, min(15, profile.get(tag, 0) + delta))
+        log = self.profile_log.setdefault(key, [])
+        entry = {
+            "version": len(log) + 1,
+            "reason": reason,
+            "tag_deltas": sanitized,
+            "weights_after": dict(profile),
+            "evidence": evidence or {},
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        log.append(entry)
+        self.log(session_id, "cap_nhat_trong_so_hanh_vi", entry)
+        return self.get_behavior_profile(session_id, user_id)
+
     def penalize_tags(self, session_id: str, tags: tuple[str, ...]) -> None:
-        profile = self.profile.setdefault(session_id, {})
-        for tag in tags:
-            profile[tag] = profile.get(tag, 0) - 1
+        self.adjust_tag_weights(
+            session_id,
+            {tag: -1 for tag in tags},
+            reason="user_removed_place",
+            evidence={"removed_tags": list(tags)},
+        )
 
     def get_nonce(self, plan_token: str, nonce: str) -> str | None:
         return self.nonces.get((plan_token, nonce))

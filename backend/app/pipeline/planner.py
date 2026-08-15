@@ -7,18 +7,30 @@ from functools import lru_cache
 import httpx
 
 from app.config import settings
-from app.data import DISTANCE_METADATA, PLACES, Place, image_for
+from app.data import DISTANCE_METADATA, PLACES, Place, image_for, source_for
 from app.pipeline.visit_guidance import VisitGuidance, guidance_for
 from app.pipeline.routing import (
+    TRAVEL_ESTIMATE_POLICY,
+    estimate_travel,
     haversine_km,
     is_routable,
     nearest_neighbor,
     travel_minutes,
+    travel_matrix,
     two_opt,
 )
+from app.pipeline.cp_sat_solver import (
+    optimize_day_schedule_with_cp_sat,
+    optimize_order_with_cp_sat,
+    select_places_with_cp_sat,
+    verify_fixed_schedule_with_cp_sat,
+)
 from app.schemas import PlanRequest
+from app.pipeline.solar import sunset_for_date
 from app.services.ai import ai_adapter
 from app.services.osm_verify import verify_place_name
+from app.services.quality_benchmarks import REQUIRED_BASELINES
+from app.services.store import store
 from app.services.weather import WeatherUnavailable, get_daily_weather
 from app.text_utils import ascii_fold
 
@@ -52,6 +64,22 @@ MAX_IDLE_MINUTES = 35
 MIN_VISIT_MINUTES = 25
 MAX_GAP_BEFORE_FILL_MINUTES = 55
 DESTINATION_RADIUS_KM = 45.0
+DURATION_FALLBACKS: dict[str, tuple[int, int]] = {
+    "bao_tang": (90, 180),
+    "dia_danh": (45, 120),
+    "cong_vien": (45, 120),
+    "cho": (45, 90),
+    "cafe": (45, 90),
+    "nha_hang": (60, 90),
+    "quan_an": (45, 75),
+}
+DATA_STALENESS_POLICY = {
+    "gio_mo_cua": {"max_age_days": 30, "refresh": "kiem_tra_lai truoc khi xep lich"},
+    "gia": {"max_age_days": 90, "refresh": "lam moi khi dia diem duoc goi trong lich"},
+    "trang_thai_hoat_dong": {"max_age_days": 7, "refresh": "chan neu co dau hieu dong cua"},
+    "thoi_luong": {"max_age_days": 180, "refresh": "hieu chinh bang phan hoi giu bo va thuc dia"},
+    "di_chuyen": {"max_age_days": 30, "refresh": "ban thu nghiem dung duong thang co bu sai so"},
+}
 GENERIC_DESTINATION_NAMES = {
     "du lich",
     "tham quan",
@@ -79,7 +107,7 @@ FOCUS_DESTINATIONS: dict[str, dict[str, object]] = {
         "label": "TP.HCM",
         "lat": 10.7769,
         "lng": 106.7009,
-        "aliases": {"tp hcm", "ho chi minh", "sai gon", "saigon", "thanh pho ho chi minh"},
+        "aliases": {"tp hcm", "tp.hcm", "ho chi minh", "sai gon", "saigon", "thanh pho ho chi minh"},
     },
     "ha_long": {
         "label": "Hạ Long",
@@ -116,6 +144,59 @@ FOCUS_DESTINATIONS: dict[str, dict[str, object]] = {
         "lat": 22.3364,
         "lng": 103.8438,
         "aliases": {"sa pa", "sapa"},
+    },
+}
+
+VIETNAM_TRAFFIC_PEAK_POLICY = {
+    "nguon": "quy_tac_noi_bo_gio_cao_diem_do_thi_viet_nam",
+    "trang_thai": "heuristic_no_live_traffic",
+    "khung_gio": [
+        {"ten": "cao_diem_sang", "tu": "07:00", "den": "09:00"},
+        {"ten": "cao_diem_chieu", "tu": "16:30", "den": "19:00"},
+    ],
+    "ghi_chu": "Dùng để ghi/né rủi ro giờ cao điểm khi chưa có provider traffic thật; không thay thế dữ liệu giao thông production.",
+}
+
+SEASONAL_TOURISM_POLICY: dict[str, dict[str, object]] = {
+    "ha_noi": {
+        "best_months": (3, 4, 10, 11),
+        "caution_months": (6, 7, 8, 12, 1, 2),
+        "festival_notes": ("Tết Nguyên đán", "2/9", "mùa thu Hà Nội"),
+    },
+    "tp_hcm": {
+        "best_months": (12, 1, 2, 3, 4),
+        "caution_months": (5, 6, 7, 8, 9, 10),
+        "festival_notes": ("Tết Nguyên đán", "30/4-1/5", "lễ hội cuối năm"),
+    },
+    "ha_long": {
+        "best_months": (3, 4, 10, 11),
+        "caution_months": (6, 7, 8, 9),
+        "festival_notes": ("mùa hè du lịch biển", "lễ hội Hạ Long"),
+    },
+    "da_nang": {
+        "best_months": (3, 4, 5, 6, 7, 8),
+        "caution_months": (9, 10, 11, 12),
+        "festival_notes": ("mùa biển", "lễ hội pháo hoa quốc tế Đà Nẵng"),
+    },
+    "hoi_an": {
+        "best_months": (2, 3, 4, 5, 6, 7, 8),
+        "caution_months": (9, 10, 11),
+        "festival_notes": ("đêm phố cổ", "rằm âm lịch"),
+    },
+    "nha_trang": {
+        "best_months": (2, 3, 4, 5, 6, 7, 8),
+        "caution_months": (10, 11, 12),
+        "festival_notes": ("mùa biển", "Festival Biển Nha Trang"),
+    },
+    "phu_quoc": {
+        "best_months": (11, 12, 1, 2, 3, 4),
+        "caution_months": (6, 7, 8, 9, 10),
+        "festival_notes": ("mùa biển khô", "cao điểm cuối năm"),
+    },
+    "sa_pa": {
+        "best_months": (3, 4, 5, 9, 10, 11),
+        "caution_months": (12, 1, 2, 6, 7, 8),
+        "festival_notes": ("mùa lúa chín", "mùa săn mây"),
     },
 }
 
@@ -317,9 +398,9 @@ OLD_QUARTER_TERMS = {
 }
 
 SEMANTIC_TAG_ALIASES = {
-    "tre_em": {"tre_em", "gia_dinh", "family", "kids"},
+    "tre_em": {"tre_em", "tre", "em", "gia_dinh", "gia", "dinh", "family", "kids"},
     "gia_re": {"gia_re", "tiet_kiem", "binh_dan", "cheap", "budget"},
-    "yen_tinh": {"yen_tinh", "chill", "healing", "chua_lanh", "thu_gian"},
+    "yen_tinh": {"yen_tinh", "chill", "healing", "chua", "lanh", "chua_lanh", "thu_gian"},
     "checkin": {"checkin", "song_ao", "anh_dep", "view_dep"},
     "ngoai_troi": {"ngoai_troi", "bien", "nui", "di_bo", "outdoor"},
     "trong_nha": {"trong_nha", "bao_tang", "museum", "indoor"},
@@ -431,8 +512,8 @@ def _destination_context(request: PlanRequest) -> tuple[float, float, str | None
     context = _ascii_fold(request.context).casefold()
     return _destination_context_from_text(
         context,
-        round(request.location.lat, 4),
-        round(request.location.lng, 4),
+        round(_lodging_anchor(request)[0], 4),
+        round(_lodging_anchor(request)[1], 4),
     )
 
 
@@ -625,6 +706,19 @@ def _request_understanding(request: PlanRequest) -> dict:
     }
 
 
+def missing_required_inputs(request: PlanRequest) -> dict:
+    understanding = _request_understanding(request)
+    missing = list(understanding.get("bat_buoc_thieu") or [])
+    questions = {
+        "diem_den": "Bạn muốn đi điểm đến/thành phố nào?",
+    }
+    return {
+        "missing_fields": missing,
+        "questions": [questions.get(field, f"Vui lòng bổ sung {field}") for field in missing],
+        "understanding": understanding,
+    }
+
+
 def _distance_score(distance_km: float) -> int:
     if distance_km < 1:
         return 100
@@ -645,17 +739,15 @@ def _numeric_place_metric(place: Place, *names: str) -> float | None:
     return None
 
 
-def _review_count_score(review_count: float | None) -> int | None:
+def _review_count_score(review_count: float | None) -> int:
     if review_count is None or review_count <= 0:
-        return None
+        return 20
     if review_count >= 1000:
         return 100
-    if review_count >= 300:
-        return 85
     if review_count >= 100:
-        return 70
-    if review_count >= 30:
-        return 55
+        return 80
+    if review_count >= 10:
+        return 60
     return 40
 
 
@@ -666,6 +758,7 @@ def _ranking_evidence(
     profiles: list[dict[str, set[str]]],
     destination_lat: float,
     destination_lng: float,
+    behavior_profile: dict | None = None,
 ) -> dict:
     place_tags = set(place.tags)
     matched_profiles = 0
@@ -688,24 +781,30 @@ def _ranking_evidence(
     rating_score = (
         max(0, min(100, round((rating_value / 5) * 100)))
         if rating_value is not None and 0 <= rating_value <= 5
-        else None
+        else 40
     )
     review_score = _review_count_score(review_count)
+    tag_weights = (behavior_profile or {}).get("tag_weights") if isinstance(behavior_profile, dict) else {}
+    behavior_signal = 0
+    if isinstance(tag_weights, dict):
+        behavior_signal = sum(
+            int(tag_weights.get(tag, 0))
+            for tag in place_tags
+            if isinstance(tag_weights.get(tag, 0), int)
+        )
     weighted_components = [
         (30, suitability),
+        (25, rating_score),
         (20, _distance_score(distance)),
         (15, opening_score),
+        (10, review_score),
     ]
-    if rating_score is not None:
-        weighted_components.append((25, rating_score))
-    if review_score is not None:
-        weighted_components.append((10, review_score))
     total_weight = sum(weight for weight, _ in weighted_components)
     total = round(sum(weight * score for weight, score in weighted_components) / total_weight, 2)
     missing = []
-    if rating_score is None:
+    if rating_value is None:
         missing.append("rating")
-    if review_score is None:
+    if review_count is None:
         missing.append("so_review")
     if not place.image_url and not image_for(place)[0]:
         missing.append("anh")
@@ -718,13 +817,19 @@ def _ranking_evidence(
             "khop_gio_mo_cua": opening_score,
             "so_nhan_xet": review_score,
         },
+        "ho_so_hanh_vi": {
+            "schema_version": (behavior_profile or {}).get("schema_version"),
+            "version": (behavior_profile or {}).get("version", 0),
+            "tin_hieu_tag": behavior_signal,
+            "gioi_han": "Hành vi người dùng được ghi riêng để điều chỉnh trọng số/tag trong giới hạn an toàn; công thức điểm phát hành vẫn giữ 5 tiêu chí cố định.",
+        },
         "khoang_cach_km": round(distance, 2),
         "du_lieu_thuc_te": {
             "rating": rating_value,
             "so_nhan_xet": int(review_count) if review_count is not None else None,
         },
         "du_lieu_thieu": missing,
-        "ghi_chu": "Chỉ tính rating/số nhận xét khi dữ liệu thật có trong catalog hoặc cache; nếu thiếu thì đánh dấu thiếu, không dùng điểm giả.",
+        "ghi_chu": "Rating thiếu dùng điểm dự phòng 40 và số nhận xét thiếu dùng 20 theo spec; dữ liệu thiếu vẫn được đánh dấu, không bịa giá trị thật.",
     }
 
 
@@ -736,11 +841,87 @@ def _holiday_note(trip_date) -> dict | None:
                 "ma": code,
                 "ghi_chu": note,
                 "nguon": "quy_tac_noi_bo_lich_nghi_le_viet_nam",
+                "gio_mo_cua_can_xac_minh": True,
+                "khong_dung_gio_thuong_lam_bang_chung_phat_hanh": code == "tet_nguyen_dan",
             }
     return None
 
 
-def _time_reason(place: Place, meal_type: str | None, start: datetime, weather: dict | None) -> str:
+def _holiday_hours_status(holiday: dict | None) -> dict | None:
+    if not holiday:
+        return None
+    return {
+        "ma": holiday.get("ma"),
+        "ghi_chu": holiday.get("ghi_chu"),
+        "nguon": holiday.get("nguon"),
+        "gio_mo_cua_can_xac_minh": True,
+        "trang_thai_xac_minh": (
+            "holiday_hours_required_before_release"
+            if holiday.get("khong_dung_gio_thuong_lam_bang_chung_phat_hanh")
+            else "holiday_hours_warning"
+        ),
+    }
+
+
+def _destination_key_from_label(label: str | None) -> str | None:
+    if not label:
+        return None
+    normalized = _ascii_fold(label).casefold()
+    for key, destination in FOCUS_DESTINATIONS.items():
+        if _ascii_fold(str(destination["label"])).casefold() == normalized:
+            return key
+    return None
+
+
+def _seasonal_context(destination_label: str | None, trip_date) -> dict:
+    key = _destination_key_from_label(destination_label)
+    policy = SEASONAL_TOURISM_POLICY.get(key or "")
+    if not policy:
+        return {
+            "co_san": False,
+            "nguon": "seasonal_tourism_policy_v1",
+            "trang_thai": "no_focus_city_policy",
+            "ghi_chu": "Chưa có policy mùa vụ nội bộ cho điểm đến này.",
+        }
+    month = trip_date.month
+    best_months = tuple(policy["best_months"])
+    caution_months = tuple(policy["caution_months"])
+    status = "recommended_season" if month in best_months else "caution_season" if month in caution_months else "neutral_season"
+    return {
+        "co_san": True,
+        "nguon": "seasonal_tourism_policy_v1",
+        "trang_thai": status,
+        "thang": month,
+        "diem_den": destination_label,
+        "thang_de_xuat": list(best_months),
+        "thang_can_luu_y": list(caution_months),
+        "ghi_chu_le_hoi": list(policy["festival_notes"]),
+        "gioi_han": "Heuristic nội bộ theo thành phố; cần lịch sự kiện/nguồn chính thức theo năm trước phát hành.",
+    }
+
+
+def _is_sunset_suitable(place: Place) -> bool:
+    return (
+        bool({"view_dep", "ho_tay", "beach", "bien", "ngoai_troi", "song", "ho"}.intersection(place.tags))
+        or place.kind in {"bai_bien", "nui", "dia_danh", "cong_vien"}
+    ) and not _is_morning_only(place)
+
+
+def _near_sunset(start: datetime, solar_context: dict | None) -> bool:
+    sunset_minute = (solar_context or {}).get("hoang_hon_phut")
+    if not isinstance(sunset_minute, int):
+        return False
+    start_minute = start.hour * 60 + start.minute
+    return sunset_minute - 105 <= start_minute <= sunset_minute + 20
+
+
+def _time_reason(
+    place: Place,
+    meal_type: str | None,
+    start: datetime,
+    weather: dict | None,
+    solar_context: dict | None = None,
+) -> str:
     if meal_type == "trua":
         return "Bữa trưa được giữ trong khung 11:30 đến 13:30."
     if meal_type == "toi":
@@ -749,6 +930,8 @@ def _time_reason(place: Place, meal_type: str | None, start: datetime, weather: 
         return "Chợ đêm được xếp sau 18:00."
     if _is_morning_only(place):
         return "Địa điểm này ưu tiên buổi sáng do giờ hoạt động hoặc guidance."
+    if _is_sunset_suitable(place) and _near_sunset(start, solar_context):
+        return "Địa điểm ngắm cảnh/ngoài trời được ưu tiên gần hoàng hôn theo tính toán thiên văn."
     if _is_outdoor_place(place) and _weather_discourages_midday_outdoor(weather):
         return "Địa điểm ngoài trời được tránh buổi trưa khi trời nóng hoặc mưa."
     guidance = _guidance(place)
@@ -763,24 +946,41 @@ def _slot_evidence(
     start: datetime,
     meal_type: str | None,
     weather: dict | None,
+    solar_context: dict | None = None,
+    behavior_profile: dict | None = None,
 ) -> dict:
     tags = relevant_tags(request.context)
     profiles = _intent_profiles(tags)
     destination_lat, destination_lng, _ = _destination_context(request)
     open_hour, close_hour = _effective_hours(place)
+    timing = {
+        "ly_do": _time_reason(place, meal_type, start, weather, solar_context),
+        "gio_mo_cua_hieu_luc": {"open": open_hour, "close": close_hour},
+    }
+    if solar_context and solar_context.get("co_san"):
+        timing["thien_van"] = {
+            "hoang_hon": solar_context.get("hoang_hon"),
+            "nguon": solar_context.get("nguon"),
+            "gan_hoang_hon": _is_sunset_suitable(place) and _near_sunset(start, solar_context),
+        }
     return {
-        "xep_hang": _ranking_evidence(place, request, tags, profiles, destination_lat, destination_lng),
+        "xep_hang": _ranking_evidence(
+            place,
+            request,
+            tags,
+            profiles,
+            destination_lat,
+            destination_lng,
+            behavior_profile,
+        ),
         "du_lieu": {
             "nguon": place.source,
-            "nguon_url": place.source_url,
+            "nguon_url": source_for(place)[0],
             "co_toa_do": True,
             "co_gio_mo_cua": 0 <= open_hour < close_hour <= 24,
             "co_anh": bool(image_for(place)[0]),
         },
-        "thoi_diem": {
-            "ly_do": _time_reason(place, meal_type, start, weather),
-            "gio_mo_cua_hieu_luc": {"open": open_hour, "close": close_hour},
-        },
+        "thoi_diem": timing,
     }
 
 
@@ -795,10 +995,16 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     wants_hanoi_highlights = bool(destination_is_hanoi and explicit_anchor and (destination_label is None or tags.intersection({"ha_noi", "hanoi", "pho_co"})))
     wants_night = bool(destination_is_hanoi and tags.intersection(INTENT_PROFILES["night"]["terms"]))
     by_id = {place.id: place for place in PLACES}
-    place_ids = [
-        *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
-        *((*HANOI_NIGHT_IDS,) if wants_night else ()),
-    ]
+    if wants_night:
+        place_ids = [
+            "curated-ho-guom",
+            "curated-ho-tay",
+            "curated-pho-co-ha-noi",
+            *HANOI_NIGHT_IDS,
+            *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
+        ]
+    else:
+        place_ids = list(HANOI_HIGHLIGHT_IDS) if wants_hanoi_highlights else []
     return [
         place
         for place_id in place_ids
@@ -908,6 +1114,26 @@ def _anchor_for_places(places: list[Place], fallback: tuple[float, float]) -> tu
         sum(place.lat for place in places) / len(places),
         sum(place.lng for place in places) / len(places),
     )
+
+
+def _lodging_anchor(request: PlanRequest) -> tuple[float, float]:
+    if request.noi_luu_tru:
+        return (request.noi_luu_tru.lat, request.noi_luu_tru.lng)
+    return (request.location.lat, request.location.lng)
+
+
+def _lodging_context(request: PlanRequest) -> dict:
+    anchor = _lodging_anchor(request)
+    return {
+        "co_noi_luu_tru": request.noi_luu_tru is not None,
+        "ten": request.ten_noi_luu_tru,
+        "toa_do": {"lat": anchor[0], "lng": anchor[1]},
+        "nguon": "plan_request.noi_luu_tru" if request.noi_luu_tru else "plan_request.location",
+        "rang_buoc": [
+            "Dùng nơi lưu trú làm điểm neo xuất phát/kết thúc khi người dùng cung cấp.",
+            "Chọn bữa ăn và điểm phụ gần nơi lưu trú/cụm điểm trong ngày để giảm vòng di chuyển.",
+        ],
+    }
 
 
 def _near_anchor(place: Place, anchor: tuple[float, float], radius_km: float = DESTINATION_RADIUS_KM) -> bool:
@@ -1218,7 +1444,7 @@ def _build_day_route(
 ) -> list[tuple[Place, str | None]]:
     if request.thoi_luong != "vai_gio":
         route = _interleave_meals(day_sights, day_meals)
-        anchor = _anchor_for_places(day_sights, (request.location.lat, request.location.lng))
+        anchor = _anchor_for_places(day_sights, _lodging_anchor(request))
         lunch_at = next((i for i, (_, meal) in enumerate(route) if meal == "trua"), None)
         if request.thoi_luong in {"ca_ngay", "nhieu_ngay"} and remaining_budget > 0 and lunch_at is not None:
             rest = _choose_midday_rest(request, used, anchor, seed, remaining_budget, used_names)
@@ -1254,7 +1480,7 @@ def _build_day_route(
                         used_names.add(name_key)
         return route
     sights = day_sights[:2]
-    anchor = _anchor_for_places(sights, (request.location.lat, request.location.lng))
+    anchor = _anchor_for_places(sights, _lodging_anchor(request))
     refresh = None
     if _wants_coffee(request) or request.thoi_luong == "vai_gio":
         refresh = _choose_refreshment(request, used, anchor, seed, remaining_budget, used_names)
@@ -1321,7 +1547,7 @@ def _pick_day_meals(
     seed: int,
     used_names: set[str],
 ) -> list[tuple[str, Place]]:
-    anchor = _anchor_for_places(day_sights, (request.location.lat, request.location.lng))
+    anchor = _anchor_for_places(day_sights, _lodging_anchor(request))
     meals: list[tuple[str, Place]] = []
     remaining = budget_per_person
     for meal_type in _meals_per_day(request.thoi_luong):
@@ -1461,11 +1687,268 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
     return max(MIN_VISIT_MINUTES, minutes)
 
 
+def _duration_estimate_for(place: Place, meal_type: str | None, planned_minutes: int | None = None) -> dict:
+    if meal_type:
+        base = MEAL_DURATION.get(meal_type, place.duration_min or 60)
+        lower, upper = max(30, base - 15), min(120, base + 15)
+        source = "meal_window_policy"
+        confidence = "medium"
+        estimated = True
+    else:
+        tip = _guidance(place)
+        if tip and tip.duration_min:
+            lower = max(20, tip.duration_min - 15)
+            upper = tip.duration_min + 30
+            source = tip.source or "official_or_guide_guidance"
+            confidence = "high"
+            estimated = False
+        elif place.duration_min > 0:
+            lower = max(20, round(place.duration_min * 0.8))
+            upper = max(lower, round(place.duration_min * 1.25))
+            source = place.source
+            confidence = "medium" if place.source not in {"local_seed", "curated"} else "low"
+            estimated = place.source in {"local_seed", "curated"}
+        else:
+            lower, upper = DURATION_FALLBACKS.get(place.kind, (45, 90))
+            source = "fallback_by_place_kind"
+            confidence = "low"
+            estimated = True
+    if planned_minutes is not None:
+        lower = min(lower, planned_minutes)
+        upper = max(upper, planned_minutes)
+    return {
+        "toi_thieu_phut": lower,
+        "toi_da_phut": upper,
+        "ke_hoach_phut": planned_minutes,
+        "do_tin_cay": confidence,
+        "nguon": source,
+        "uoc_luong": estimated,
+        "ghi_chu": "AI khong tu sinh thoi luong; gia tri nay lay tu huong dan, catalog hoac fallback co cau truc.",
+    }
+
+
+def _slot_duration_minutes(slot: dict) -> int:
+    return max(0, _parse_slot_clock(slot["ket_thuc"]) - _parse_slot_clock(slot["bat_dau"]))
+
+
+def _traffic_peak_for_clock(clock: str) -> dict:
+    minute = _parse_slot_clock(clock)
+    for window in VIETNAM_TRAFFIC_PEAK_POLICY["khung_gio"]:
+        start = _parse_slot_clock(window["tu"])
+        end = _parse_slot_clock(window["den"])
+        if start <= minute <= end:
+            return {
+                "trong_gio_cao_diem": True,
+                "khung": window["ten"],
+                "nguon": VIETNAM_TRAFFIC_PEAK_POLICY["nguon"],
+                "ghi_chu": VIETNAM_TRAFFIC_PEAK_POLICY["ghi_chu"],
+            }
+    return {
+        "trong_gio_cao_diem": False,
+        "khung": None,
+        "nguon": VIETNAM_TRAFFIC_PEAK_POLICY["nguon"],
+        "ghi_chu": VIETNAM_TRAFFIC_PEAK_POLICY["ghi_chu"],
+    }
+
+
+def _attach_evidence(plan: dict, request: PlanRequest, places: tuple[Place, ...]) -> None:
+    by_id = {place.id: place for place in places}
+    decision_log: list[dict] = []
+    holiday = (
+        plan.get("tieu_chi_thoi_diem", {}).get("lich_nghi_le")
+        if isinstance(plan.get("tieu_chi_thoi_diem"), dict)
+        else None
+    )
+    holiday_status = _holiday_hours_status(holiday if isinstance(holiday, dict) else None)
+    for day in plan.get("ngay", []):
+        previous: Place | None = None
+        for slot in day.get("khoang_gio", []):
+            place = by_id.get(slot.get("dia_diem_id"))
+            if not place:
+                continue
+            planned_minutes = _slot_duration_minutes(slot)
+            duration = _duration_estimate_for(place, slot.get("bua_an"), planned_minutes)
+            slot["thoi_luong"] = duration
+            open_hour, close_hour = _effective_hours(place)
+            guidance = _guidance(place)
+            slot["gio_mo_cua"] = {
+                "mo": f"{open_hour:02d}:00",
+                "dong": f"{close_hour:02d}:00",
+                "nguon": guidance.source if guidance else place.source,
+            }
+            if holiday_status:
+                slot["gio_mo_cua"]["trang_thai_xac_minh"] = holiday_status["trang_thai_xac_minh"]
+                slot["gio_mo_cua"]["ghi_chu_ngay_le"] = holiday_status["ghi_chu"]
+            travel = None
+            if previous:
+                estimate = estimate_travel(previous, place)
+                travel = estimate.__dict__
+                travel["gio_cao_diem"] = _traffic_peak_for_clock(slot["bat_dau"])
+                slot["di_chuyen_tu_diem_truoc"] = travel
+            reasons = [
+                f"khop gio mo cua {open_hour:02d}:00 den {close_hour:02d}:00",
+                f"thoi luong ke hoach {planned_minutes} phut trong khoang {duration['toi_thieu_phut']} den {duration['toi_da_phut']} phut",
+            ]
+            if travel:
+                reasons.append(f"di chuyen tam tinh {travel['minutes']} phut tu diem truoc")
+                if travel.get("gio_cao_diem", {}).get("trong_gio_cao_diem"):
+                    reasons.append("chặng này được đánh dấu rủi ro giờ cao điểm")
+            if holiday_status:
+                reasons.append("giờ mở cửa ngày lễ/Tết cần xác minh bằng nguồn chính thức trước khi phát hành")
+            evidence = slot.get("bang_chung") if isinstance(slot.get("bang_chung"), dict) else {}
+            timing_evidence = evidence.get("thoi_diem") if isinstance(evidence.get("thoi_diem"), dict) else {}
+            if holiday_status:
+                timing_evidence["lich_nghi_le"] = holiday_status
+                timing_evidence["gio_mo_cua_hieu_luc"] = {
+                    **(timing_evidence.get("gio_mo_cua_hieu_luc") or {}),
+                    "trang_thai_xac_minh": holiday_status["trang_thai_xac_minh"],
+                }
+                evidence["thoi_diem"] = timing_evidence
+            evidence.update({
+                "dia_diem_id": place.id,
+                "nguon_dia_diem": place.source,
+                "nguon_url": source_for(place)[0],
+                "thoi_luong": duration,
+                "di_chuyen": travel,
+                "rang_buoc_da_ap": ["gio_mo_cua", "ngan_sach", "khong_trung_dia_diem", "thoi_gian_di_chuyen"],
+                "tag_khop": sorted(place.tags),
+                "ly_do_luat": reasons,
+                "lay_luc": datetime.now(UTC).isoformat(),
+            })
+            slot["bang_chung"] = evidence
+            slot["giai_thich"] = f"{place.name} được chọn vì " + "; ".join(reasons) + "."
+            decision_log.append(slot["bang_chung"])
+            previous = place
+    all_places = [by_id[slot["dia_diem_id"]] for day in plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") in by_id]
+    plan["bang_chung_quyet_dinh"] = decision_log
+    plan["chinh_sach_do_cu_du_lieu"] = DATA_STALENESS_POLICY
+    plan["bang_thoi_gian_di_chuyen"] = {
+        "trang_thai": TRAVEL_ESTIMATE_POLICY["status"],
+        "cong_thuc": TRAVEL_ESTIMATE_POLICY["formula"],
+        "ghi_chu": TRAVEL_ESTIMATE_POLICY["note"],
+        "ma_tran": travel_matrix(all_places),
+    }
+
+
+def _quality_report(plan: dict, request: PlanRequest, trusted_ids: set[str], places: tuple[Place, ...]) -> dict:
+    slots = [slot for day in plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
+    max_minutes = LIMITS[request.thoi_luong][1] * LIMITS[request.thoi_luong][2]
+    scheduled_minutes = sum(_slot_duration_minutes(slot) for slot in slots)
+    utilization = round(scheduled_minutes / max_minutes, 2) if max_minutes else 0
+    tags = {
+        tag
+        for tag in relevant_tags(request.context)
+        if tag not in {"du", "lich", "di", "choi", "ngay", "nguoi", "toi", "va"}
+    }
+    by_id = {place.id: place for place in places}
+    covered = sorted(
+        tag
+        for tag in tags
+        if any(tag in {ascii_fold(item).replace(" ", "_") for item in by_id.get(slot.get("dia_diem_id"), Place("", "", "", "", 0, 0, 0, 0, ())).tags} for slot in slots)
+    )
+    feasibility_errors = validate_plan(plan, trusted_ids, request)
+    cp_sat = verify_fixed_schedule_with_cp_sat(plan, by_id, travel_minutes)
+    day_optimizer_reports = []
+    for day in plan.get("ngay", []):
+        day_slots = [slot for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") in by_id]
+        day_places = [by_id[slot["dia_diem_id"]] for slot in day_slots]
+        if not day_places:
+            continue
+        starts = [_parse_slot_clock(slot["bat_dau"]) for slot in day_slots]
+        ends = [_parse_slot_clock(slot["ket_thuc"]) for slot in day_slots]
+        durations = {slot["dia_diem_id"]: _slot_duration_minutes(slot) for slot in day_slots}
+        scores = {
+            slot["dia_diem_id"]: int(
+                ((slot.get("bang_chung") or {}).get("xep_hang") or {}).get("diem_tong", 0) * 100
+            )
+            for slot in day_slots
+        }
+        result = optimize_day_schedule_with_cp_sat(
+            day_places,
+            min(starts) if starts else 8 * 60,
+            max(ends) if ends else 22 * 60,
+            durations,
+            scores,
+            travel_minutes,
+            min_places=len(day_places),
+            max_places=len(day_places),
+            budget_per_person=request.ngan_sach,
+            max_candidates=50,
+        )
+        day_optimizer_reports.append(
+            {
+                "ngay": day.get("thu_tu"),
+                "co_san": result.available,
+                "hop_le": result.feasible,
+                "trang_thai": result.status,
+                "so_ung_vien_xet": result.candidate_count,
+                "selected_ids": list(result.selected_ids),
+                "starts": {key: f"{value // 60:02d}:{value % 60:02d}" for key, value in result.starts.items()},
+                "objective_score": result.objective_score,
+                "chan_bo": list(result.blockers),
+            }
+        )
+    release_blockers = []
+    if feasibility_errors:
+        release_blockers.extend(feasibility_errors)
+    if not cp_sat.available or not cp_sat.feasible:
+        release_blockers.extend(f"CP-SAT: {blocker}" for blocker in cp_sat.blockers)
+    if utilization < 0.6:
+        release_blockers.append("Lich dung duoi 60 phan tram khung gio kha thi")
+    holiday = (
+        plan.get("tieu_chi_thoi_diem", {}).get("lich_nghi_le")
+        if isinstance(plan.get("tieu_chi_thoi_diem"), dict)
+        else None
+    )
+    if isinstance(holiday, dict) and holiday.get("khong_dung_gio_thuong_lam_bang_chung_phat_hanh"):
+        release_blockers.append(
+            "Tết Nguyên đán: cần giờ mở cửa/lịch hoạt động chính thức theo năm, không dùng giờ thường làm bằng chứng phát hành"
+        )
+    return {
+        "phien_ban_bo_do": "release-readiness-quality-v1",
+        "tinh_kha_thi": {"hop_le": not feasibility_errors, "loi": feasibility_errors},
+        "do_phu_so_thich": {
+            "so_thich_nhan_dien": sorted(tags),
+            "so_thich_duoc_phu": covered,
+            "ty_le": round(len(covered) / len(tags), 2) if tags else 1.0,
+            "ghi_chu": "Do tren tag co san cua dia diem, khong dung diem cua he thong lam dap an chuan.",
+        },
+        "muc_su_dung_khung_gio": utilization,
+        "bo_giai_cp_sat": {
+            "thu_vien": "ortools.sat.python.cp_model",
+            "vai_tro": "kiem_chung_kha_thi_lich_da_chon",
+            "co_san": cp_sat.available,
+            "hop_le": cp_sat.feasible,
+            "trang_thai": cp_sat.status,
+            "so_slot_kiem_tra": cp_sat.checked_slots,
+            "objective_minutes": cp_sat.objective_minutes,
+            "chan_bo": list(cp_sat.blockers),
+        },
+        "bo_giai_cp_sat_ngay": {
+            "thu_vien": "ortools.sat.python.cp_model",
+            "vai_tro": "toi_uu_lai_theo_ngay_voi_time_window_travel_budget_tren_slot_da_chon",
+            "gioi_han_hien_tai": "Chạy trên các slot đã chọn để kiểm tra mô hình joint scheduling; chưa thay thế full optimizer 50-100 ứng viên trước phát hành.",
+            "ket_qua": day_optimizer_reports,
+            "tat_ca_hop_le": bool(day_optimizer_reports) and all(item["hop_le"] for item in day_optimizer_reports),
+        },
+        "moc_so_sanh_bat_buoc": {
+            name: {
+                "bat_buoc": True,
+                "trang_thai": "required_before_release",
+                "chan_phat_hanh_neu_thua": True,
+            }
+            for name in REQUIRED_BASELINES
+        },
+        "cong_phat_hanh": {"dat": not release_blockers, "chan_bo": release_blockers},
+    }
+
+
 def _preference_score(
     place: Place,
     meal_type: str | None,
     hour: float,
     weather: dict | None = None,
+    solar_context: dict | None = None,
 ) -> float:
     if _is_night_market(place):
         open_hour, close_hour = _effective_hours(place)
@@ -1494,6 +1977,12 @@ def _preference_score(
     if _is_outdoor_place(place):
         if _weather_discourages_midday_outdoor(weather) and 11 <= hour < 15:
             return -35
+        sunset_minute = (solar_context or {}).get("hoang_hon_phut")
+        if _is_sunset_suitable(place) and isinstance(sunset_minute, int):
+            sunset_hour = sunset_minute / 60
+            sunset_score = 18 - abs(hour - (sunset_hour - 0.75)) * 8
+            if sunset_hour - 1.75 <= hour <= sunset_hour + 0.35:
+                return max(16, sunset_score)
         if 7 <= hour < 10.5:
             return 14
         if 14 <= hour <= 18:
@@ -1620,6 +2109,8 @@ def _pack_day_slots(
     scheduled_ids: set[str],
     scheduled_names: set[str],
     weather: dict | None = None,
+    solar_context: dict | None = None,
+    behavior_profile: dict | None = None,
     max_slots: int = 10,
 ) -> tuple[list[dict], int]:
     day_end = day_start + timedelta(minutes=max_minutes)
@@ -1654,7 +2145,13 @@ def _pack_day_slots(
                     continue
                 start, end, _visit = bounds
                 idle = max(0, (start - arrive).total_seconds() / 60)
-                score = _preference_score(place, meal_type, start.hour + start.minute / 60, weather)
+                score = _preference_score(
+                    place,
+                    meal_type,
+                    start.hour + start.minute / 60,
+                    weather,
+                    solar_context,
+                )
                 score -= idle * 0.6
                 score -= travel * 0.15
                 if relax:
@@ -1709,11 +2206,19 @@ def _pack_day_slots(
             "chi_phi": place.cost * request.so_nguoi,
             "toa_do": {"lat": place.lat, "lng": place.lng},
             "nguon": place.source,
-            "nguon_url": place.source_url,
+            "nguon_url": source_for(place)[0],
             "anh": image_url,
             "anh_nguon": image_credit,
             "ghi_chu": ghi_chu,
-            "bang_chung": _slot_evidence(place, request, start, meal_type, weather),
+            "bang_chung": _slot_evidence(
+                place,
+                request,
+                start,
+                meal_type,
+                weather,
+                solar_context,
+                behavior_profile,
+            ),
         }
         if meal_type:
             slot["bua_an"] = meal_type
@@ -1805,6 +2310,8 @@ def _backfill_day_gaps(
     seed: int,
     max_slots: int,
     weather: dict | None = None,
+    solar_context: dict | None = None,
+    behavior_profile: dict | None = None,
 ) -> tuple[list[dict], int]:
     """Insert nearby attractions into long idle gaps between packed stops."""
     if len(slots) < 1 or len(slots) >= max_slots:
@@ -1881,11 +2388,19 @@ def _backfill_day_gaps(
             "chi_phi": candidate.cost * request.so_nguoi,
             "toa_do": {"lat": candidate.lat, "lng": candidate.lng},
             "nguon": candidate.source,
-            "nguon_url": candidate.source_url,
+            "nguon_url": source_for(candidate)[0],
             "anh": image_url,
             "anh_nguon": image_credit,
             "ghi_chu": ghi_chu,
-            "bang_chung": _slot_evidence(candidate, request, start, None, weather),
+            "bang_chung": _slot_evidence(
+                candidate,
+                request,
+                start,
+                None,
+                weather,
+                solar_context,
+                behavior_profile,
+            ),
         }
         slots.insert(index + 1, slot)
         scheduled_ids.add(candidate.id)
@@ -1928,7 +2443,7 @@ def _schedule_stop(
         "chi_phi": place.cost * request.so_nguoi,
         "toa_do": {"lat": place.lat, "lng": place.lng},
         "nguon": place.source,
-        "nguon_url": place.source_url,
+        "nguon_url": source_for(place)[0],
         "anh": image_url,
         "anh_nguon": image_credit,
         "ghi_chu": ghi_chu,
@@ -2030,8 +2545,10 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     wants_night = _wants_night(request)
     wants_coffee = _wants_coffee(request)
     seed = _request_seed(request)
+    behavior_profile = store.get_behavior_profile(request.ma_phien) if request.ma_phien else {}
+    tag_weights = behavior_profile.get("tag_weights", {}) if isinstance(behavior_profile, dict) else {}
     destination_lat, destination_lng, destination_label = _destination_context(request)
-    source_places = _nearby_places((destination_lat, destination_lng)) if destination_label else tuple(PLACES)
+    source_places = _nearby_places((destination_lat, destination_lng))
     candidates = [
         p for p in source_places
         if p.id not in excluded
@@ -2040,10 +2557,7 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
         and not _looks_like_non_travel_business(p)
         and not _mentions_other_destination(p, destination_label)
         and not _looks_closed(p)
-        and (
-            destination_label is None
-            or haversine_km(destination_lat, destination_lng, p.lat, p.lng) <= DESTINATION_RADIUS_KM
-        )
+        and haversine_km(destination_lat, destination_lng, p.lat, p.lng) <= DESTINATION_RADIUS_KM
         and not (
             p.source == "curated"
             and {"pho_co", "old_quarter", "hang_pho"}.intersection(p.tags)
@@ -2065,6 +2579,7 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
             -int(p.kind in {"dia_danh", "bao_tang"}),
             -int(p.source == "curated"),
             -len(tags.intersection(p.tags)),
+            -sum(int(tag_weights.get(tag, 0)) for tag in p.tags if isinstance(tag_weights.get(tag, 0), int)),
             haversine_km(destination_lat, destination_lng, p.lat, p.lng),
             p.cost,
             _place_seed(p, seed),
@@ -2257,6 +2772,7 @@ def _select_llm_first_places(
     details_by_id: dict[str, dict] = {}
     seen: set[str] = set()
     seen_names: set[str] = set()
+    candidate_ids = {place.id for place in candidates}
     destination_lat, destination_lng, destination_label = _destination_context(request)
     origin = (destination_lat, destination_lng)
     for item in suggestions:
@@ -2264,7 +2780,7 @@ def _select_llm_first_places(
         if not isinstance(name, str) or not name.strip():
             continue
         place = verify_place_name(name.strip(), origin)
-        if not place or place.id in seen or place.cost > request.ngan_sach:
+        if not place or place.id not in candidate_ids or place.id in seen or place.cost > request.ngan_sach:
             continue
         if destination_label and not _near_anchor(place, origin):
             continue
@@ -2448,7 +2964,9 @@ def _select_sight_places(
     candidates: list[Place],
     sight_count: int,
     request: PlanRequest,
-) -> tuple[list[Place], dict[str, dict]]:
+    max_minutes: int,
+    number_of_days: int,
+) -> tuple[list[Place], dict[str, dict], dict]:
     sight_pool = _dedupe_places(_sight_candidates(candidates, request))
     llm_details_by_id: dict[str, dict] = {}
     allow_cafe = _wants_coffee(request)
@@ -2463,7 +2981,95 @@ def _select_sight_places(
             ]
         )
         if len(chosen) >= min(sight_count, 2):
-            return chosen[:sight_count], llm_details_by_id
+            return chosen[:sight_count], llm_details_by_id, {
+                "phuong_phap": "llm_catalog_guarded",
+                "ghi_chu": "LLM chỉ chọn id có trong catalog tin cậy; planner vẫn kiểm tra ràng buộc sau đó.",
+            }
+    score_by_id = {
+        place.id: max(1, (len(sight_pool) - index) * 10 + _tourism_quality_score(place))
+        for index, place in enumerate(sight_pool)
+    }
+    cp_day = None
+    if number_of_days == 1:
+        cp_day = optimize_day_schedule_with_cp_sat(
+            sight_pool,
+            8 * 60,
+            8 * 60 + max_minutes,
+            {place.id: max(MIN_VISIT_MINUTES, place.duration_min or 60) for place in sight_pool[:80]},
+            score_by_id,
+            travel_minutes,
+            min_places=sight_count,
+            max_places=sight_count,
+            budget_per_person=request.ngan_sach,
+            max_candidates=80,
+        )
+        if cp_day.selected_ids:
+            by_id = {place.id: place for place in sight_pool}
+            chosen = [by_id[place_id] for place_id in cp_day.selected_ids if place_id in by_id]
+            if len(chosen) >= min(sight_count, 2):
+                return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+                    "phuong_phap": "ortools_cp_sat_day_joint_selection",
+                    "thu_vien": "ortools.sat.python.cp_model",
+                    "trang_thai": cp_day.status,
+                    "vai_tro": "chon_va_xep_lai_ung_vien_theo_ngay_voi_time_window_duration_travel_budget",
+                    "so_ung_vien_xet": cp_day.candidate_count,
+                    "gioi_han_ung_vien": 80,
+                    "objective_score": cp_day.objective_score,
+                    "selected_ids": list(cp_day.selected_ids),
+                    "suggested_starts": {
+                        place_id: f"{minute // 60:02d}:{minute % 60:02d}"
+                        for place_id, minute in cp_day.starts.items()
+                    },
+                    "chan_bo": list(cp_day.blockers),
+                }
+    cp_selection = select_places_with_cp_sat(
+        sight_pool,
+        sight_count,
+        request.ngan_sach,
+        score_by_id,
+        max_candidates=40,
+    )
+    if cp_selection.selected_ids:
+        by_id = {place.id: place for place in sight_pool}
+        chosen = [by_id[place_id] for place_id in cp_selection.selected_ids if place_id in by_id]
+        if len(chosen) >= min(sight_count, 2):
+            origin = _lodging_anchor(request)
+            origin_place = Place(
+                id="__origin__",
+                name="Origin",
+                kind="origin",
+                area="origin",
+                lat=origin[0],
+                lng=origin[1],
+                cost=0,
+                duration_min=0,
+                tags=(),
+            )
+            order = optimize_order_with_cp_sat(
+                _dedupe_places(chosen)[:sight_count],
+                origin,
+                lambda _origin, place: travel_minutes(origin_place, place),
+                travel_minutes,
+            )
+            if order.ordered_ids:
+                ordered_by_id = {place.id: place for place in chosen}
+                chosen = [ordered_by_id[place_id] for place_id in order.ordered_ids if place_id in ordered_by_id]
+            return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+                "phuong_phap": "ortools_cp_sat_selection",
+                "thu_vien": "ortools.sat.python.cp_model",
+                "trang_thai": cp_selection.status,
+                "so_ung_vien_xet": cp_selection.candidate_count,
+                "gioi_han_ung_vien": 40,
+                "objective_score": cp_selection.objective_score,
+                "sap_thu_tu": {
+                    "phuong_phap": "ortools_cp_sat_order",
+                    "trang_thai": order.status,
+                    "so_diem_xet": order.candidate_count,
+                    "objective_travel_minutes": order.objective_travel_minutes,
+                    "chan_bo": list(order.blockers),
+                },
+                "chan_bo": list(cp_selection.blockers),
+            }
     chosen = (
         _select_ai_places(sight_pool, sight_count, request)
         or _select_within_budget(sight_pool, sight_count, request.ngan_sach)
@@ -2473,7 +3079,24 @@ def _select_sight_places(
         for place in chosen
         if not _is_dining_place(place) and _is_sight_place(place, allow_cafe=allow_cafe)
     ]
-    return _dedupe_places(chosen)[:sight_count], llm_details_by_id
+    return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+        "phuong_phap": "fallback_ranked_budget",
+        "cp_sat": {
+            "co_san": cp_selection.available,
+            "trang_thai": cp_selection.status,
+            "chan_bo": list(cp_selection.blockers),
+        },
+        "cp_sat_day_joint": (
+            {
+                "co_san": cp_day.available,
+                "trang_thai": cp_day.status,
+                "so_ung_vien_xet": cp_day.candidate_count,
+                "chan_bo": list(cp_day.blockers),
+            }
+            if cp_day
+            else {"co_san": False, "trang_thai": "not_applicable_multi_day_or_disabled"}
+        ),
+    }
 
 
 def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
@@ -2488,12 +3111,19 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     destination_lat, destination_lng, destination_label = _destination_context(request)
     input_understanding = _request_understanding(request)
     candidates = choose_candidates(request, excluded)
-    sight_chosen, llm_details_by_id = _select_sight_places(candidates, sight_total, request)
+    behavior_profile = store.get_behavior_profile(request.ma_phien) if request.ma_phien else {}
+    sight_chosen, llm_details_by_id, selection_solver_evidence = _select_sight_places(
+        candidates,
+        sight_total,
+        request,
+        max_minutes,
+        number_of_days,
+    )
     sight_chosen = _dedupe_places(sight_chosen)
     if len(sight_chosen) < min(sight_total, 2):
         raise PipelineUnavailable("Không đủ địa điểm tham quan tin cậy trong ngân sách")
 
-    origin = (destination_lat, destination_lng)
+    origin = _lodging_anchor(request)
     ordered_sights = _ordered_route(sight_chosen, origin)
     split_index = (len(ordered_sights) + 1) // 2
     sight_by_day = (
@@ -2503,6 +3133,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     )
 
     trip_date = request.ngay_di or datetime.now(UTC).date()
+    holiday_context = _holiday_note(trip_date)
     copy = COPY[request.ngon_ngu]
     labels = _meal_labels(request.ngon_ngu)
     weather = {
@@ -2517,6 +3148,8 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             )
         except (WeatherUnavailable, ValueError, httpx.HTTPError):
             weather["ghi_chu"] = copy[2]
+    solar_context = sunset_for_date(trip_date, destination_lat, destination_lng)
+    seasonal_context = _seasonal_context(destination_label, trip_date)
 
     seed = _request_seed(request)
     used_ids = {place.id for place in sight_chosen} | (excluded or set())
@@ -2577,6 +3210,8 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             scheduled_ids,
             scheduled_names,
             weather,
+            solar_context,
+            behavior_profile,
             max_slots=max_slots,
         )
         slots, fill_cost = _backfill_day_gaps(
@@ -2594,6 +3229,8 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             seed + day_index,
             max_slots,
             weather,
+            solar_context,
+            behavior_profile,
         )
         total_cost += day_cost + fill_cost
         remaining_budget -= fill_cost // max(request.so_nguoi, 1)
@@ -2624,17 +3261,34 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             "diem_den": input_understanding["diem_den"],
             "ghi_chu": "Ứng viên được lọc từ catalog hiện có, loại điểm không phù hợp du lịch, kiểm tra ngân sách, tọa độ và vùng.",
         },
+        "rang_buoc_luu_tru": _lodging_context(request),
+        "bo_giai_chon_ung_vien": selection_solver_evidence,
+        "ho_so_hanh_vi": {
+            "schema_version": behavior_profile.get("schema_version"),
+            "version": behavior_profile.get("version", 0),
+            "so_tin_hieu": behavior_profile.get("observation_count", 0),
+            "kich_hoat_sau": behavior_profile.get("active_after_observations", 5),
+            "dang_ap_dung": bool(behavior_profile.get("is_active")),
+            "co_log_thay_doi": bool(behavior_profile.get("change_log")),
+            "nguon": "store.ho_so_so_thich",
+        },
         "tieu_chi_thoi_diem": {
-            "lich_nghi_le": _holiday_note(trip_date),
+            "lich_nghi_le": holiday_context,
+            "thien_van": solar_context,
+            "mua_vu_le_hoi": seasonal_context,
             "thoi_tiet": {
                 "co_du_bao": bool(weather.get("nguon")),
                 "tranh_outdoor_buoi_trua": _weather_discourages_midday_outdoor(weather),
             },
+            "gio_cao_diem": VIETNAM_TRAFFIC_PEAK_POLICY,
             "quy_tac": [
                 "Bữa trưa giữ trong khung 11:30 đến 13:30.",
                 "Bữa tối giữ trong khung 18:00 đến 21:00.",
                 "Chợ đêm được xếp sau 18:00.",
                 "Điểm ngoài trời tránh buổi trưa khi trời nóng hoặc mưa nếu có dữ liệu thời tiết.",
+                "Điểm ngắm cảnh/ngoài trời được ưu tiên gần hoàng hôn khi có tính toán thiên văn.",
+                "Mùa vụ/lễ hội theo thành phố được ghi như heuristic nội bộ; lịch sự kiện chính thức theo năm vẫn là điều kiện phát hành.",
+                "Chặng di chuyển trong 07:00-09:00 hoặc 16:30-19:00 được đánh dấu rủi ro giờ cao điểm khi chưa có dữ liệu traffic live.",
                 "Visit guidance đã lưu được ưu tiên khi có dữ liệu.",
             ],
         },
@@ -2642,6 +3296,8 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
         "luu_y": [
             copy[7],
             copy[8],
+            "Thoi gian di chuyen uu tien ma tran OSRM/PostgreSQL da build; cap thieu du lieu se duoc danh dau fallback.",
+            "Neu co noi luu tru, lich trinh dung toa do do lam diem neo xuat phat/ket thuc thay vi chi dung tam thanh pho.",
         ],
     }
     try:
@@ -2652,6 +3308,9 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
             *plan.get("luu_y", []),
             AI_FALLBACK_NOTE.get(request.ngon_ngu, AI_FALLBACK_NOTE["en"]),
         ][:6]
+    evidence_places = tuple([*PLACES, *candidates, *sight_chosen, *meal_places])
+    _attach_evidence(plan, request, evidence_places)
+    plan["danh_gia_chat_luong"] = _quality_report(plan, request, trusted_ids, evidence_places)
     errors = validate_plan(plan, trusted_ids, request)
     if errors:
         raise PipelineUnavailable("; ".join(errors))

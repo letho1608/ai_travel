@@ -11,14 +11,14 @@ from app.schemas import AccountDeleteRequest, OAuthRequest, UserPreferencesReque
 from app.services.store import store
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-DEMO_USERS: dict[str, dict] = {}
+LOCAL_USERS: dict[str, dict] = {}
 POLICY_VERSION = "2026-08-05"
 
 
 def _issue_token(user: dict) -> str:
     if settings.app_env == "local":
-        token = f"mock-jwt-{user['id']}"
-        DEMO_USERS[token] = user
+        token = f"local-jwt-{user['id']}"
+        LOCAL_USERS[token] = user
         return token
     if not settings.app_jwt_secret:
         raise RuntimeError("APP_JWT_SECRET is required outside local mode")
@@ -34,7 +34,7 @@ def resolve_user(authorization: str | None) -> dict | None:
     if not token:
         return None
     if settings.app_env == "local":
-        return DEMO_USERS.get(token)
+        return LOCAL_USERS.get(token)
     if not settings.app_jwt_secret:
         return None
     try:
@@ -61,11 +61,11 @@ def oauth(payload: OAuthRequest):
         raise HTTPException(400, "Bạn cần đồng ý điều khoản và chính sách bảo mật")
     try:
         if settings.app_env == "local":
-            if not payload.token.startswith("mock-google-"):
-                raise ValueError("Mock Google token không hợp lệ")
+            if not payload.token.startswith("local-google-"):
+                raise ValueError("Local Google token không hợp lệ")
             identity = {
                 "sub": str(uuid5(NAMESPACE_URL, payload.token)),
-                "email": "demo@example.com", "name": "Người dùng demo",
+                "email": "local@example.com", "name": "Người dùng local",
             }
         else:
             identity = _verify_google(payload.token)
@@ -125,6 +125,6 @@ def delete_account(
         store.delete_user_data(user["id"])
     except ValueError as exc:
         raise HTTPException(404, "Tài khoản không còn tồn tại") from exc
-    for token, demo_user in list(DEMO_USERS.items()):
-        if demo_user["id"] == user["id"]:
-            DEMO_USERS.pop(token, None)
+    for token, local_user in list(LOCAL_USERS.items()):
+        if local_user["id"] == user["id"]:
+            LOCAL_USERS.pop(token, None)

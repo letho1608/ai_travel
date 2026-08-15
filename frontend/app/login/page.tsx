@@ -69,7 +69,7 @@ export default function Login() {
     <label className="consent"><input type="checkbox" checked={consent} disabled={busy} onChange={event => updateConsent(event.target.checked)}/> <span>{t("consentBefore")} <Link href="/terms">{t("termsLabel")}</Link> {t("consentBetween")} <Link href="/privacy">{t("privacyLabel")}</Link> {t("consentAfter")}</span></label>
     {!consent && <p className="disclaimer" role="status">{t("consentRequired")}</p>}
     {consent && CLIENT_ID && <div ref={buttonRef} className="google-button" aria-busy={busy} style={{pointerEvents:busy?"none":"auto",opacity:busy?.6:1}}/>}
-    {consent && LOCAL && !CLIENT_ID && <button className="primary form-submit" disabled={busy} onClick={() => submitToken("mock-google-local-user")}>{t("continueGoogle")}</button>}
+    {consent && LOCAL && !CLIENT_ID && <button className="primary form-submit" disabled={busy} onClick={() => submitToken("local-google-user")}>{t("continueGoogle")}</button>}
     {!LOCAL && !CLIENT_ID && <p className="error" role="alert">{t("loginNotConfigured")}</p>}
     {message && <p className="error" role="alert">{message}</p>}
   </main>;

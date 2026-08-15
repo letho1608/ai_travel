@@ -22,6 +22,40 @@ GOOGLE_PHOTO_MEDIA_URL = "https://places.googleapis.com/v1/{photo_name}/media"
 CACHE_PATH = DATA_DIR / "google_place_cache.json"
 
 
+def google_places_readiness() -> dict[str, Any]:
+    blockers: list[str] = []
+    if not settings.google_maps_api_key:
+        blockers.append("GOOGLE_MAPS_API_KEY is not configured.")
+    if settings.google_places_runtime_per_plan_cap <= 0:
+        blockers.append("GOOGLE_PLACES_RUNTIME_PER_PLAN_CAP must be > 0.")
+    if settings.google_places_text_search_daily_cap <= 0 or settings.google_places_text_search_monthly_cap <= 0:
+        blockers.append("Google Places text-search daily/monthly caps must be > 0.")
+    if settings.google_places_runtime_photos and (
+        settings.google_places_photo_daily_cap <= 0 or settings.google_places_photo_monthly_cap <= 0
+    ):
+        blockers.append("Google Places photo caps must be > 0 when runtime photos are enabled.")
+    if settings.google_places_runtime_hours and (
+        settings.google_places_hours_daily_cap <= 0 or settings.google_places_hours_monthly_cap <= 0
+    ):
+        blockers.append("Google Places hours caps must be > 0 when runtime hours are enabled.")
+    return {
+        "ready": not blockers,
+        "status": "ready" if not blockers else "missing_or_invalid_configuration",
+        "api_key_configured": bool(settings.google_maps_api_key),
+        "api_key_length": len(settings.google_maps_api_key or ""),
+        "runtime_per_plan_cap": settings.google_places_runtime_per_plan_cap,
+        "text_search_daily_cap": settings.google_places_text_search_daily_cap,
+        "text_search_monthly_cap": settings.google_places_text_search_monthly_cap,
+        "runtime_photos": settings.google_places_runtime_photos,
+        "photo_daily_cap": settings.google_places_photo_daily_cap,
+        "photo_monthly_cap": settings.google_places_photo_monthly_cap,
+        "runtime_hours": settings.google_places_runtime_hours,
+        "hours_daily_cap": settings.google_places_hours_daily_cap,
+        "hours_monthly_cap": settings.google_places_hours_monthly_cap,
+        "blockers": blockers,
+    }
+
+
 def _load_cache() -> dict[str, Any]:
     if not CACHE_PATH.exists():
         return {"metadata": {}, "places": {}}
@@ -188,6 +222,37 @@ def _apply_enrichment(slot: dict[str, Any], enriched: dict[str, Any], api_key: s
             slot[key] = value
     if enriched.get("google_maps_url"):
         slot["google_review_url"] = enriched["google_maps_url"]
+    rating = enriched.get("google_rating")
+    review_count = enriched.get("google_user_rating_count")
+    if rating is not None or review_count is not None:
+        slot["thong_tin_danh_gia"] = {
+            "rating": rating,
+            "so_nhan_xet": review_count,
+            "nguon": "Google Places API",
+            "nguon_url": enriched.get("google_maps_url"),
+            "lay_luc": enriched.get("google_updated_at"),
+        }
+        evidence = slot.get("bang_chung") if isinstance(slot.get("bang_chung"), dict) else None
+        if evidence is not None:
+            google_evidence = {
+                "rating": rating,
+                "so_nhan_xet": review_count,
+                "nguon": "Google Places API",
+                "nguon_url": enriched.get("google_maps_url"),
+                "lay_luc": enriched.get("google_updated_at"),
+            }
+            evidence["thong_tin_danh_gia"] = google_evidence
+            ranking = evidence.get("xep_hang")
+            if isinstance(ranking, dict):
+                facts = ranking.setdefault("du_lieu_thuc_te", {})
+                if isinstance(facts, dict):
+                    facts["rating"] = rating
+                    facts["so_nhan_xet"] = review_count
+                missing = ranking.get("du_lieu_thieu")
+                if isinstance(missing, list):
+                    ranking["du_lieu_thieu"] = [
+                        item for item in missing if item not in {"rating", "so_review"}
+                    ]
     photo_name = enriched.get("google_photo_name")
     if settings.google_places_runtime_photos and photo_name:
         slot["anh"] = _photo_url(str(photo_name), api_key)

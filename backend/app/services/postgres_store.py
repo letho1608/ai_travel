@@ -550,12 +550,96 @@ class PostgresStore:
             )
 
     def penalize_tags(self, session_id: str, tags: tuple[str, ...]) -> None:
-        # Atomic JSONB merge will be expanded when tag preferences become weighted ranking input.
+        self.adjust_tag_weights(
+            session_id,
+            {tag: -1 for tag in tags},
+            reason="user_removed_place",
+            evidence={"removed_tags": list(tags)},
+        )
+
+    def get_behavior_profile(self, session_id: str, user_id: str | None = None) -> dict:
+        where = "id_nguoi_dung=%s" if user_id else "ma_phien=%s"
+        value = UUID(user_id) if user_id else session_id
         with self._connect() as connection:
+            row = connection.execute(
+                f"SELECT trong_so_tag,trong_so_log FROM ho_so_so_thich WHERE {where}",
+                (value,),
+            ).fetchone()
+        weights = row["trong_so_tag"] if row and isinstance(row["trong_so_tag"], dict) else {}
+        log = row["trong_so_log"] if row and isinstance(row["trong_so_log"], list) else []
+        observation_count = len(log)
+        is_active = observation_count >= 5
+        return {
+            "schema_version": "behavior-profile-v1",
+            "owner_key": user_id or session_id,
+            "tag_weights": weights if is_active else {},
+            "stored_tag_weights": weights,
+            "version": observation_count,
+            "observation_count": observation_count,
+            "active_after_observations": 5,
+            "is_active": is_active,
+            "change_log": log[-20:],
+        }
+
+    def adjust_tag_weights(
+        self,
+        session_id: str,
+        tag_deltas: dict[str, int],
+        *,
+        user_id: str | None = None,
+        reason: str = "behavior_update",
+        evidence: dict | None = None,
+    ) -> dict:
+        sanitized = {
+            str(tag): max(-5, min(5, int(delta)))
+            for tag, delta in tag_deltas.items()
+            if tag and int(delta) != 0
+        }
+        owner_column = "id_nguoi_dung" if user_id else "ma_phien"
+        owner_value = UUID(user_id) if user_id else session_id
+        with self._connect() as connection, connection.transaction():
+            row = connection.execute(
+                f"SELECT trong_so_tag,trong_so_log FROM ho_so_so_thich WHERE {owner_column}=%s FOR UPDATE",
+                (owner_value,),
+            ).fetchone()
+            weights = row["trong_so_tag"] if row and isinstance(row["trong_so_tag"], dict) else {}
+            log = row["trong_so_log"] if row and isinstance(row["trong_so_log"], list) else []
+            next_weights = dict(weights)
+            for tag, delta in sanitized.items():
+                next_weights[tag] = max(-15, min(15, int(next_weights.get(tag, 0)) + delta))
+            entry = {
+                "version": len(log) + 1,
+                "reason": reason,
+                "tag_deltas": sanitized,
+                "weights_after": next_weights,
+                "evidence": evidence or {},
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+            next_log = [*log, entry][-200:]
+            if row:
+                connection.execute(
+                    f"UPDATE ho_so_so_thich SET trong_so_tag=%s::jsonb,trong_so_log=%s::jsonb,ngay_cap_nhat=now() "
+                    f"WHERE {owner_column}=%s",
+                    (
+                        json.dumps(next_weights, ensure_ascii=False),
+                        json.dumps(next_log, ensure_ascii=False),
+                        owner_value,
+                    ),
+                )
+            else:
+                connection.execute(
+                    f"INSERT INTO ho_so_so_thich({owner_column},trong_so_tag,trong_so_log) VALUES(%s,%s::jsonb,%s::jsonb)",
+                    (
+                        owner_value,
+                        json.dumps(next_weights, ensure_ascii=False),
+                        json.dumps(next_log, ensure_ascii=False),
+                    ),
+                )
             connection.execute(
-                "INSERT INTO ho_so_so_thich(ma_phien,trong_so_tag) VALUES(%s,%s::jsonb) "
-                "ON CONFLICT DO NOTHING", (session_id, json.dumps({tag: -1 for tag in tags})),
+                "INSERT INTO nhat_ky(ma_phien,su_kien,du_lieu) VALUES(%s,%s,%s::jsonb)",
+                (session_id, "cap_nhat_trong_so_hanh_vi", json.dumps(entry, ensure_ascii=False)),
             )
+        return self.get_behavior_profile(session_id, user_id)
 
     def get_nonce(self, plan_token: str, nonce: str) -> str | None:
         with self._connect() as connection:

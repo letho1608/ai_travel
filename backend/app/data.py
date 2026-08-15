@@ -22,10 +22,15 @@ class Place:
     tags: tuple[str, ...]
     open_hour: int = 7
     close_hour: int = 22
-    source: str = "demo"
+    source: str = "local_seed"
     source_url: str | None = None
     image_url: str | None = None
     image_credit: str | None = None
+    website: str | None = None
+    rating: float | None = None
+    review_count: int | None = None
+    google_place_id: str | None = None
+    google_maps_url: str | None = None
 
 
 def place_name_key(name: str) -> str:
@@ -38,9 +43,17 @@ def place_name_key(name: str) -> str:
     return " ".join(ascii_fold(name).replace("\u2013", "-").replace("\u2014", "-").split())
 
 
+def _first_present(item: dict, *keys: str):
+    for key in keys:
+        if key in item and item[key] is not None:
+            return item[key]
+    return None
+
+
 PLACE_IMAGE_URLS: dict[str, str] = {
     "bao-tang-phu-nu": "https://commons.wikimedia.org/wiki/Special:FilePath/Vietnamese_Women%27s_Museum_Building.JPG?width=800",
     "curated-ho-guom": "https://commons.wikimedia.org/wiki/Special:FilePath/August%202003%20Hoan%20Kiem%20.jpg?width=800",
+    "curated-den-ngoc-son": "https://commons.wikimedia.org/wiki/Special:FilePath/Temple-ngoc-son-hanoi.jpg?width=800",
     "curated-ho-tay": "https://commons.wikimedia.org/wiki/Special:FilePath/H%E1%BB%93%20T%C3%A2y.png?width=800",
     "curated-lang-bac": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi%20Vietnam%20Mausoleum-of-Ho-Chi-Minh-01.jpg?width=800",
     "curated-pho-co-ha-noi": "https://commons.wikimedia.org/wiki/Special:FilePath/Hanoi%20old%20quarter%20shophouse.jpg?width=800",
@@ -69,6 +82,7 @@ PLACE_IMAGE_URLS: dict[str, str] = {
 PLACE_IMAGE_CREDITS: dict[str, str] = {
     "bao-tang-phu-nu": "Wikimedia Commons (Vietnamese Women's Museum Building)",
     "curated-ho-guom": "Wikimedia Commons (August 2003 Hoan Kiem .jpg)",
+    "curated-den-ngoc-son": "Wikimedia Commons (Temple-ngoc-son-hanoi.jpg)",
     "curated-ho-tay": "Wikimedia Commons (Hồ Tây.png)",
     "curated-lang-bac": "Wikimedia Commons (Hanoi Vietnam Mausoleum-of-Ho-Chi-Minh-01.jpg)",
     "curated-pho-co-ha-noi": "Wikimedia Commons (Hanoi old quarter shophouse.jpg)",
@@ -95,12 +109,35 @@ PLACE_IMAGE_CREDITS: dict[str, str] = {
 }
 
 
+CURATED_SOURCE_URLS: dict[str, str] = {
+    place_id: url
+    for place_id, url in PLACE_IMAGE_URLS.items()
+}
+
+
+def _curated_default_source_url(place_id: str) -> str:
+    if "nha-trang" in place_id or place_id in {
+        "curated-thap-ba-ponagar",
+        "curated-hon-chong",
+        "curated-vien-hai-duong-hoc",
+        "curated-nha-tho-da-nha-trang",
+        "curated-chua-long-son",
+        "curated-hon-mun",
+        "curated-hon-tam",
+        "curated-bai-dai-cam-ranh",
+        "curated-dao-khi-nha-trang",
+        "curated-i-resort-nha-trang",
+    }:
+        return "https://en.wikivoyage.org/wiki/Nha_Trang"
+    return "https://en.wikivoyage.org/wiki/Hanoi/Hoan_Kiem"
+
+
 def image_for(place: "Place") -> tuple[str | None, str | None]:
     """Resolve a place's image (URL, credit) in any catalogue mode.
 
     Order: the place's own recorded image (OSM import / Postgres row), then the
     id-keyed curated map, then the name-keyed map so a catalogue row whose
-    normalized name matches a curated/demo place still surfaces its image even
+    normalized name matches a curated/local-seed place still surfaces its image even
     when the catalogue runs on `ma_nguon` ids (Postgres mode).
     """
     if place.image_url:
@@ -113,7 +150,31 @@ def image_for(place: "Place") -> tuple[str | None, str | None]:
     return PLACE_IMAGE_URLS_BY_NAME.get(key), PLACE_IMAGE_CREDITS_BY_NAME.get(key)
 
 
-DEMO_PLACES = [
+def source_for(place: "Place") -> tuple[str | None, str | None]:
+    """Resolve a place information source without inventing provider facts.
+
+    Imported rows keep their own source URL. Curated rows and their OSM/Postgres
+    same-name twins get the editorial source attached to the curated anchor, so
+    catalogue quality can distinguish source-backed curated data from plain OSM
+    rows while still reporting the limited coverage honestly.
+    """
+    url = CURATED_SOURCE_URLS.get(place.id)
+    if url:
+        return url, "curated_editorial_source"
+    key = place_name_key(place.name)
+    url = CURATED_SOURCE_URLS_BY_NAME.get(key)
+    if url:
+        return url, CURATED_SOURCE_LABELS_BY_NAME.get(key)
+    if place.website:
+        return place.website, "official_website"
+    if place.google_maps_url:
+        return place.google_maps_url, "google_places_source"
+    if place.source_url:
+        return place.source_url, place.source
+    return None, None
+
+
+LOCAL_SEED_PLACES = [
     Place("ho-guom", "Hồ Hoàn Kiếm", "dia_danh", "Hoàn Kiếm", 21.0287, 105.8522, 0, 60, ("di_bo", "chill", "ngoai_troi"), 5, 23),
     Place("bao-tang-phu-nu", "Bảo tàng Phụ nữ Việt Nam", "bao_tang", "Hoàn Kiếm", 21.0235, 105.8515, 40_000, 75, ("van_hoa", "trong_nha"), 8, 17),
     Place("van-mieu", "Văn Miếu – Quốc Tử Giám", "dia_danh", "Đống Đa", 21.0277, 105.8355, 70_000, 75, ("van_hoa", "checkin"), 8, 17),
@@ -149,6 +210,11 @@ def _load_imported_places() -> tuple[list[Place], dict]:
             open_hour=int(item.get("open_hour", 7)), close_hour=int(item.get("close_hour", 22)),
             source=item.get("source", "OpenStreetMap"), source_url=item.get("source_url"),
             image_url=item.get("image_url"), image_credit=item.get("image_credit"),
+            website=item.get("website"),
+            rating=_first_present(item, "google_rating", "rating"),
+            review_count=_first_present(item, "google_user_rating_count", "review_count"),
+            google_place_id=item.get("google_place_id"),
+            google_maps_url=item.get("google_maps_url"),
         )
         for item in payload.get("places", [])
     ]
@@ -171,7 +237,7 @@ def finalize_catalogue(rows: list[Place]) -> list[Place]:
 
     Catalogue rows always win a name collision (they carry OSM verification and
     route-matrix ids); a curated anchor is only appended when no row shares its
-    normalized name. This single step keeps the local (places.json/demo) and
+    normalized name. This single step keeps the local (places.json/offline seed) and
     Postgres (`ma_nguon`) catalogues consistent, so planning logic sees the
     same curated stops in every mode.
     """
@@ -203,6 +269,21 @@ CURATED_HANOI_ANCHORS = [
         ("hanoi_icon", "ho_guom", "hoan_kiem", "di_bo", "chill", "ngoai_troi", "checkin"),
         5,
         23,
+        "curated",
+        None,
+    ),
+    Place(
+        "curated-den-ngoc-son",
+        "Đền Ngọc Sơn",
+        "di_tich",
+        "Hoàn Kiếm",
+        21.0307,
+        105.8523,
+        30_000,
+        60,
+        ("hanoi_icon", "ho_guom", "hoan_kiem", "van_hoa", "lich_su", "di_tich", "temple", "checkin"),
+        8,
+        18,
         "curated",
         None,
     ),
@@ -388,18 +469,20 @@ CURATED_NHA_TRANG_ANCHORS = [
     Place("curated-i-resort-nha-trang", "I-Resort Nha Trang", "giai_tri", "Nha Trang", 12.2820, 109.1770, 170_000, 150, ("nha_trang_icon", "suoi_khoang", "nghi_duong", "chill", "spa", "gia_dinh"), 8, 18, "curated", None),
 ]
 
-# Canonical id -> display name for every curated/demo place, so planning code
-# can resolve a `curated-*`/demo id against a Postgres-style catalogue by name.
+# Canonical id -> display name for every curated/local-seed place, so planning code
+# can resolve a `curated-*`/local-seed id against a Postgres-style catalogue by name.
 KNOWN_PLACE_NAMES_BY_ID: dict[str, str] = {
     place.id: place.name
-    for place in (*DEMO_PLACES, *CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING, *CURATED_NHA_TRANG_ANCHORS)
+    for place in (*LOCAL_SEED_PLACES, *CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING, *CURATED_NHA_TRANG_ANCHORS)
 }
+for _place_id in KNOWN_PLACE_NAMES_BY_ID:
+    CURATED_SOURCE_URLS.setdefault(_place_id, _curated_default_source_url(_place_id))
 
 _CURATED_NAME_KEYS = {place_name_key(name) for name in KNOWN_PLACE_NAMES_BY_ID.values()}
 
 
 def is_curated_named(place: "Place") -> bool:
-    """True when a place carries a canonical curated/demo name.
+    """True when a place carries a canonical curated/local-seed name.
 
     Used by routing so the OSM twin that finalize_catalogue keeps in place of a
     dropped curated anchor (Postgres-style catalogues have no `curated-*` rows)
@@ -432,10 +515,19 @@ def _build_name_image_maps() -> tuple[dict[str, str], dict[str, str]]:
 
 
 PLACE_IMAGE_URLS_BY_NAME, PLACE_IMAGE_CREDITS_BY_NAME = _build_name_image_maps()
+CURATED_SOURCE_URLS_BY_NAME: dict[str, str] = {
+    place_name_key(name): CURATED_SOURCE_URLS[place_id]
+    for place_id, name in KNOWN_PLACE_NAMES_BY_ID.items()
+    if place_id in CURATED_SOURCE_URLS
+}
+CURATED_SOURCE_LABELS_BY_NAME: dict[str, str] = {
+    key: "curated_editorial_source"
+    for key in CURATED_SOURCE_URLS_BY_NAME
+}
 
-# Local catalogue: imported OSM rows (or the demo list when places.json is
+# Local catalogue: imported OSM rows (or the offline seed list when places.json is
 # absent), merged with the curated anchors once the curated lists exist above.
-PLACES = finalize_catalogue(IMPORTED_PLACES if IMPORTED_PLACES else DEMO_PLACES)
+PLACES = finalize_catalogue(IMPORTED_PLACES if IMPORTED_PLACES else LOCAL_SEED_PLACES)
 
 
 def _load_postgres_places() -> tuple[list[Place], dict]:
@@ -445,7 +537,8 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
     with psycopg.connect(database_url, row_factory=dict_row, connect_timeout=3) as connection:
         rows = connection.execute(
             "SELECT ten,loai,khu_vuc,gia_trung_binh,tags,gio_mo_cua,toa_do,"
-            "nguon,nguon_url,ma_nguon,thoi_luong_phut,hinh_anh,hinh_anh_nguon "
+            "nguon,nguon_url,website,ma_nguon,thoi_luong_phut,hinh_anh,hinh_anh_nguon,"
+            "diem_danh_gia,so_nhan_xet,google_place_id,google_maps_url "
             "FROM dia_diem WHERE trang_thai='active' AND ma_nguon IS NOT NULL"
         ).fetchall()
     if not rows:
@@ -460,6 +553,11 @@ def _load_postgres_places() -> tuple[list[Place], dict]:
             close_hour=int((row["gio_mo_cua"] or {}).get("close", 22)),
             source=row["nguon"], source_url=row["nguon_url"],
             image_url=row["hinh_anh"], image_credit=row["hinh_anh_nguon"],
+            website=row["website"],
+            rating=float(row["diem_danh_gia"]) if row["diem_danh_gia"] is not None else None,
+            review_count=int(row["so_nhan_xet"]) if row["so_nhan_xet"] is not None else None,
+            google_place_id=row["google_place_id"],
+            google_maps_url=row["google_maps_url"],
         )
         for row in rows
     ]
@@ -504,7 +602,7 @@ DISTANCE_METADATA = _load_distance_metadata()
 if not DISTANCE_METADATA["loaded"] and os.getenv("APP_ENV", "local") == "local":
     DISTANCE_METADATA = {
         "loaded": True,
-        "updated_at": "local-demo",
-        "profile": "demo_haversine",
+        "updated_at": "local-offline-seed",
+        "profile": "offline_haversine_seed",
         "place_count": len(PLACES),
     }

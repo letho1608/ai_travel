@@ -8,9 +8,20 @@ from fastapi.responses import Response
 from redis.exceptions import RedisError
 
 from app.config import settings
-from app.data import DISTANCE_METADATA, PLACE_METADATA, PLACES
-from app.pipeline.planner import AI_FALLBACK_NOTE
+from app.data import DISTANCE_METADATA, PLACE_METADATA, PLACES, source_for
+from app.pipeline.planner import (
+    AI_FALLBACK_NOTE,
+    DESTINATION_RADIUS_KM,
+    FOCUS_DESTINATIONS,
+    build_plan,
+    haversine_km,
+)
+from app.pipeline.routing import public_transit_policy_status, route_calibration_status
+from app.services.event_calendar import official_event_calendar_status
+from app.services.google_places import google_places_readiness
+from app.services.quality_benchmarks import audit_release_spec, run_release_readiness_benchmark
 from app.services.ai import breaker_status
+from app.services.catalog_quality import catalogue_field_coverage
 from app.services.rate_limit import limiter
 from app.services.store import store
 
@@ -57,12 +68,12 @@ def _provider_statuses() -> list[dict]:
         {
             "name": "AI",
             "mode": settings.ai_mode,
-            "status": "mock" if settings.ai_mode == "mock" else (
+            "status": "offline" if settings.ai_mode == "offline" else (
                 "ready" if settings.ai_api_key else "missing_credentials"
             ),
             "detail": (
-                "Local deterministic mock. No paid AI call is made."
-                if settings.ai_mode == "mock"
+                "Local deterministic offline adapter. No paid AI call is made."
+                if settings.ai_mode == "offline"
                 else settings.ai_model
             ),
         },
@@ -91,9 +102,10 @@ def _provider_statuses() -> list[dict]:
 
 
 def _provider_diagnostics() -> dict:
-    ai_ready = settings.ai_mode != "mock" and bool(settings.ai_api_key)
-    ai_key_env = "API_KEY_GROQ" if settings.ai_mode == "groq" else "API_KEY_DEEPSEEK"
-    ai_model_env = "TEN_MODEL_GROQ" if settings.ai_mode == "groq" else "TEN_MODEL_DEEPSEEK"
+    ai_ready = settings.ai_mode != "offline" and bool(settings.ai_api_key)
+    preferred_ai_mode = settings.ai_mode if settings.ai_mode in {"groq", "deepseek"} else "groq"
+    ai_key_env = "API_KEY_GROQ" if preferred_ai_mode == "groq" else "API_KEY_DEEPSEEK"
+    ai_model_env = "TEN_MODEL_GROQ" if preferred_ai_mode == "groq" else "TEN_MODEL_DEEPSEEK"
     amadeus_ready = bool(settings.amadeus_client_id and settings.amadeus_client_secret)
     return {
         "ai": {
@@ -133,12 +145,16 @@ def _provider_diagnostics() -> dict:
                 else "Add Amadeus client id/secret to enable live flights, hotels, activities and transfers."
             ),
         },
+        "google_places": google_places_readiness(),
         "osrm": {
             "ready": bool(settings.osrm_base_url),
             "base_url": settings.osrm_base_url,
             "required_env": ["OSRM_BASE_URL"],
             "next_action": "Use a private OSRM endpoint for production load." if settings.app_env != "local" else "Local/dev routing can use the public OSRM endpoint.",
         },
+        "public_transit": public_transit_policy_status(),
+        "route_calibration": route_calibration_status(),
+        "official_event_calendar": official_event_calendar_status(),
     }
 
 
@@ -151,11 +167,25 @@ def _catalog_quality() -> dict:
     for place in PLACES:
         by_kind[place.kind] = by_kind.get(place.kind, 0) + 1
         by_source[place.source] = by_source.get(place.source, 0) + 1
-        missing_source_url += 0 if place.source_url else 1
+        missing_source_url += 0 if source_for(place)[0] else 1
         if place.open_hour < 0 or place.open_hour > 23 or place.close_hour < 0 or place.close_hour > 24 or place.open_hour >= place.close_hour:
             unusual_hours += 1
         for tag in place.tags:
             tags[tag] = tags.get(tag, 0) + 1
+    focus_city_counts = {
+        key: sum(
+            1
+            for place in PLACES
+            if haversine_km(
+                float(destination["lat"]),
+                float(destination["lng"]),
+                place.lat,
+                place.lng,
+            )
+            <= DESTINATION_RADIUS_KM
+        )
+        for key, destination in FOCUS_DESTINATIONS.items()
+    }
     coverage = PLACE_METADATA.get("coverage", [])
     failing_coverage = [
         item for item in coverage
@@ -172,8 +202,14 @@ def _catalog_quality() -> dict:
         "unusual_hours": unusual_hours,
         "kind_counts": dict(sorted(by_kind.items(), key=lambda item: item[1], reverse=True)[:12]),
         "source_counts": dict(sorted(by_source.items(), key=lambda item: item[1], reverse=True)[:8]),
+        "focus_city_radius_km": DESTINATION_RADIUS_KM,
+        "focus_city_counts": focus_city_counts,
         "top_tags": dict(sorted(tags.items(), key=lambda item: item[1], reverse=True)[:12]),
         "failing_coverage": failing_coverage,
+        "field_coverage": catalogue_field_coverage(
+            focus_destinations=FOCUS_DESTINATIONS,
+            radius_km=DESTINATION_RADIUS_KM,
+        ),
         "sample_places": [
             {
                 "id": place.id,
@@ -181,7 +217,7 @@ def _catalog_quality() -> dict:
                 "kind": place.kind,
                 "area": place.area,
                 "source": place.source,
-                "source_url": place.source_url,
+                "source_url": source_for(place)[0],
                 "open_hour": place.open_hour,
                 "close_hour": place.close_hour,
             }
@@ -199,20 +235,20 @@ def _ai_quality() -> dict:
         if isinstance(notes, list) and any(note in fallback_notes for note in notes):
             fallback_count += 1
     total = len(items)
-    deterministic_count = total if settings.ai_mode == "mock" else fallback_count
+    deterministic_count = total if settings.ai_mode == "offline" else fallback_count
     return {
         "mode": settings.ai_mode,
         "model": settings.ai_model,
-        "live_provider_ready": settings.ai_mode != "mock" and bool(settings.ai_api_key),
+        "live_provider_ready": settings.ai_mode != "offline" and bool(settings.ai_api_key),
         "total_plans": total,
         "fallback_plan_count": fallback_count,
         "fallback_rate_percent": round((fallback_count / total * 100) if total else 0, 2),
-        "deterministic_mode": settings.ai_mode == "mock",
+        "deterministic_mode": settings.ai_mode == "offline",
         "deterministic_plan_count": deterministic_count,
         "deterministic_rate_percent": round((deterministic_count / total * 100) if total else 0, 2),
         "next_action": (
             "Set AI_MODE=groq and API_KEY_GROQ to enable paid AI assembly."
-            if settings.ai_mode == "mock" or not settings.ai_api_key
+            if settings.ai_mode == "offline" or not settings.ai_api_key
             else "Monitor fallback rate and circuit breaker before increasing traffic."
         ),
     }
@@ -276,6 +312,28 @@ def ai_quality(x_admin_token: str | None = Header(default=None)):
     return _ai_quality()
 
 
+@router.get("/release-readiness")
+def release_readiness(x_admin_token: str | None = Header(default=None)):
+    authorize_admin(x_admin_token)
+    benchmark = run_release_readiness_benchmark(build_plan)
+    spec = audit_release_spec(build_plan)
+    return {
+        "benchmark": benchmark,
+        "spec_audit": spec,
+        "release_gate": {
+            "pass": benchmark["summary"]["release_pass"] and spec["release_gate"]["pass"],
+            "blockers": [
+                *[
+                    blocker
+                    for result in benchmark["results"]
+                    for blocker in result["release_gate"]["blockers"]
+                ],
+                *spec["release_gate"]["blockers"],
+            ],
+        },
+    }
+
+
 @router.get("/catalog/export.csv")
 def catalog_export_csv(
     q: str | None = Query(default=None, max_length=120),
@@ -295,7 +353,7 @@ def catalog_export_csv(
         writer.writerow([
             place.id, place.name, place.kind, place.area, place.lat, place.lng,
             place.cost, place.duration_min, "|".join(place.tags), place.open_hour,
-            place.close_hour, place.source, place.source_url or "",
+            place.close_hour, place.source, source_for(place)[0] or "",
         ])
     return Response(
         output.getvalue(),
@@ -335,7 +393,7 @@ def catalog(
             "open_hour": place.open_hour,
             "close_hour": place.close_hour,
             "source": place.source,
-            "source_url": place.source_url,
+            "source_url": source_for(place)[0],
         }
         for place in matches[:limit]
     ]

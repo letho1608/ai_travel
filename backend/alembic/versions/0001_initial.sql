@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS dia_diem (
   loai text NOT NULL, khu_vuc text, dia_chi text, gia_trung_binh integer,
   tags text[] DEFAULT '{}', phong_cach text[] DEFAULT '{}', gio_mo_cua jsonb,
   toa_do jsonb NOT NULL, mo_ta text, hinh_anh text, hinh_anh_nguon text, nguon text NOT NULL,
-  nguon_url text UNIQUE, ma_nguon text UNIQUE, thoi_luong_phut integer NOT NULL DEFAULT 60,
+  nguon_url text UNIQUE, website text, ma_nguon text UNIQUE, thoi_luong_phut integer NOT NULL DEFAULT 60,
+  diem_danh_gia numeric(2,1), so_nhan_xet integer, google_place_id text, google_maps_url text,
   trang_thai text NOT NULL DEFAULT 'active', ngay_tao timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS bang_khoang_cach (
@@ -129,9 +130,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ho_so_nguoi_dung
   ON ho_so_so_thich(id_nguoi_dung) WHERE ma_phien IS NULL;
 
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS nguon_url text;
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS website text;
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS hinh_anh_nguon text;
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS ma_nguon text;
 ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS thoi_luong_phut integer NOT NULL DEFAULT 60;
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS diem_danh_gia numeric(2,1);
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS so_nhan_xet integer;
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS google_place_id text;
+ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS google_maps_url text;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dia_diem_nguon_url
   ON dia_diem(nguon_url) WHERE nguon_url IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_dia_diem_ma_nguon
@@ -139,3 +145,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_dia_diem_ma_nguon
 ALTER TABLE ho_so_so_thich ADD COLUMN IF NOT EXISTS ngon_ngu text NOT NULL DEFAULT 'vi';
 ALTER TABLE ho_so_so_thich ADD COLUMN IF NOT EXISTS tien_te text NOT NULL DEFAULT 'VND';
 ALTER TABLE ho_so_so_thich ADD COLUMN IF NOT EXISTS don_vi text NOT NULL DEFAULT 'metric';
+ALTER TABLE ho_so_so_thich ADD COLUMN IF NOT EXISTS trong_so_log jsonb NOT NULL DEFAULT '[]';

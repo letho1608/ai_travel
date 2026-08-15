@@ -119,6 +119,13 @@ def test_image_for_returns_url_and_credit_for_every_curated_anchor():
         assert PLACE_IMAGE_CREDITS[curated.id] == credit, curated.id
 
 
+def test_source_for_returns_editorial_source_for_every_curated_anchor():
+    for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING, *data_module.CURATED_NHA_TRANG_ANCHORS):
+        url, label = data_module.source_for(curated)
+        assert url and url.startswith("https://"), curated.id
+        assert label == "curated_editorial_source"
+
+
 def test_image_for_resolves_recorded_catalogue_images_from_live_mapping():
     from app.data import PLACE_IMAGE_CREDITS_BY_NAME, PLACE_IMAGE_URLS_BY_NAME
 
@@ -143,17 +150,17 @@ def test_no_dead_image_keys_in_any_supported_catalogue():
 
     A key is live when its id is present in the loaded catalogue, when the
     place with that (canonical) name exists there — the name-key resolution
-    path — or when it belongs to the demo/demo-curated catalogue used when
+    path — or when it belongs to the local-seed/curated catalogue used when
     places.json is absent.
     """
     loaded_ids = {place.id for place in data_module.PLACES}
     loaded_names = {place_name_key(place.name) for place in data_module.PLACES}
-    demo_ids = {place.id for place in data_module.finalize_catalogue(data_module.DEMO_PLACES)}
+    local_seed_ids = {place.id for place in data_module.finalize_catalogue(data_module.LOCAL_SEED_PLACES)}
     unresolved = [
         place_id
         for place_id in PLACE_IMAGE_URLS
         if place_id not in loaded_ids
-        and place_id not in demo_ids
+        and place_id not in local_seed_ids
         and (
             (name := data_module.KNOWN_PLACE_NAMES_BY_ID.get(place_id)) is None
             or place_name_key(name) not in loaded_names
@@ -169,3 +176,42 @@ def test_image_for_name_fallback_matches_osm_twin():
     curated = next(place for place in CURATED_HANOI_ANCHORS if place.id == "curated-lang-bac")
     assert url == PLACE_IMAGE_URLS[curated.id]
     assert credit == PLACE_IMAGE_CREDITS[curated.id]
+
+
+def test_source_for_name_fallback_matches_osm_twin():
+    osm_twin = next(place for place in POSTGRES_STYLE_CATALOGUE if place.id == "osm-way-37625751")
+    url, label = data_module.source_for(osm_twin)
+    assert url and url.startswith("https://")
+    assert label == "curated_editorial_source"
+
+
+def test_source_for_uses_recorded_official_website_before_plain_osm_source():
+    place = next(item for item in data_module.PLACES if item.website)
+    url, label = data_module.source_for(place)
+
+    assert url == place.website
+    assert label == "official_website"
+
+
+def test_postgres_seed_and_schema_preserve_official_website_field():
+    root = data_module.Path(__file__).resolve().parents[1]
+    schema = (root / "alembic" / "versions" / "0001_initial.sql").read_text(encoding="utf-8")
+    seed = (root / "scripts" / "seed_postgres.py").read_text(encoding="utf-8")
+
+    assert "website text" in schema
+    assert "ALTER TABLE dia_diem ADD COLUMN IF NOT EXISTS website text" in schema
+    assert "place.get(\"website\")" in seed
+    assert "website=EXCLUDED.website" in seed
+
+
+def test_postgres_seed_and_schema_preserve_google_rating_review_fields():
+    root = data_module.Path(__file__).resolve().parents[1]
+    schema = (root / "alembic" / "versions" / "0001_initial.sql").read_text(encoding="utf-8")
+    seed = (root / "scripts" / "seed_postgres.py").read_text(encoding="utf-8")
+
+    for column in ("diem_danh_gia", "so_nhan_xet", "google_place_id", "google_maps_url"):
+        assert column in schema
+        assert column in seed
+    assert "place.get(\"google_rating\")" in seed
+    assert "place.get(\"google_user_rating_count\")" in seed
+    assert "google_maps_url=EXCLUDED.google_maps_url" in seed

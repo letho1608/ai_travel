@@ -9,8 +9,15 @@ from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
 from app.data import PLACES, Place, image_for
-from app.pipeline.planner import COPY, PipelineUnavailable, _effective_hours, build_plan, travel_minutes, validate_plan
-from app.services.ai import ai_adapter
+from app.pipeline.planner import (
+    COPY,
+    PipelineUnavailable,
+    _effective_hours,
+    build_plan,
+    missing_required_inputs,
+    travel_minutes,
+    validate_plan,
+)
 from app.routers.auth import resolve_user
 from app.schemas import (
     CommentRequest,
@@ -144,6 +151,19 @@ async def generate(payload: PlanRequest, request: Request):
         yield sse("status", {"status": "finding_places"})
         yield sse("status", {"status": "routing_plan"})
         try:
+            required = await to_thread(missing_required_inputs, payload)
+            if required["missing_fields"]:
+                store.log(session_id, "boc_tach_yeu_cau", required["understanding"])
+                yield sse(
+                    "error",
+                    {
+                        "code": "missing_required_input",
+                        "detail": required["questions"][0],
+                        "missing_fields": required["missing_fields"],
+                        "questions": required["questions"],
+                    },
+                )
+                return
             plan = await to_thread(build_plan, payload)
             plan = await to_thread(enrich_plan_with_google, plan)
             _append_turn(plan, "user", payload.context)
@@ -438,7 +458,6 @@ def swipe(
     if payload.dia_diem_thay_the and payload.ten_dia_diem_thay_the:
         raise HTTPException(422, "Chỉ chọn ID gợi ý hoặc nhập tên địa điểm")
     requested_place: Place | None = None
-    estimated = False
     if payload.ten_dia_diem_thay_the:
         current = next((slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") == payload.diem_bi_loai), None)
         if not current:
@@ -448,12 +467,10 @@ def swipe(
         if not requested_place:
             raise HTTPException(404, "Không tìm thấy địa điểm này tại Hà Nội")
         if requested_place.id not in {place.id for place in PLACES}:
-            try:
-                estimate = ai_adapter.estimate_place_metadata(requested_place.name, requested_place.kind, requested_place.area)
-            except RuntimeError as exc:
-                raise HTTPException(503, "Không thể ước tính dữ liệu địa điểm") from exc
-            requested_place = Place(**(requested_place.__dict__ | estimate))
-            estimated = True
+            raise HTTPException(
+                422,
+                "Địa điểm ngoài danh mục thiếu giờ mở cửa/giá đã xác minh; không dùng AI để ước tính dữ liệu vận hành",
+            )
     external = (requested_place,) if requested_place and requested_place.id not in {place.id for place in PLACES} else ()
     target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=False, additional=external)
     if not candidates:
@@ -495,16 +512,6 @@ def swipe(
     swap_image_url, swap_image_credit = image_for(replacement)
     new_target["anh"] = swap_image_url
     new_target["anh_nguon"] = swap_image_credit
-    if estimated:
-        new_target["du_lieu_uoc_tinh"] = True
-        new_target["gio_mo_cua_uoc_tinh"] = replacement.open_hour
-        new_target["gio_dong_cua_uoc_tinh"] = replacement.close_hour
-        new_target["chi_phi_moi_nguoi"] = replacement.cost
-        new_target["nguon_du_lieu_uoc_tinh"] = "AI"
-        if plan_request.ngon_ngu == "vi":
-            new_target["ghi_chu"] = f"AI ước tính: mở {replacement.open_hour}:00–{replacement.close_hour}:00, khoảng {replacement.cost:,} VNĐ/người. Vui lòng kiểm tra lại."
-        else:
-            new_target["ghi_chu"] = f"AI estimate: open {replacement.open_hour}:00–{replacement.close_hour}:00, about {replacement.cost:,} VND/person. Please verify."
     plan["tong_chi_phi"] += new_target["chi_phi"] - old_cost
     plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
     try:
@@ -521,7 +528,20 @@ def swipe(
         raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
     except PipelineUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
-    store.penalize_tags(item.session_id, rejected.tags)
+    tag_deltas = {tag: -1 for tag in rejected.tags}
+    for tag in replacement.tags:
+        tag_deltas[tag] = tag_deltas.get(tag, 0) + 1
+    store.adjust_tag_weights(
+        item.session_id,
+        tag_deltas,
+        user_id=item.user_id,
+        reason="user_replaced_place",
+        evidence={
+            "id_ke_hoach": token,
+            "id_dia_diem_bi_loai": rejected.id,
+            "id_dia_diem_thay_the": replacement.id,
+        },
+    )
     store.log(item.session_id, "vuot_doi_diem", {"id_ke_hoach": token, "id_dia_diem_bi_loai": payload.diem_bi_loai})
     return {"ke_hoach_moi": plan, "phien_ban": item.version}
 
