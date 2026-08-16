@@ -208,7 +208,14 @@ def haversine_km(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> floa
 
 def estimate_straight_line_travel(a: Place, b: Place, mode: str = "motorbike") -> TravelEstimate:
     speeds = TRAVEL_ESTIMATE_POLICY["speeds_kmh"]
-    factors = TRAVEL_ESTIMATE_POLICY["detour_factors"]
+    factors = dict(TRAVEL_ESTIMATE_POLICY["detour_factors"])
+    # Đồi núi, đường đèo (Sa Pa, Đà Lạt, Hà Giang) tăng detour factor lên 1.6
+    mountain_hints = {"sa pa", "sapa", "da lat", "dalat", "ha giang", "fansipan", "langbiang"}
+    a_area = (a.area or "").lower()
+    b_area = (b.area or "").lower()
+    if any(m in a_area or m in b_area for m in mountain_hints):
+        factors[mode] = max(factors.get(mode, 1.3), 1.6)
+        
     if mode not in speeds:
         mode = "motorbike"
     distance = haversine_km(a.lat, a.lng, b.lat, b.lng)

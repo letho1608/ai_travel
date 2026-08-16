@@ -109,12 +109,6 @@ FOCUS_DESTINATIONS: dict[str, dict[str, object]] = {
         "lng": 106.7009,
         "aliases": {"tp hcm", "tp.hcm", "ho chi minh", "sai gon", "saigon", "thanh pho ho chi minh"},
     },
-    "ha_long": {
-        "label": "Hạ Long",
-        "lat": 20.9712,
-        "lng": 107.0448,
-        "aliases": {"ha long", "vinh ha long", "quang ninh"},
-    },
     "da_nang": {
         "label": "Đà Nẵng",
         "lat": 16.0544,
@@ -125,25 +119,91 @@ FOCUS_DESTINATIONS: dict[str, dict[str, object]] = {
         "label": "Hội An",
         "lat": 15.8801,
         "lng": 108.3380,
-        "aliases": {"hoi an", "pho co hoi an"},
+        "aliases": {"hoi an", "pho co hoi an", "quang nam"},
+    },
+    "hue": {
+        "label": "Huế",
+        "lat": 16.4637,
+        "lng": 107.5909,
+        "aliases": {"hue", "thua thien hue", "co do hue", "tp hue"},
+    },
+    "da_lat": {
+        "label": "Đà Lạt",
+        "lat": 11.9404,
+        "lng": 108.4583,
+        "aliases": {"da lat", "dalat", "lam dong", "thanh pho ngan hoa"},
     },
     "nha_trang": {
         "label": "Nha Trang",
         "lat": 12.2388,
         "lng": 109.1967,
-        "aliases": {"nha trang", "khanh hoa"},
+        "aliases": {"nha trang", "khanh hoa", "tp nha trang"},
     },
-    "phu_quoc": {
-        "label": "Phú Quốc",
-        "lat": 10.2899,
-        "lng": 103.9840,
-        "aliases": {"phu quoc", "dao phu quoc"},
+    "ninh_binh": {
+        "label": "Ninh Bình",
+        "lat": 20.2506,
+        "lng": 105.9745,
+        "aliases": {"ninh binh", "trang an", "bai dinh", "tam coc", "hoa lu"},
+    },
+    "ha_long": {
+        "label": "Hạ Long",
+        "lat": 20.9712,
+        "lng": 107.0448,
+        "aliases": {"ha long", "vinh ha long", "quang ninh"},
     },
     "sa_pa": {
         "label": "Sa Pa",
         "lat": 22.3364,
         "lng": 103.8438,
-        "aliases": {"sa pa", "sapa"},
+        "aliases": {"sa pa", "sapa", "lao cai", "fansipan"},
+    },
+    "phu_quoc": {
+        "label": "Phú Quốc",
+        "lat": 10.2899,
+        "lng": 103.9840,
+        "aliases": {"phu quoc", "dao phu quoc", "kien giang"},
+    },
+    "can_tho": {
+        "label": "Cần Thơ",
+        "lat": 10.0452,
+        "lng": 105.7469,
+        "aliases": {"can tho", "tay do", "tp can tho", "ninh kieu"},
+    },
+    "vung_tau": {
+        "label": "Vũng Tàu",
+        "lat": 10.3460,
+        "lng": 107.0843,
+        "aliases": {"vung tau", "ba ria vung tau", "tp vung tau"},
+    },
+    "quy_nhon": {
+        "label": "Quy Nhơn",
+        "lat": 13.7820,
+        "lng": 109.2197,
+        "aliases": {"quy nhon", "binh dinh", "tp quy nhon", "eo gio", "ky co"},
+    },
+    "phan_thiet": {
+        "label": "Phan Thiết",
+        "lat": 10.9273,
+        "lng": 108.1021,
+        "aliases": {"phan thiet", "mui ne", "binh thuan"},
+    },
+    "quang_binh": {
+        "label": "Quảng Bình",
+        "lat": 17.4764,
+        "lng": 106.6022,
+        "aliases": {"quang binh", "dong hoi", "phong nha", "phong nha ke bang"},
+    },
+    "ha_giang": {
+        "label": "Hà Giang",
+        "lat": 22.8233,
+        "lng": 104.9839,
+        "aliases": {"ha giang", "dong van", "ma pi leng", "meo vac"},
+    },
+    "hai_phong": {
+        "label": "Hải Phòng",
+        "lat": 20.8449,
+        "lng": 106.6881,
+        "aliases": {"hai phong", "cat ba", "do son", "dat cang"},
     },
 }
 
@@ -197,6 +257,56 @@ SEASONAL_TOURISM_POLICY: dict[str, dict[str, object]] = {
         "best_months": (3, 4, 5, 9, 10, 11),
         "caution_months": (12, 1, 2, 6, 7, 8),
         "festival_notes": ("mùa lúa chín", "mùa săn mây"),
+    },
+    "hue": {
+        "best_months": (1, 2, 3, 4),
+        "caution_months": (9, 10, 11, 12),
+        "festival_notes": ("Festival Huế", "du lịch di sản Cố đô"),
+    },
+    "da_lat": {
+        "best_months": (11, 12, 1, 2, 3, 4),
+        "caution_months": (6, 7, 8, 9),
+        "festival_notes": ("Festival Hoa Đà Lạt", "mùa săn mây, dã quỳ"),
+    },
+    "ninh_binh": {
+        "best_months": (1, 2, 3, 5, 6),
+        "caution_months": (7, 8, 9),
+        "festival_notes": ("Lễ hội Tràng An", "mùa lúa chín Tam Cốc"),
+    },
+    "can_tho": {
+        "best_months": (12, 1, 2, 3, 4),
+        "caution_months": (8, 9, 10),
+        "festival_notes": ("Lễ hội Bánh dân gian Nam Bộ", "mùa trái cây miệt vườn"),
+    },
+    "vung_tau": {
+        "best_months": (11, 12, 1, 2, 3, 4),
+        "caution_months": (7, 8, 9),
+        "festival_notes": ("Lễ hội Nghinh Ông", "du lịch biển cuối tuần"),
+    },
+    "quy_nhon": {
+        "best_months": (3, 4, 5, 6, 7, 8),
+        "caution_months": (9, 10, 11, 12),
+        "festival_notes": ("mùa biển Eo Gió - Kỳ Co", "lễ hội võ cổ truyền"),
+    },
+    "phan_thiet": {
+        "best_months": (11, 12, 1, 2, 3, 4, 5),
+        "caution_months": (7, 8),
+        "festival_notes": ("Lễ hội Kate", "lướt ván buồm Mũi Né"),
+    },
+    "quang_binh": {
+        "best_months": (3, 4, 5, 6, 7, 8),
+        "caution_months": (9, 10, 11, 12),
+        "festival_notes": ("mùa khám phá hang động Phong Nha", "du lịch biển Nhật Lệ"),
+    },
+    "ha_giang": {
+        "best_months": (9, 10, 11, 12, 1, 2),
+        "caution_months": (6, 7, 8),
+        "festival_notes": ("Lễ hội hoa Tam giác mạch", "mùa lúa chín Hoàng Su Phì"),
+    },
+    "hai_phong": {
+        "best_months": (4, 5, 6, 7, 8, 9),
+        "caution_months": (12, 1, 2),
+        "festival_notes": ("Lễ hội Hoa Phượng Đỏ", "mùa biển Cát Bà"),
     },
 }
 
@@ -343,8 +453,14 @@ LOW_VALUE_TOURIST_NAME_KEYS = {
     "rao chan",
     "saturday option",
     "small waterfall",
+    "hoa don ban hang",
+    "1",
+    "7",
+    "14",
+    "nguoi tinh nha co binh thuy",
 }
 FAMOUS_TOURIST_NAME_HINTS = {
+    # Đà Nẵng & Hội An
     "ba na",
     "bai bien my khe",
     "bao tang cham",
@@ -355,23 +471,28 @@ FAMOUS_TOURIST_NAME_HINTS = {
     "cau vang",
     "cho con",
     "chua cau",
-    "chua long son",
+    "chua linh ung",
     "de hai van",
     "dinh ban co",
     "hai van quan",
-    "hon chong",
-    "hon mun",
-    "hon tam",
     "hoi an",
-    "i-resort",
-    "lang co",
     "lang da my nghe non nuoc",
     "my khe",
-    "nha tho da nha trang",
-    "nha trang",
     "ngu hanh son",
     "nui son tra",
     "pho co hoi an",
+    "son tra",
+    # Nha Trang & Cam Ranh
+    "bai dai cam ranh",
+    "chua long son",
+    "dao khi",
+    "hon chong",
+    "hon mun",
+    "hon tam",
+    "hon tre",
+    "i-resort",
+    "nha tho da nha trang",
+    "nha trang",
     "thap ba ponagar",
     "thap po nagar",
     "vien hai duong hoc",
@@ -379,7 +500,119 @@ FAMOUS_TOURIST_NAME_HINTS = {
     "vinwonders",
     "vinwonders nha trang",
     "vinh nha trang",
-    "son tra",
+    # Huế
+    "dai noi",
+    "dai noi hue",
+    "chua thien mu",
+    "thien mu",
+    "lang khai dinh",
+    "lang tu duc",
+    "lang minh mang",
+    "hoang thanh hue",
+    "song huong",
+    "cau trang tien",
+    # Đà Lạt
+    "thung lung tinh yeu",
+    "langbiang",
+    "lang biang",
+    "ho xuan huong",
+    "chua linh phuoc",
+    "chua ve chai",
+    "dinh bao dai",
+    "thac datanla",
+    "datanla",
+    "thac pren",
+    "crazy house",
+    "nha tho con ga",
+    "quang truong lam vien",
+    # Ninh Bình
+    "trang an",
+    "chua bai dinh",
+    "bai dinh",
+    "tam coc",
+    "tam coc bich dong",
+    "hang mua",
+    "tuyet tinh coc",
+    "co do hoa lu",
+    "hoa lu",
+    "thung nham",
+    # Cần Thơ & Miền Tây
+    "cho noi cai rang",
+    "cai rang",
+    "ben ninh kieu",
+    "ninh kieu",
+    "nha co binh thuy",
+    "chua ong can tho",
+    "thien vien truc lam phuong nam",
+    # Hạ Long & Quảng Ninh
+    "vinh ha long",
+    "hang sung sot",
+    "dao ti top",
+    "titop",
+    "dao tuan chau",
+    "tuan chau",
+    "bao tang quang ninh",
+    "yen tu",
+    # Sa Pa & Lào Cai
+    "fansipan",
+    "dinh fansipan",
+    "ban cat cat",
+    "cat cat",
+    "nha tho da sapa",
+    "nui ham rong",
+    "deo o quy ho",
+    "o quy ho",
+    "ta van",
+    # Phú Quốc
+    "bai sao",
+    "bai khem",
+    "vinwonders phu quoc",
+    "safari phu quoc",
+    "sunset sanato",
+    "hon thom",
+    "cap treo hon thom",
+    "grand world",
+    # Vũng Tàu
+    "tuong chua kito",
+    "chua kito",
+    "hai dang vung tau",
+    "mui nghinh phong",
+    "bai sau vung tau",
+    "bai truoc vung tau",
+    "bach dinh",
+    # Quy Nhơn
+    "eo gio",
+    "ky co",
+    "thap banh it",
+    "thap doi",
+    "ghenh rang tien sa",
+    # Phan Thiết & Mũi Né
+    "doi cat bay",
+    "doi cat do",
+    "bau trang",
+    "suoi tien mui ne",
+    "thap cham poshanu",
+    # Quảng Bình
+    "phong nha",
+    "dong phong nha",
+    "dong thien duong",
+    "suoi nuoc mooc",
+    "song chay hang toi",
+    # Hà Giang
+    "ma pi leng",
+    "deo ma pi leng",
+    "cot co lung cu",
+    "lung cu",
+    "dinh thu vua meo",
+    "song nho que",
+    "dong van",
+    # Hải Phòng
+    "vinh lan ha",
+    "lan ha",
+    "dao cat ba",
+    "cat ba",
+    "vuon quoc gia cat ba",
+    "bai bien do son",
 }
 OLD_QUARTER_TERMS = {
     "pho_co",
@@ -469,12 +702,15 @@ def _destination_context_from_text(context: str, lat: float, lng: float) -> tupl
         for prefix in DESTINATION_NAME_PREFIXES:
             if name.startswith(prefix):
                 name_aliases.add(name.removeprefix(prefix).strip())
-        name_match = any(alias and len(alias) >= 4 and alias in context for alias in name_aliases)
+        name_match = any(
+            alias and (len(alias) >= 4 or alias in {"hue", "sa pa", "ha giang"}) and re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", context)
+            for alias in name_aliases
+        )
         area_match = bool(
             area
             and area not in {"viet nam", "vietnam"}
-            and len(area) >= 4
-            and area in context
+            and (len(area) >= 4 or area in {"hue", "sa pa", "ha giang"})
+            and re.search(rf"(?<![a-z0-9]){re.escape(area)}(?![a-z0-9])", context)
         )
         if not name_match and not area_match:
             continue
@@ -984,27 +1220,56 @@ def _slot_evidence(
     }
 
 
+PROVINCE_HIGHLIGHT_MAP: dict[str, tuple[str, ...]] = {
+    "ha_noi": HANOI_HIGHLIGHT_IDS,
+    "da_nang": ("curated-cau-rong", "curated-ngu-hanh-son", "curated-bai-bien-my-khe", "curated-ba-na-hills", "curated-chua-linh-ung"),
+    "hoi_an": ("curated-pho-co-hoi-an", "curated-chua-cau-hoi-an"),
+    "hue": ("curated-dai-noi-hue", "curated-chua-thien-mu", "curated-lang-khai-dinh", "curated-lang-tu-duc"),
+    "da_lat": ("curated-thung-lung-tinh-yeu", "curated-langbiang", "curated-ho-xuan-huong", "curated-chua-linh-phuoc", "curated-dinh-bao-dai"),
+    "nha_trang": ("curated-thap-ba-ponagar", "curated-nha-trang-beach", "curated-hon-chong", "curated-vien-hai-duong-hoc", "curated-chua-long-son"),
+    "ninh_binh": ("curated-trang-an", "curated-chua-bai-dinh", "curated-tam-coc", "curated-hang-mua"),
+    "can_tho": ("curated-cho-noi-cai-rang", "curated-ben-ninh-kieu", "curated-nha-co-binh-thuy"),
+    "ha_long": ("curated-vinh-ha-long", "curated-hang-sung-sot", "curated-dao-ti-top"),
+    "sa_pa": ("curated-fansipan-peak", "curated-ban-cat-cat", "curated-nha-tho-da-sapa"),
+    "phu_quoc": ("curated-bai-sao-phu-quoc", "curated-vinwonders-phu-quoc", "curated-sunset-sanato"),
+}
+
+
 def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     tags = relevant_tags(request.context)
     destination_lat, destination_lng, destination_label = _destination_context(request)
-    destination_key = _ascii_fold(destination_label or "").casefold()
-    destination_is_hanoi = destination_key in {"ha noi", "hanoi"} or (
-        destination_label is None and haversine_km(destination_lat, destination_lng, 21.0285, 105.8542) <= 20
-    )
-    explicit_anchor = tags.intersection({"ha_noi", "hanoi", "pho_co", "ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh"})
-    wants_hanoi_highlights = bool(destination_is_hanoi and explicit_anchor and (destination_label is None or tags.intersection({"ha_noi", "hanoi", "pho_co"})))
-    wants_night = bool(destination_is_hanoi and tags.intersection(INTENT_PROFILES["night"]["terms"]))
+    destination_key = _ascii_fold(destination_label or "").replace(" ", "_").casefold()
     by_id = {place.id: place for place in PLACES}
-    if wants_night:
-        place_ids = [
-            "curated-ho-guom",
-            "curated-ho-tay",
-            "curated-pho-co-ha-noi",
-            *HANOI_NIGHT_IDS,
-            *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
-        ]
+    
+    # 1. Check province-specific highlights
+    matching_key = None
+    if destination_key in PROVINCE_HIGHLIGHT_MAP:
+        matching_key = destination_key
     else:
-        place_ids = list(HANOI_HIGHLIGHT_IDS) if wants_hanoi_highlights else []
+        for key, dest_info in FOCUS_DESTINATIONS.items():
+            if _ascii_fold(str(dest_info["label"])).casefold() == _ascii_fold(destination_label or "").casefold():
+                matching_key = key
+                break
+    
+    place_ids: list[str] = []
+    if matching_key and matching_key in PROVINCE_HIGHLIGHT_MAP:
+        if matching_key == "ha_noi":
+            wants_night = bool(tags.intersection(INTENT_PROFILES["night"]["terms"]))
+            explicit_anchor = tags.intersection({"ha_noi", "hanoi", "pho_co", "ho_guom", "ho_tay", "lang_bac", "ho_chi_minh", "ba_dinh", "lan_dau"})
+            wants_hanoi_highlights = bool(explicit_anchor and (destination_label is None or tags.intersection({"ha_noi", "hanoi", "pho_co", "lan_dau"})))
+            if wants_night:
+                place_ids = [
+                    "curated-ho-guom",
+                    "curated-ho-tay",
+                    "curated-pho-co-ha-noi",
+                    *HANOI_NIGHT_IDS,
+                    *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
+                ]
+            elif wants_hanoi_highlights:
+                place_ids = list(HANOI_HIGHLIGHT_IDS)
+        else:
+            place_ids = list(PROVINCE_HIGHLIGHT_MAP[matching_key])
+            
     return [
         place
         for place_id in place_ids
@@ -2985,6 +3250,12 @@ def _select_sight_places(
                 "phuong_phap": "llm_catalog_guarded",
                 "ghi_chu": "LLM chỉ chọn id có trong catalog tin cậy; planner vẫn kiểm tra ràng buộc sau đó.",
             }
+    ai_chosen = _select_ai_places(sight_pool, sight_count, request)
+    if ai_chosen:
+        return _dedupe_places(ai_chosen)[:sight_count], llm_details_by_id, {
+            "phuong_phap": "ai_catalog_selection",
+            "ghi_chu": "AI chọn danh sách từ ứng viên hợp lệ trong catalog.",
+        }
     score_by_id = {
         place.id: max(1, (len(sight_pool) - index) * 10 + _tourism_quality_score(place))
         for index, place in enumerate(sight_pool)

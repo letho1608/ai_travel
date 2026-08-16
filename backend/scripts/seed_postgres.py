@@ -4,11 +4,12 @@ import argparse
 import datetime as _dt
 import json
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 if not hasattr(_dt, "UTC"):
-    _dt.UTC = _dt.timezone.utc
-from datetime import UTC, datetime
-from pathlib import Path
+    _dt.UTC = timezone.utc
+UTC = getattr(_dt, "UTC", timezone.utc)
 
 import psycopg
 
@@ -48,6 +49,8 @@ def main() -> None:
     from app.data import (
         CURATED_HANOI_ANCHORS,
         CURATED_HANOI_DINING,
+        CURATED_NHA_TRANG_ANCHORS,
+        CURATED_OTHER_PROVINCE_ANCHORS,
         PLACE_IMAGE_CREDITS_BY_NAME,
         PLACE_IMAGE_URLS_BY_NAME,
         place_name_key,
@@ -105,10 +108,15 @@ def main() -> None:
             ).fetchone()
             ids[str(place["id"])] = str(row[0])
 
-        # Seed the curated Hanoi anchors/dining so the same stops exist in
+        # Seed the curated anchors/dining so the same stops exist in
         # production (ids = `curated-*`, images from the curated maps).
         curated_upserted = 0
-        for curated in (*CURATED_HANOI_ANCHORS, *CURATED_HANOI_DINING):
+        for curated in (
+            *CURATED_HANOI_ANCHORS,
+            *CURATED_HANOI_DINING,
+            *CURATED_NHA_TRANG_ANCHORS,
+            *CURATED_OTHER_PROVINCE_ANCHORS,
+        ):
             image_url, image_credit = recorded_image(
                 {"name": curated.name, "image_url": curated.image_url, "image_credit": curated.image_credit}
             )
@@ -141,7 +149,7 @@ def main() -> None:
                     json.dumps({"lat": curated.lat, "lng": curated.lng}),
                     None, image_url, image_credit,
                     "curated", f"curated:{curated.id}", None, curated.id, curated.duration_min,
-                    None, None, None, None,
+                    curated.rating, curated.review_count, curated.google_place_id, curated.google_maps_url,
                 ),
             ).fetchone()
             ids[curated.id] = str(row[0])

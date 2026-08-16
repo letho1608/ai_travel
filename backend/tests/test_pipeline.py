@@ -119,6 +119,44 @@ def test_saigon_alias_resolves_to_hcm_region():
     )
 
 
+def test_other_provinces_select_famous_tourism_anchors():
+    provinces_to_test = [
+        ("tôi muốn du lịch Huế 1 ngày", "Huế", {"Đại Nội Huế", "Chùa Thiên Mụ", "Lăng Khải Định", "Lăng Tự Đức"}),
+        ("du lịch Đà Lạt cuối tuần ngắm hoa", "Đà Lạt", {"Thung lũng Tình Yêu", "Đỉnh Langbiang", "Hồ Xuân Hương", "Chùa Linh Phước", "Dinh III Bảo Đại"}),
+        ("đi tour Ninh Bình khám phá hang động", "Ninh Bình", {"Quần thể danh thắng Tràng An", "Chùa Bái Đính", "Tam Cốc – Bích Động", "Hang Múa"}),
+        ("du lịch Cần Thơ miền tây sông nước", "Cần Thơ", {"Chợ nổi Cái Răng", "Bến Ninh Kiều", "Nhà cổ Bình Thủy"}),
+        ("nghỉ dưỡng vịnh Hạ Long 1 ngày", "Hạ Long", {"Vịnh Hạ Long", "Hang Sửng Sốt", "Đảo Ti Tốp"}),
+        ("đi Sa Pa săn mây và leo núi", "Sa Pa", {"Đỉnh Fansipan Legend", "Bản Cát Cát", "Nhà thờ Đá Sa Pa"}),
+    ]
+
+    for prompt, expected_label, expected_anchors in provinces_to_test:
+        req = PlanRequest.model_validate(
+            {
+                "context": prompt,
+                "location": {"lat": 21.0285, "lng": 105.8542}, # Form default coord
+                "thoi_luong": "ca_ngay",
+                "so_nguoi": 2,
+                "ngan_sach": 2_000_000,
+                "ma_phien": "test-multicity-session",
+                "nonce": f"nonce-test-{expected_label}-001",
+            }
+        )
+        destination_lat, destination_lng, destination_label = planner._destination_context(req)
+        assert destination_label == expected_label, f"Failed resolving label for prompt: {prompt}"
+
+        plan = build_plan(req)
+        slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+        names = {slot["ten_dia_diem"] for slot in slots}
+
+        # Must include at least 1-2 iconic landmarks from our curated famous anchor list
+        assert names.intersection(expected_anchors), f"Expected at least one of {expected_anchors} in {names} for {expected_label}"
+        assert all(
+            planner.haversine_km(destination_lat, destination_lng, slot["toa_do"]["lat"], slot["toa_do"]["lng"])
+            <= planner.DESTINATION_RADIUS_KM
+            for slot in slots
+        ), f"Some stops exceeded radius in {expected_label}"
+
+
 def test_nha_trang_uses_curated_tourism_anchors():
     req = PlanRequest.model_validate(
         {

@@ -8,14 +8,19 @@ It is intended for tourism/nature/historic places, not restaurants or hotels.
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import re
 import time
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+
+if not hasattr(_dt, "UTC"):
+    _dt.UTC = timezone.utc
+UTC = getattr(_dt, "UTC", timezone.utc)
 
 ENRICHABLE_KINDS = {
     "bai_bien",

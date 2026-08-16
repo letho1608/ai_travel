@@ -71,6 +71,10 @@ FOCUS_CITY_FIXTURES: dict[str, dict] = {
     "nha_trang": {"label": "Nha Trang", "location": {"lat": 12.2388, "lng": 109.1967}, "tags": ("bien", "view_dep", "gia_dinh")},
     "phu_quoc": {"label": "Phú Quốc", "location": {"lat": 10.2899, "lng": 103.984}, "tags": ("bien", "chill", "nghi_duong")},
     "sa_pa": {"label": "Sa Pa", "location": {"lat": 22.3364, "lng": 103.8438}, "tags": ("nui", "view_dep", "chill")},
+    "hue": {"label": "Huế", "location": {"lat": 16.4637, "lng": 107.5909}, "tags": ("di_tich", "van_hoa", "lich_su")},
+    "da_lat": {"label": "Đà Lạt", "location": {"lat": 11.9404, "lng": 108.4583}, "tags": ("chill", "view_dep", "checkin")},
+    "ninh_binh": {"label": "Ninh Bình", "location": {"lat": 20.2506, "lng": 105.9745}, "tags": ("hang_dong", "view_dep", "di_tich")},
+    "can_tho": {"label": "Cần Thơ", "location": {"lat": 10.0452, "lng": 105.7469}, "tags": ("song_nuoc", "am_thuc", "van_hoa")},
 }
 
 
