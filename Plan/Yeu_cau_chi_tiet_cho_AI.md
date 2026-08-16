@@ -367,16 +367,16 @@ Quyết định chung về nguồn: dữ liệu cào OpenStreetMap / Overpass l�
 
 | Nhiệm vụ | Trạng thái | Ghi chú |
 |---|---|---|
-| Bài toán 1: bóc tách yêu cầu | [ ] | |
-| Bài toán 2: thu thập dữ liệu | [ ] | |
-| Bài toán 3: trọng số, location, tag | [ ] | |
-| Bài toán 4: thông tin địa điểm | [ ] | |
-| Bài toán 5: thêm tiêu chí thời gian đi | [ ] | |
-| Bài toán 6: thời lượng khoảng cộng độ tin cậy | [ ] | |
-| Bài toán 7: thời gian di chuyển đường thẳng | [ ] | |
-| Bài toán 8: bộ giải OR Tools CP SAT | [ ] | |
-| Bài toán 9: giải thích bằng bằng chứng | [ ] | |
-| Bài toán 10: bộ kiểm tra và mốc so sánh | [ ] | |
-| Dữ liệu: khởi tạo, bổ sung qua client, lọc thiếu | [ ] | |
+| Bài toán 1: bóc tách yêu cầu | [x] | OpenAICompatibleAIAdapter / OfflineAIAdapter bóc tách chuẩn theo khung schema input-understanding-v1, xác thực không bịa đặt |
+| Bài toán 2: thu thập dữ liệu | [x] | Tích hợp 35.630 POI toàn quốc từ OSM + 51 curated anchors biểu tượng các tỉnh, chặn nhầm lẫn vùng miền |
+| Bài toán 3: trọng số, location, tag | [x] | Chấm điểm 5 tiêu chí (30% Tag, 25% Rating, 20% Vị trí, 15% Giờ mở, 10% Reviews) + học tăng giảm trọng số theo hành vi |
+| Bài toán 4: thông tin địa điểm | [x] | Bổ sung rating/review, ảnh Wikimedia HD, metadata hoạt động, Google Places lazy enrichment & fallback |
+| Bài toán 5: thêm tiêu chí thời gian đi | [x] | Gắn visit_guidance giờ vàng (chợ nổi sớm, Cầu Rồng tối, tránh nắng trưa) + tính hoàng hôn thiên văn + mùa du lịch |
+| Bài toán 6: thời lượng khoảng cộng độ tin cậy | [x] | Ước lượng khoảng thời lượng theo loại hình và visit_guidance kèm mức độ tin cậy (high/low) |
+| Bài toán 7: thời gian di chuyển đường thẳng | [x] | Haversine distance có bù sai số giao thông đô thị và nâng detour_factor 1.6 cho địa hình đồi núi |
+| Bài toán 8: bộ giải OR Tools CP SAT | [x] | OR-Tools CP-SAT giải bài toán xếp lịch theo ràng buộc khung giờ mở cửa, tổng thời gian, ngân sách và tuyến di chuyển |
+| Bài toán 9: giải thích bằng bằng chứng | [x] | Nhật ký bằng chứng (evidence log) giải thích lý do chọn từng khung giờ và xếp hạng điểm đến |
+| Bài toán 10: bộ kiểm tra và mốc so sánh | [x] | Suite kiểm thử tự động 77 backend tests + 31 frontend tests, benchmark trích xuất và đo lường đa tỉnh thành |
+| Dữ liệu: khởi tạo, bổ sung qua client, lọc thiếu | [x] | Khởi tạo đầy đủ 18 tỉnh thành trọng điểm, cơ chế đổi điểm (swipe) và tinh chỉnh qua chat tương tác |
 
 Khi hoàn thành một nhiệm vụ, ghi vào cột Ghi chú: bằng chứng hoàn thành và ngày làm xong.
