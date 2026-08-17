@@ -61,3 +61,5 @@ def test_deepseek_prompt_requests_locale_and_preserves_provenance(monkeypatch):
     prompt = captured["messages"][1]["content"]
     assert "Japanese" in prompt
     assert "Preserve place names, proper nouns, source names" in prompt
+    assert "Lịch trình du lịch" in prompt
+    assert "context_goc" in prompt

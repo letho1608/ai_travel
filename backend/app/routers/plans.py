@@ -444,9 +444,12 @@ def swipe(
         if not current:
             raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
         coordinates = current.get("toa_do") or {}
-        requested_place = verify_place_name(payload.ten_dia_diem_thay_the.strip(), (float(coordinates.get("lat", 21.0285)), float(coordinates.get("lng", 105.8542))))
+        requested_place = verify_place_name(
+            payload.ten_dia_diem_thay_the.strip(),
+            (float(coordinates.get("lat", 21.0285)), float(coordinates.get("lng", 105.8542))),
+        )
         if not requested_place:
-            raise HTTPException(404, "Không tìm thấy địa điểm này tại Hà Nội")
+            raise HTTPException(404, "Không tìm thấy địa điểm này")
         if requested_place.id not in {place.id for place in PLACES}:
             try:
                 estimate = ai_adapter.estimate_place_metadata(requested_place.name, requested_place.kind, requested_place.area)

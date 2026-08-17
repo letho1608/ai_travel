@@ -1,0 +1,3982 @@
+{
+  "osm-way-207742943": {
+    "name_key": "nha trang",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-way-272274254": {
+    "name_key": "an vien beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-231779290": {
+    "name_key": "bai dai",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-node-4959124022": {
+    "name_key": "bai na",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-way-1239290934": {
+    "name_key": "bai tam hon chong",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-way-753496272": {
+    "name_key": "bai bien doc let",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-way-231784653": {
+    "name_key": "bai tam mia",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-node-13118872106": {
+    "name_key": "ruong muoi",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-node-6806979085": {
+    "name_key": "",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-relation-15662995": {
+    "name_key": "bao tang hai duong hoc nha trang",
+    "muc_uu_tien": 1,
+    "ly_do": "Bảo tàng nổi tiếng"
+  },
+  "osm-node-4673841090": {
+    "name_key": "gas station",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-node-5189505622": {
+    "name_key": "long thanh art gallery",
+    "muc_uu_tien": 2,
+    "ly_do": "Trưng bày nghệ thuật"
+  },
+  "osm-node-7087673293": {
+    "name_key": "mai loc photo gallery",
+    "muc_uu_tien": 2,
+    "ly_do": "Trưng bày nghệ thuật"
+  },
+  "osm-way-196896058": {
+    "name_key": "showroom",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-node-12813515691": {
+    "name_key": "some motobikes",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-node-5249720503": {
+    "name_key": "a-di-da phat",
+    "muc_uu_tien": 2,
+    "ly_do": "Điểm du lịch tôn giáo"
+  },
+  "osm-node-13800462101": {
+    "name_key": "buddha",
+    "muc_uu_tien": 2,
+    "ly_do": "Điểm du lịch tôn giáo"
+  },
+  "osm-node-13915744234": {
+    "name_key": "ga phu vinh",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch nổi tiếng"
+  },
+  "osm-node-3889096567": {
+    "name_key": "monument alexander yersin",
+    "muc_uu_tien": 1,
+    "ly_do": "Di tích lịch sử nổi tiếng"
+  },
+  "osm-node-11527158960": {
+    "name_key": "nam mo da bao phat",
+    "muc_uu_tien": 2,
+    "ly_do": "Điểm du lịch tôn giáo"
+  },
+  "osm-way-1545622602": {
+    "name_key": "thap but",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-146780347": {
+    "name_key": "thap po nagar",
+    "muc_uu_tien": 1,
+    "ly_do": "Thap Po Nagar la di tinh noi tieng cua Nha Trang"
+  },
+  "osm-node-2401084526": {
+    "name_key": "tuong dai cam ranh",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1417257985": {
+    "name_key": "dai tuong niem cam lam",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4082426389": {
+    "name_key": "ba",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1660060665": {
+    "name_key": "ban dao hon gom",
+    "muc_uu_tien": 2,
+    "ly_do": "Ban dao Hon Gom la dia danh dep"
+  },
+  "osm-node-4959115526": {
+    "name_key": "bai rang - hon ghenh",
+    "muc_uu_tien": 2,
+    "ly_do": "Bai Rang - Hon Ghenh la dia danh dep"
+  },
+  "osm-way-406136497": {
+    "name_key": "central park",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-9623762575": {
+    "name_key": "chua oc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-7040433200": {
+    "name_key": "dolphin show",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-13566332701": {
+    "name_key": "hang heo",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-relation-17189873": {
+    "name_key": "khu bao ton thien nhien hon ba",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu bao ton thien nhien Hon Ba la dia danh dep"
+  },
+  "osm-node-2288757829": {
+    "name_key": "khu du lich thac yang bay",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu du lich Thac Yang Bay la dia danh dep"
+  },
+  "osm-node-7248365886": {
+    "name_key": "lang nghe truong son",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-849300563": {
+    "name_key": "lau bao dai",
+    "muc_uu_tien": 1,
+    "ly_do": "Lau Bao Dai la di tinh noi tieng cua Nha Trang"
+  },
+  "osm-node-6861462485": {
+    "name_key": "park of marital stones",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-7130126788": {
+    "name_key": "saint-hardy (madonna rock)",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-2288757828": {
+    "name_key": "thac yang bay",
+    "muc_uu_tien": 2,
+    "ly_do": "Thac Yang Bay la dia danh dep"
+  },
+  "osm-node-12511801248": {
+    "name_key": "trai sim",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-relation-16028844": {
+    "name_key": "vinh cam ranh",
+    "muc_uu_tien": 2,
+    "ly_do": "Vinh Cam Ranh la dia danh dep"
+  },
+  "osm-node-11563767584": {
+    "name_key": "vinh van phong",
+    "muc_uu_tien": 1,
+    "ly_do": "Vịnh Vân Phong là một trong những điểm du lịch nổi tiếng nhất tại Nha Trang"
+  },
+  "osm-node-8569184073": {
+    "name_key": "waterfall view",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin cụ thể về điểm du lịch này"
+  },
+  "osm-node-4248697393": {
+    "name_key": "dao khi",
+    "muc_uu_tien": 2,
+    "ly_do": "Đảo Khỉ là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-node-11779892378": {
+    "name_key": "dam nha phu",
+    "muc_uu_tien": 3,
+    "ly_do": "Đầm Nha Phu không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-11563319766": {
+    "name_key": "dinh deo khanh son",
+    "muc_uu_tien": 2,
+    "ly_do": "Đỉnh đèo Khánh Sơn là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-node-4172003998": {
+    "name_key": "100 eggs mud bath",
+    "muc_uu_tien": 2,
+    "ly_do": "100 Eggs Mud Bath là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-way-471186074": {
+    "name_key": "ho ca tri nguyen",
+    "muc_uu_tien": 3,
+    "ly_do": "Ho Ca Tri Nguyen không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-way-518945762": {
+    "name_key": "nhan tam park",
+    "muc_uu_tien": 3,
+    "ly_do": "Nhan tam park không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-way-1353575383": {
+    "name_key": "splash bay",
+    "muc_uu_tien": 2,
+    "ly_do": "Splash Bay là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-way-385512390": {
+    "name_key": "underwater world",
+    "muc_uu_tien": 2,
+    "ly_do": "Underwater world là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-way-1353575545": {
+    "name_key": "vinpearl",
+    "muc_uu_tien": 1,
+    "ly_do": "VinPearl là một điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-7311724607": {
+    "name_key": "gao ly",
+    "muc_uu_tien": 3,
+    "ly_do": "Gạo Ly không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-13819694039": {
+    "name_key": "le hai hair salon",
+    "muc_uu_tien": 3,
+    "ly_do": "Lê Hải Hair Salon không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-7311724605": {
+    "name_key": "nha may muoi",
+    "muc_uu_tien": 3,
+    "ly_do": "Nhà May Muội không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-7311724604": {
+    "name_key": "thai loc mobile",
+    "muc_uu_tien": 3,
+    "ly_do": "Thái Lộc Mobile không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-7311724603": {
+    "name_key": "tap hoa nghia",
+    "muc_uu_tien": 3,
+    "ly_do": "Tạp Hóa Nghĩa không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-7311724606": {
+    "name_key": "dong ho hoa",
+    "muc_uu_tien": 3,
+    "ly_do": "Đồng Hồ Hóa không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-5301711382": {
+    "name_key": "hon dung",
+    "muc_uu_tien": 2,
+    "ly_do": "Hòn Dung là một điểm du lịch thú vị nhưng không phải là điểm đến chính tại Nha Trang"
+  },
+  "osm-node-11759350604": {
+    "name_key": "hon gia lu",
+    "muc_uu_tien": 3,
+    "ly_do": "Hòn Gia Lữ không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-11563767585": {
+    "name_key": "hon san",
+    "muc_uu_tien": 3,
+    "ly_do": "Hòn Sạn không phải là điểm du lịch nổi tiếng tại Nha Trang"
+  },
+  "osm-node-11780939103": {
+    "name_key": "hon thom",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng o Nha Trang"
+  },
+  "osm-node-11759350606": {
+    "name_key": "hon trich mia",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem du lich dang ghe"
+  },
+  "osm-node-11759354628": {
+    "name_key": "nui tien du",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin noi tieng"
+  },
+  "osm-way-1469438352": {
+    "name_key": "bai bien binh minh",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1469438377": {
+    "name_key": "bai bien ha binh",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1469438378": {
+    "name_key": "bai bien tan an",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-279353637": {
+    "name_key": "bai bim",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-755508145": {
+    "name_key": "bai ong",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1205391950": {
+    "name_key": "vanessa beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-node-5674096859": {
+    "name_key": "diep dong nguyen",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-node-4279640089": {
+    "name_key": "nha co phung hung",
+    "muc_uu_tien": 2,
+    "ly_do": "Nhà cổ nổi tiếng"
+  },
+  "osm-node-2076855954": {
+    "name_key": "nha co quan thang",
+    "muc_uu_tien": 2,
+    "ly_do": "Nhà cổ nổi tiếng"
+  },
+  "osm-node-2076855866": {
+    "name_key": "nha co duc an",
+    "muc_uu_tien": 2,
+    "ly_do": "Nhà cổ nổi tiếng"
+  },
+  "osm-node-8883385553": {
+    "name_key": "tasy studio",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-2076856032": {
+    "name_key": "boa tang gom su mau dich",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-way-565592419": {
+    "name_key": "bao tang hoi an",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-way-902966818": {
+    "name_key": "bao tang quan doi tinh quang nam",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng quân đội"
+  },
+  "osm-way-584941415": {
+    "name_key": "bao tang dien ban",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-node-11896339273": {
+    "name_key": "cso gallery",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-7127464285": {
+    "name_key": "hoi an museum of traditional medicine",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng y học"
+  },
+  "osm-way-626704914": {
+    "name_key": "hung dong ve va ban tranh",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-way-627379326": {
+    "name_key": "my son museum",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-node-11946310464": {
+    "name_key": "nguc dak glei",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-relation-17140360": {
+    "name_key": "vuon quoc gia song thanh",
+    "muc_uu_tien": 3,
+    "ly_do": "Vườn quốc gia Sông Thanh không phải là điểm du lịch nổi tiếng tại Hội An"
+  },
+  "osm-node-4452884989": {
+    "name_key": "cau tre",
+    "muc_uu_tien": 3,
+    "ly_do": "Cầu tre không phải là điểm du lịch nổi tiếng tại Hội An"
+  },
+  "osm-way-1530193368": {
+    "name_key": "duong dinh dap thuy dien song tranh 2",
+    "muc_uu_tien": 3,
+    "ly_do": "Đường đỉnh đập Thuỷ điện Sông Tranh 2 không phải là điểm du lịch nổi tiếng tại Hội An"
+  },
+  "osm-node-4171971589": {
+    "name_key": "",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin về điểm du lịch này"
+  },
+  "osm-way-14131302": {
+    "name_key": "hoi an memories land",
+    "muc_uu_tien": 2,
+    "ly_do": "Hoi An Memories Land là điểm du lịch giải trí tại Hội An"
+  },
+  "osm-node-13149084101": {
+    "name_key": "mini-golf hoi an",
+    "muc_uu_tien": 3,
+    "ly_do": "Mini-Golf Hoi An không phải là điểm du lịch nổi tiếng tại Hội An"
+  },
+  "osm-way-782381624": {
+    "name_key": "vinwonders nam hoi an",
+    "muc_uu_tien": 1,
+    "ly_do": "VinWonders Nam Hội An là điểm du lịch nổi tiếng tại Hội An"
+  },
+  "osm-way-715077456": {
+    "name_key": "nha tu con dao",
+    "muc_uu_tien": 1,
+    "ly_do": "Nhà tù Côn Đảo là một di tích lịch sử quan trọng"
+  },
+  "osm-node-7024795791": {
+    "name_key": "so lo voi",
+    "muc_uu_tien": 3,
+    "ly_do": "Sở Lò Vôi không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-way-469802902": {
+    "name_key": "trai phu binh",
+    "muc_uu_tien": 2,
+    "ly_do": "Trại Phú Bình là một di tích lịch sử đáng tham quan"
+  },
+  "osm-way-751056578": {
+    "name_key": "trai phu hai",
+    "muc_uu_tien": 2,
+    "ly_do": "Trại Phú Hải là một di tích lịch sử đáng tham quan"
+  },
+  "osm-node-7023329194": {
+    "name_key": "trai phu phong",
+    "muc_uu_tien": 3,
+    "ly_do": "Trại Phú Phong không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-way-751056577": {
+    "name_key": "trai phu son",
+    "muc_uu_tien": 2,
+    "ly_do": "Trại Phú Sơn là một di tích lịch sử đáng tham quan"
+  },
+  "osm-node-7023329193": {
+    "name_key": "trai phu tho",
+    "muc_uu_tien": 3,
+    "ly_do": "Trại Phú Thọ không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-7023329195": {
+    "name_key": "trai phu tuong",
+    "muc_uu_tien": 3,
+    "ly_do": "Trại Phú Tường không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-13420385690": {
+    "name_key": "buildings of so roy plantation",
+    "muc_uu_tien": 3,
+    "ly_do": "Buildings of So Roy Plantation không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-way-751056520": {
+    "name_key": "chuong bo",
+    "muc_uu_tien": 3,
+    "ly_do": "Chuồng bò không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-7021707094": {
+    "name_key": "ham phan bo",
+    "muc_uu_tien": 3,
+    "ly_do": "Hầm phân bò không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-7040442174": {
+    "name_key": "mo co van",
+    "muc_uu_tien": 2,
+    "ly_do": "Mộ Cô Vân là một di tích lịch sử đáng tham quan"
+  },
+  "osm-node-7040443180": {
+    "name_key": "mo cu nguyen an ninh",
+    "muc_uu_tien": 2,
+    "ly_do": "Mộ Cụ Nguyễn An Ninh là một di tích lịch sử đáng tham quan"
+  },
+  "osm-node-773401741": {
+    "name_key": "mo vo thi sau",
+    "muc_uu_tien": 1,
+    "ly_do": "Mộ Võ Thị Sáu là một di tích lịch sử quan trọng"
+  },
+  "osm-node-12654211643": {
+    "name_key": "mo cu le hong phong",
+    "muc_uu_tien": 2,
+    "ly_do": "Mộ cụ Lê Hồng Phong là một di tích lịch sử đáng tham quan"
+  },
+  "osm-node-7040229642": {
+    "name_key": "bai ong dung",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Ông Đụng là một điểm du lịch nổi tiếng"
+  },
+  "osm-way-751056510": {
+    "name_key": "cau tau 914",
+    "muc_uu_tien": 2,
+    "ly_do": "Cầu tàu 914 là một điểm du lịch đáng tham quan"
+  },
+  "osm-node-5826260261": {
+    "name_key": "mui ca map",
+    "muc_uu_tien": 1,
+    "ly_do": "Mũi Cá Mập là một điểm du lịch nổi tiếng"
+  },
+  "osm-node-13417458222": {
+    "name_key": "viewpoint",
+    "muc_uu_tien": 3,
+    "ly_do": "Viewpoint không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-13420414198": {
+    "name_key": "viewpoint mui chim chim",
+    "muc_uu_tien": 2,
+    "ly_do": "Viewpoint Mũi Chim Chim là một điểm du lịch đáng tham quan"
+  },
+  "osm-node-1016630575": {
+    "name_key": "entrance no. 6",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-13298789701": {
+    "name_key": "dinh ham ha",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua tinh Thanh Hoa"
+  },
+  "osm-way-576742550": {
+    "name_key": "den do",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1327195096": {
+    "name_key": "dinh ha lieu",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1416432466": {
+    "name_key": "dinh lang huu chap",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1110686331": {
+    "name_key": "chua xa dan",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-1164583083": {
+    "name_key": "dinh an thai",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-6652529905": {
+    "name_key": "dinh chem (den chem)",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-977375277": {
+    "name_key": "dinh nam dong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1481550721": {
+    "name_key": "den voi phuc",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-776438252": {
+    "name_key": "den tho an duong vuong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1151001168": {
+    "name_key": "den chua nguyen phi y lan",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-697326496": {
+    "name_key": "chua mot cot",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-700840711": {
+    "name_key": "den bach ma",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-207178320": {
+    "name_key": "den quan thanh",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-888629812": {
+    "name_key": "chua boc",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-175975025": {
+    "name_key": "chua lang",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-884063648": {
+    "name_key": "chua nam dong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1230498810": {
+    "name_key": "chua nen",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1140667038": {
+    "name_key": "chua phuc khanh",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1319176641": {
+    "name_key": "chua tuu liet",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1021332447": {
+    "name_key": "chua dong quang",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1110090366": {
+    "name_key": "khu tuong niem trang trinh nguyen binh khiem",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tich lich su"
+  },
+  "osm-node-11338749963": {
+    "name_key": "mo chu van an",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tich lich su"
+  },
+  "osm-node-2496920815": {
+    "name_key": "den tho bac ho",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tich lich su"
+  },
+  "osm-node-6278479146": {
+    "name_key": "duc vuong ngo quyen",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tich lich su"
+  },
+  "osm-node-12818429487": {
+    "name_key": "bien vo cuc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5360350621": {
+    "name_key": "cau dang",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5361071925": {
+    "name_key": "cau dinh vu - cat hai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5360350822": {
+    "name_key": "cau khue",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-6315496285": {
+    "name_key": "cho ga",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5938438385": {
+    "name_key": "che co huong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-6385048414": {
+    "name_key": "cung van hoa thieu nhi",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-13593140565": {
+    "name_key": "cung duong bao dom",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249423": {
+    "name_key": "cuong phong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249443": {
+    "name_key": "con loc sac mau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-2797512242": {
+    "name_key": "dinh vua bao dai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1383780581": {
+    "name_key": "khu bao ton thien nhien dat ngap nuoc thai thuy",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5141145956": {
+    "name_key": "khu di tich con son - kiep bac",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tich lich su"
+  },
+  "osm-node-6372554292": {
+    "name_key": "korea town",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249448": {
+    "name_key": "kinh ngu so tai & duong dua than toc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-10709724113": {
+    "name_key": "lang dan nong cu hung hoc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5291054227": {
+    "name_key": "bac khuyet dai",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4171968896": {
+    "name_key": "bach ma national park",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-13917001802": {
+    "name_key": "blue car",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5295611830": {
+    "name_key": "boi lang",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12851234501": {
+    "name_key": "buddha statue",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5326810021": {
+    "name_key": "cau chau son",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5320014421": {
+    "name_key": "cau tam giang",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5326790725": {
+    "name_key": "cau thuy van",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5326790726": {
+    "name_key": "cau van duong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-172763420": {
+    "name_key": "cung dien tho",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-172763427": {
+    "name_key": "cung truong sanh",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-39414469": {
+    "name_key": "cau ga",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5323683221": {
+    "name_key": "cau vi da",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-683524977": {
+    "name_key": "cau ngoi thanh toan",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-5914162435": {
+    "name_key": "cong chao tren dao con co",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-617944748": {
+    "name_key": "cuu vi than cong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-172657563": {
+    "name_key": "duyet thi duong",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-1453749845": {
+    "name_key": "ho thuy tien",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-771244236": {
+    "name_key": "holy cannons of the citadel of hue",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-1473275556": {
+    "name_key": "huyen tran cong chua",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4720321393": {
+    "name_key": "hong phat",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-9974267816": {
+    "name_key": "da ba chong",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh"
+  },
+  "osm-node-12495448277": {
+    "name_key": "hai duong water park",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-way-377308558": {
+    "name_key": "cong vien nuoc dam sen",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-way-463548000": {
+    "name_key": "khu du lich suoi tien",
+    "muc_uu_tien": 1,
+    "ly_do": "Thang canh"
+  },
+  "osm-way-147614676": {
+    "name_key": "dai nam van hien",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh"
+  },
+  "osm-way-32735046": {
+    "name_key": "cong vien van hoa dam sen",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-way-1023126419": {
+    "name_key": "cong vien giai tri vinwonders grand park",
+    "muc_uu_tien": 1,
+    "ly_do": "Thang canh"
+  },
+  "osm-node-12777641246": {
+    "name_key": "cong vien nuoc grand park",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-way-1303838285": {
+    "name_key": "happyland",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1383011682": {
+    "name_key": "khu vui choi van lai vien",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1491439860": {
+    "name_key": "thien duong giai tri tho trang",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1088130930": {
+    "name_key": "thoock aquatic",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1381739672": {
+    "name_key": "vuon thu my quynh",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-way-1163348358": {
+    "name_key": "vinh ky dieu",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh"
+  },
+  "osm-node-5788750953": {
+    "name_key": "kho hang thanh ly phong hai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-13330165361": {
+    "name_key": "casa",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-14057583412": {
+    "name_key": "cong ty luat emerald chi nhanh bien hoa",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-13473750007": {
+    "name_key": "h.i.d",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-8757701375": {
+    "name_key": "hang thoi trang sanding",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-11563767581": {
+    "name_key": "vinh dien chau",
+    "muc_uu_tien": 2,
+    "ly_do": "Vinh Diễn Châu là một vịnh đẹp, thu hút khách du lịch"
+  },
+  "osm-relation-20801088": {
+    "name_key": "vinh dien chau",
+    "muc_uu_tien": 2,
+    "ly_do": "Vinh Diễn Châu là một vịnh đẹp, thu hút khách du lịch"
+  },
+  "osm-node-5220854523": {
+    "name_key": "diem nghe vuon",
+    "muc_uu_tien": 3,
+    "ly_do": "Điểm nghe vượn không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-way-1286228645": {
+    "name_key": "vinwonder cua hoi",
+    "muc_uu_tien": 1,
+    "ly_do": "VinWonder Cửa Hội là một khu du lịch giải trí nổi tiếng"
+  },
+  "osm-node-12632937281": {
+    "name_key": "hang tham nang man",
+    "muc_uu_tien": 3,
+    "ly_do": "Hang Thắm Nàng Màn không phải là điểm du lịch nổi tiếng"
+  },
+  "osm-node-9828428026": {
+    "name_key": "nui lo",
+    "muc_uu_tien": 2,
+    "ly_do": "Núi Lò là một điểm du lịch thú vị, nhưng không quá nổi tiếng"
+  },
+  "osm-node-3154342340": {
+    "name_key": "dinh ngoc hoa",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem den du lich nui noi tieng o tinh Phu Tho"
+  },
+  "osm-node-5544886521": {
+    "name_key": "chua bai dinh co",
+    "muc_uu_tien": 1,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-node-12767619601": {
+    "name_key": "closed path april 2025",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-5250159922": {
+    "name_key": "cay dang co thu",
+    "muc_uu_tien": 2,
+    "ly_do": "La dia diem du lich dang ghe"
+  },
+  "osm-node-6707403387": {
+    "name_key": "cau thong tieu",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-way-449263545": {
+    "name_key": "cong tam quan",
+    "muc_uu_tien": 2,
+    "ly_do": "La dia diem du lich dang ghe"
+  },
+  "osm-node-5348990925": {
+    "name_key": "dai chien thang",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-7222461185": {
+    "name_key": "dong am tiem.",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-13392912624": {
+    "name_key": "duck petting",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-5392629123": {
+    "name_key": "dong vai gioi",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-6366200005": {
+    "name_key": "entry of mermaid cave",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-4414778348": {
+    "name_key": "exit of mermaid cave",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-3189559919": {
+    "name_key": "hai grotto",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-12309522701": {
+    "name_key": "hanh lang la han",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-relation-13552106": {
+    "name_key": "khu bao ton thien nhien dat ngap nuoc van long",
+    "muc_uu_tien": 1,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-way-474685617": {
+    "name_key": "khu du lich sinh thai trang an",
+    "muc_uu_tien": 1,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-node-5348532724": {
+    "name_key": "kim son",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-10220706862": {
+    "name_key": "lotus lake board walk",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-11913629654": {
+    "name_key": "lying dragon mountain",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-9959235417": {
+    "name_key": "lang gom bo bat",
+    "muc_uu_tien": 2,
+    "ly_do": "La dia diem du lich dang ghe"
+  },
+  "osm-node-9959238017": {
+    "name_key": "lang gom gia thuy",
+    "muc_uu_tien": 2,
+    "ly_do": "La dia diem du lich dang ghe"
+  },
+  "osm-node-4265724390": {
+    "name_key": "tea leaf forests",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng o Yên Bái"
+  },
+  "osm-node-5725299021": {
+    "name_key": "bamboo chopsticks factory",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12612375701": {
+    "name_key": "cave",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-13566134366": {
+    "name_key": "chua hang but",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-12692236473": {
+    "name_key": "hang bo muoi",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-5112141922": {
+    "name_key": "hang chieu",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-13475984320": {
+    "name_key": "hang nhim cave",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-10268906506": {
+    "name_key": "hang sung",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-13358813101": {
+    "name_key": "rien a voir ici",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-11813748258": {
+    "name_key": "tea house of baiyue tribes",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-5582045526": {
+    "name_key": "thach lam vien - ha giang",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-7189142285": {
+    "name_key": "thac so 6",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-13634036101": {
+    "name_key": "unnamed viewpoint",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-relation-17167371": {
+    "name_key": "vuon quoc gia du gia - cao nguyen da dong van",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-3108058417": {
+    "name_key": "nui co tien",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-12470652010": {
+    "name_key": "",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-853242742": {
+    "name_key": "cong vien nuoc ha giang",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-5294733028": {
+    "name_key": "grotte tien phuong",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-4518601444": {
+    "name_key": "lung khuy cave",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-8043969241": {
+    "name_key": "nui dan dam",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-378921412": {
+    "name_key": "viet nam - campuchia- lao",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-1621178555": {
+    "name_key": "chien thang dac to - tan canh",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-5154907722": {
+    "name_key": "san bay da chien",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-5158684722": {
+    "name_key": "trai trau",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-6438157485": {
+    "name_key": "duong nho kho di",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-3499295493": {
+    "name_key": "dong thien duong",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng"
+  },
+  "osm-node-3499399985": {
+    "name_key": "dong tien son",
+    "muc_uu_tien": 2,
+    "ly_do": "La diem du lich dang ghe"
+  },
+  "osm-way-519123489": {
+    "name_key": "5 hieu",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-895756059": {
+    "name_key": "bai dau",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-222906164": {
+    "name_key": "bai dua",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-node-13255497664": {
+    "name_key": "bai lang du",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-node-5736659006": {
+    "name_key": "bai suoi o - song lo",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển không nổi tiếng"
+  },
+  "osm-way-220821647": {
+    "name_key": "bai truoc",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-788324533": {
+    "name_key": "bai vong nguyet",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-node-7113815237": {
+    "name_key": "bai tam chi linh",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển không nổi tiếng"
+  },
+  "osm-node-6920066882": {
+    "name_key": "bai tam gio bien",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển không nổi tiếng"
+  },
+  "osm-node-7113815247": {
+    "name_key": "bai tam long cung",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển không nổi tiếng"
+  },
+  "osm-way-259198642": {
+    "name_key": "bai tam long hai",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển ít nổi tiếng"
+  },
+  "osm-node-6897629528": {
+    "name_key": "bai tam mo ong",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển không nổi tiếng"
+  },
+  "osm-node-7113815246": {
+    "name_key": "bai tam thuy tien",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm nổi tiếng"
+  },
+  "osm-node-6899808319": {
+    "name_key": "bai tam tran chau",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm nổi tiếng"
+  },
+  "osm-node-6895804352": {
+    "name_key": "bai tam deo nuoc ngot",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm nổi tiếng"
+  },
+  "osm-way-233875809": {
+    "name_key": "bai o quan",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm nổi tiếng"
+  },
+  "osm-way-235006078": {
+    "name_key": "ben thach kieu",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-way-775773134": {
+    "name_key": "ho coc beach resort",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu nghỉ dưỡng"
+  },
+  "osm-node-12848150025": {
+    "name_key": "palace long hai resort",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu nghỉ dưỡng"
+  },
+  "osm-way-736723391": {
+    "name_key": "phuoc hai",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm nổi tiếng"
+  },
+  "osm-way-519123488": {
+    "name_key": "s.8",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-way-580493869": {
+    "name_key": "bao tang ba ria-vung tau",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng"
+  },
+  "osm-node-5606336362": {
+    "name_key": "bao tang vu khi co robert taylor",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng"
+  },
+  "osm-way-741239559": {
+    "name_key": "bao tang dia dao long phuoc",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng"
+  },
+  "osm-way-744059371": {
+    "name_key": "di tich nha ma tam nhung",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử quan trọng"
+  },
+  "osm-way-614449966": {
+    "name_key": "nha lon long son",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử quan trọng"
+  },
+  "osm-way-569352552": {
+    "name_key": "nha luu niem vo thi sau",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử quan trọng"
+  },
+  "osm-way-577760667": {
+    "name_key": "phong trung bay di tich nui dinh",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử quan trọng"
+  },
+  "osm-node-7081523186": {
+    "name_key": "xe",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-7152911385": {
+    "name_key": "xe 2",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-7081523185": {
+    "name_key": "dia diem",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-way-259518443": {
+    "name_key": "niet ban tinh xa",
+    "muc_uu_tien": 2,
+    "ly_do": "Cơ sở tôn giáo quan trọng"
+  },
+  "osm-node-11494544919": {
+    "name_key": "buddha",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-way-259198631": {
+    "name_key": "dinh co",
+    "muc_uu_tien": 1,
+    "ly_do": "Điểm du lịch nổi tiếng"
+  },
+  "osm-way-791795169": {
+    "name_key": "nha tho vung tau",
+    "muc_uu_tien": 1,
+    "ly_do": "Điểm du lịch nổi tiếng"
+  },
+  "osm-way-410990540": {
+    "name_key": "thien vien linh chieu",
+    "muc_uu_tien": 2,
+    "ly_do": "Cơ sở tôn giáo quan trọng"
+  },
+  "osm-way-410990541": {
+    "name_key": "thien vien thuong chieu",
+    "muc_uu_tien": 2,
+    "ly_do": "La thiền viện"
+  },
+  "osm-node-1276258153": {
+    "name_key": "thich ca phat dai",
+    "muc_uu_tien": 2,
+    "ly_do": "La đền chùa"
+  },
+  "osm-way-736945163": {
+    "name_key": "den liet sy can cu minh dam",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-way-410573820": {
+    "name_key": "den tho vo thi sau",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-way-816401592": {
+    "name_key": "ho tram complex",
+    "muc_uu_tien": 1,
+    "ly_do": "Là khu du lịch"
+  },
+  "osm-node-6522497649": {
+    "name_key": "ham thuy loi",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-10291730841": {
+    "name_key": "ancient artillary battlefield",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-way-220753354": {
+    "name_key": "bach dinh",
+    "muc_uu_tien": 1,
+    "ly_do": "Là địa danh nổi tiếng"
+  },
+  "osm-node-1276258348": {
+    "name_key": "cho luoc trung",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-7370659921": {
+    "name_key": "cap treo vung tau",
+    "muc_uu_tien": 2,
+    "ly_do": "Là phương tiện di chuyển"
+  },
+  "osm-node-1276258233": {
+    "name_key": "cong khu du lich chi linh",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-way-254752637": {
+    "name_key": "cong chao ba ria",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-2653846762": {
+    "name_key": "di tich minh dam",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử"
+  },
+  "osm-way-112232819": {
+    "name_key": "hot spring water and mud b",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-relation-17189463": {
+    "name_key": "khu bao ton thien nhien binh chau - phuoc buu",
+    "muc_uu_tien": 1,
+    "ly_do": "Khu bảo tồn thiên nhiên"
+  },
+  "osm-node-6892187773": {
+    "name_key": "khu du lich deo nuoc ngot",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu du lịch"
+  },
+  "osm-relation-15678007": {
+    "name_key": "khu du tru sinh quyen rung ngap man can gio",
+    "muc_uu_tien": 3,
+    "ly_do": "Không thuộc Vũng Tàu"
+  },
+  "osm-node-12990302236": {
+    "name_key": "minera hot springs binh chau",
+    "muc_uu_tien": 2,
+    "ly_do": "Suối nước nóng"
+  },
+  "osm-node-4139573698": {
+    "name_key": "monkey island",
+    "muc_uu_tien": 2,
+    "ly_do": "Đảo du lịch"
+  },
+  "osm-way-577760733": {
+    "name_key": "nha tron",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-4469809893": {
+    "name_key": "moc trung gian",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-5419821922": {
+    "name_key": "quan tien hai san",
+    "muc_uu_tien": 3,
+    "ly_do": "Quán ăn"
+  },
+  "osm-node-7409782792": {
+    "name_key": "duong sach vung tau",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-6344633485": {
+    "name_key": "dao khi",
+    "muc_uu_tien": 2,
+    "ly_do": "Đảo du lịch"
+  },
+  "osm-node-9186621717": {
+    "name_key": "dat",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4139586001": {
+    "name_key": "bien go cong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong thuoc tinh Vung Tau"
+  },
+  "osm-way-259375905": {
+    "name_key": "cong vien tho trang",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe neu con thoi gian"
+  },
+  "osm-way-118943765": {
+    "name_key": "cong vien nuoc vung tau",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe neu con thoi gian"
+  },
+  "osm-node-7403730668": {
+    "name_key": "ho may park",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh / diem du khach thuong tim o tinh nay"
+  },
+  "osm-way-1372258701": {
+    "name_key": "tropicana park",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe neu con thoi gian"
+  },
+  "osm-node-6908808043": {
+    "name_key": "dong huynh ho",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh / diem du khach thuong tim o tinh nay"
+  },
+  "osm-way-443199521": {
+    "name_key": "bai dai beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bai Dai Beach la mot trong nhung bai bien dep nhat o Phu Quoc"
+  },
+  "osm-way-451452488": {
+    "name_key": "bai dai",
+    "muc_uu_tien": 1,
+    "ly_do": "Bai Dai la mot bai bien rong rai, thich hop cho cac hoat dong du lich"
+  },
+  "osm-way-404529508": {
+    "name_key": "bai ganh dau",
+    "muc_uu_tien": 2,
+    "ly_do": "Bai Ganh Dau la mot bai bien nho, thich hop cho nhung ai muon tim kiem mot chot bai bien yen tinh"
+  },
+  "osm-way-152288136": {
+    "name_key": "bai khem",
+    "muc_uu_tien": 2,
+    "ly_do": "Bai Khem la mot bai bien nho, thich hop cho nhung ai muon tim kiem mot chot bai bien yen tinh"
+  },
+  "osm-way-451772441": {
+    "name_key": "bai rach tram",
+    "muc_uu_tien": 3,
+    "ly_do": "Bai Rach Tram la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-451772442": {
+    "name_key": "bai rach vem",
+    "muc_uu_tien": 3,
+    "ly_do": "Bai Rach Vem la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-1489570686": {
+    "name_key": "bai trao",
+    "muc_uu_tien": 3,
+    "ly_do": "Bai Trao la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-32003768": {
+    "name_key": "bai vung bau",
+    "muc_uu_tien": 3,
+    "ly_do": "Bai Vung Bau la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-node-5482745524": {
+    "name_key": "bai bien ba keo",
+    "muc_uu_tien": 3,
+    "ly_do": "Bai bien Ba Keo la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-451452489": {
+    "name_key": "bai ong lang",
+    "muc_uu_tien": 2,
+    "ly_do": "Bai Ong Lang la mot bai bien nho, thich hop cho nhung ai muon tim kiem mot chot bai bien yen tinh"
+  },
+  "osm-way-1494293548": {
+    "name_key": "conco beach",
+    "muc_uu_tien": 3,
+    "ly_do": "ConCo Beach la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-153999648": {
+    "name_key": "thom beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Thom Beach la mot bai bien nho, khong co nhieu hoat dong du lich"
+  },
+  "osm-way-1488988777": {
+    "name_key": "bao tang phu quoc",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao Tang Phu Quoc la mot dia diem du lich noi tieng"
+  },
+  "osm-way-1270360767": {
+    "name_key": "bao tang gau teddy (teddy bear museum)",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao Tang Gay Teddy la mot dia diem du lich noi tieng"
+  },
+  "osm-node-2326969111": {
+    "name_key": "chua phat da",
+    "muc_uu_tien": 3,
+    "ly_do": "Chua Phat Da la mot dia diem du lich nho"
+  },
+  "osm-node-2326845868": {
+    "name_key": "chua van hoa",
+    "muc_uu_tien": 3,
+    "ly_do": "Chua Van Hoa la mot dia diem du lich nho"
+  },
+  "osm-node-5385141121": {
+    "name_key": "chua mo ba co",
+    "muc_uu_tien": 3,
+    "ly_do": "Chua Mo Ba Co la mot dia diem du lich nho"
+  },
+  "osm-way-467994898": {
+    "name_key": "di tich lich su - nha tu phu quoc",
+    "muc_uu_tien": 2,
+    "ly_do": "Di Tich Lich Su - Nha Tu Phu Quoc la mot dia diem du lich noi tieng"
+  },
+  "osm-node-5435536324": {
+    "name_key": "di tich chua xa xia",
+    "muc_uu_tien": 3,
+    "ly_do": "Di Tich Chua Xa Xia la mot dia diem du lich nho"
+  },
+  "osm-node-2326969092": {
+    "name_key": "phu dung co tu",
+    "muc_uu_tien": 3,
+    "ly_do": "Phu Dung Co Tu la mot dia diem du lich nho"
+  },
+  "osm-node-5382283922": {
+    "name_key": "thap 7 tang",
+    "muc_uu_tien": 2,
+    "ly_do": "Thap 7 Tang la mot dia diem du lich noi tieng"
+  },
+  "osm-node-3482735052": {
+    "name_key": "truc lam ho quoc zen monastery",
+    "muc_uu_tien": 2,
+    "ly_do": "Truc Lam Ho Quoc Zen Monastery la mot dia diem du lich noi tieng"
+  },
+  "osm-way-1270360775": {
+    "name_key": "huyen thoai tre (bamboo legend)",
+    "muc_uu_tien": 3,
+    "ly_do": "Huyen Thoai Tre la mot dia diem du lich nho"
+  },
+  "osm-way-1495746338": {
+    "name_key": "thap hen ho",
+    "muc_uu_tien": 3,
+    "ly_do": "Thap Hen Ho la mot dia diem du lich nho"
+  },
+  "osm-way-32003769": {
+    "name_key": "bai truong",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Trường là một trong những bãi biển nổi tiếng nhất tại Phú Quốc"
+  },
+  "osm-node-6968353589": {
+    "name_key": "bai truong beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Trường Beach là một điểm đến phổ biến cho du khách"
+  },
+  "osm-node-6359615985": {
+    "name_key": "fausse plage starfish",
+    "muc_uu_tien": 2,
+    "ly_do": "Fausse plage starfish là một điểm đến thú vị nhưng không quá nổi tiếng"
+  },
+  "osm-node-4293342731": {
+    "name_key": "hang ca sau",
+    "muc_uu_tien": 2,
+    "ly_do": "Hang Cá Sấu là một điểm đến thú vị cho những người thích khám phá"
+  },
+  "osm-node-6187500387": {
+    "name_key": "hoang mau pq",
+    "muc_uu_tien": 3,
+    "ly_do": "Hoàng Mâu PQ không phải là một điểm đến nổi tiếng"
+  },
+  "osm-node-4293357089": {
+    "name_key": "mo so",
+    "muc_uu_tien": 3,
+    "ly_do": "Mo So không phải là một điểm đến nổi tiếng"
+  },
+  "osm-node-4293357189": {
+    "name_key": "nui den",
+    "muc_uu_tien": 2,
+    "ly_do": "Núi Đèn là một điểm đến thú vị cho những người thích khám phá"
+  },
+  "osm-node-1954274168": {
+    "name_key": "nuoc mam khai hoan",
+    "muc_uu_tien": 3,
+    "ly_do": "Nước Mắm Khải Hoàn không phải là một điểm đến nổi tiếng"
+  },
+  "osm-node-6361980940": {
+    "name_key": "photo motifs",
+    "muc_uu_tien": 3,
+    "ly_do": "Photo Motifs không phải là một điểm đến nổi tiếng"
+  },
+  "osm-node-3482735049": {
+    "name_key": "phu quoc ridgeback terrain raceway",
+    "muc_uu_tien": 3,
+    "ly_do": "Phu Quoc Ridgeback Terrain Raceway không phải là một điểm đến nổi tiếng"
+  },
+  "osm-node-7148312985": {
+    "name_key": "start of hike trail to tien son dinh summit",
+    "muc_uu_tien": 2,
+    "ly_do": "Start of hike trail to Tiên Sơn Đỉnh summit là một điểm đến thú vị cho những người thích khám phá"
+  },
+  "osm-node-13648647562": {
+    "name_key": "the peak",
+    "muc_uu_tien": 2,
+    "ly_do": "THE PEAK là một điểm đến thú vị cho những người thích khám phá"
+  },
+  "osm-node-13652404006": {
+    "name_key": "tro choi mat dai bang",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1495890430": {
+    "name_key": "vong xoay thoi gian",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-1954274170": {
+    "name_key": "vuon tieu ngoc ha",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12441398184": {
+    "name_key": "vuon tieu duc thanh",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-10736277208": {
+    "name_key": "diem tap trung tham quan vuon quoc gia phu quoc",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-223838790": {
+    "name_key": "da dung",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-6117199886": {
+    "name_key": ".",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-relation-20973306": {
+    "name_key": "cung dien hai vuong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1092523953": {
+    "name_key": "cong vien nuoc aquatopia",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-660104575": {
+    "name_key": "vinwonders phu quoc",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-753491820": {
+    "name_key": "vinpearl safari",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-13437193401": {
+    "name_key": "hang doi",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-7495819111": {
+    "name_key": "bien dai lanh",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-160203374": {
+    "name_key": "bai mon",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-node-12128958634": {
+    "name_key": "bai bien ganh do",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-232410041": {
+    "name_key": "bao tang phu yen",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử"
+  },
+  "osm-node-4292019089": {
+    "name_key": "di tich lich su tau khong so.",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử"
+  },
+  "osm-node-13157730289": {
+    "name_key": "dia dao go thi thung",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích lịch sử"
+  },
+  "osm-node-11395378829": {
+    "name_key": "back entrance, no fee",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-9991162617": {
+    "name_key": "baie de van phong",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-4172081938": {
+    "name_key": "bai xep",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-node-5325163021": {
+    "name_key": "beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-4290014490": {
+    "name_key": "bai dung bau",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-node-5984618285": {
+    "name_key": "bo ke xom ro",
+    "muc_uu_tien": 3,
+    "ly_do": "Không rõ thông tin"
+  },
+  "osm-node-5273999121": {
+    "name_key": "cau thuan phuoc",
+    "muc_uu_tien": 2,
+    "ly_do": "Cau Thuận Phước la mot dia danh nhiễu tiếng tại Đà Nẵng"
+  },
+  "osm-node-5273998822": {
+    "name_key": "cau tien son",
+    "muc_uu_tien": 2,
+    "ly_do": "Cau Tiên Sơn la mot dia danh nhiễu tiếng tại Đà Nẵng"
+  },
+  "osm-node-5273998823": {
+    "name_key": "cau tran thi ly",
+    "muc_uu_tien": 2,
+    "ly_do": "Cau Trần Thị Lý la mot dia danh nhiễu tiếng tại Đà Nẵng"
+  },
+  "osm-node-12982910801": {
+    "name_key": "dong giang gate of heaven eco-tourism area",
+    "muc_uu_tien": 1,
+    "ly_do": "Dong Giang Gate of Heaven Eco-tourism Area la mot khu du lịch sinh thái nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-11161070775": {
+    "name_key": "dragon's head",
+    "muc_uu_tien": 3,
+    "ly_do": "Dragon's Head la mot dia danh không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-4924323121": {
+    "name_key": "fishing village and fleet",
+    "muc_uu_tien": 3,
+    "ly_do": "Fishing Village and Fleet la mot khu vực đánh bắt cá không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-6198497624": {
+    "name_key": "giant budist bell",
+    "muc_uu_tien": 3,
+    "ly_do": "Giant Budist Bell la mot công trình kiến trúc không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-way-466418347": {
+    "name_key": "hai van quan",
+    "muc_uu_tien": 1,
+    "ly_do": "Hải Vân Quan la mot dia danh lịch sử nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-5383428522": {
+    "name_key": "khu du lich sinh thai suoi luong",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu Du Lịch Sinh Thái Suối Lương la mot khu du lịch sinh thái tại Đà Nẵng"
+  },
+  "osm-node-11176025737": {
+    "name_key": "lang bich hoa da nang",
+    "muc_uu_tien": 3,
+    "ly_do": "Lang Bich hoa Da Nang la mot khu vực không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-10709738005": {
+    "name_key": "lang chieu cam ne",
+    "muc_uu_tien": 3,
+    "ly_do": "Làng chiếu Cẩm Nê la mot làng nghề không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-10709738105": {
+    "name_key": "lang nuoc mam nam o",
+    "muc_uu_tien": 3,
+    "ly_do": "Làng nước mắm Nam Ô la mot làng nghề không nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-4936727363": {
+    "name_key": "thac song mooc",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-way-610783746": {
+    "name_key": "den xa tac",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-way-971390941": {
+    "name_key": "trung tam vui choi giai tri mong cai",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1267152786": {
+    "name_key": "quang truong ho chi minh",
+    "muc_uu_tien": 1,
+    "ly_do": "La quang truong trung tam cua thanh pho"
+  },
+  "osm-node-5334861221": {
+    "name_key": "tuong dai",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua thanh pho"
+  },
+  "osm-node-9959964318": {
+    "name_key": "xa bao ninh - nghe lam nuoc mam",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4409198189": {
+    "name_key": "den tuong niem cac chien sy truong son",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua thanh pho"
+  },
+  "osm-node-1016630618": {
+    "name_key": "entrance no. 3",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1016631618": {
+    "name_key": "entrance no. 4",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1016630457": {
+    "name_key": "entrance no. 5",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-6274092945": {
+    "name_key": "du lich sinh thai mo o",
+    "muc_uu_tien": 2,
+    "ly_do": "Dia diem du lich sinh thai"
+  },
+  "osm-node-6516450285": {
+    "name_key": "fish sauce factory",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-12839265101": {
+    "name_key": "floating market tourist",
+    "muc_uu_tien": 1,
+    "ly_do": "Cham diem du lich noi tieng"
+  },
+  "osm-node-4578718792": {
+    "name_key": "flower market",
+    "muc_uu_tien": 2,
+    "ly_do": "Dia diem mua sam"
+  },
+  "osm-node-11630422969": {
+    "name_key": "khu du lich vinh sang",
+    "muc_uu_tien": 1,
+    "ly_do": "Khu du lich"
+  },
+  "osm-relation-17189465": {
+    "name_key": "khu bao ton thien nhien lung ngoc hoang",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu bao ton thien nhien"
+  },
+  "osm-node-4375003793": {
+    "name_key": "nguoi tinh nha co binh thuy",
+    "muc_uu_tien": 1,
+    "ly_do": "Nha co co y nghia lich su"
+  },
+  "osm-node-6191483685": {
+    "name_key": "nha co cai cuong",
+    "muc_uu_tien": 1,
+    "ly_do": "Nha co co y nghia lich su"
+  },
+  "osm-node-12334098401": {
+    "name_key": "orchard with fruit tasting",
+    "muc_uu_tien": 2,
+    "ly_do": "Vua vườn trái cây"
+  },
+  "osm-way-1455066448": {
+    "name_key": "orchard with fruit tasting",
+    "muc_uu_tien": 2,
+    "ly_do": "Vua vườn trái cây"
+  },
+  "osm-node-11449076782": {
+    "name_key": "phong dien floating market",
+    "muc_uu_tien": 1,
+    "ly_do": "Cham diem du lich noi tieng"
+  },
+  "osm-node-6308020518": {
+    "name_key": "rice noodle manufacture",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-12492282614": {
+    "name_key": "bo cau",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-9459474981": {
+    "name_key": "choi ong vit",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-13352751554": {
+    "name_key": "clock tower grand world - venice",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492282615": {
+    "name_key": "cu li nho",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492282620": {
+    "name_key": "cu ngoi",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4716178989": {
+    "name_key": "ca sau",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492282618": {
+    "name_key": "cong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492282619": {
+    "name_key": "cong viet nam",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-2607827391": {
+    "name_key": "cau mau luong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-9566542": {
+    "name_key": "cau the huc",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492312463": {
+    "name_key": "cay huong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-12492312461": {
+    "name_key": "cay muc",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-10709738014": {
+    "name_key": "den dai lo",
+    "muc_uu_tien": 2,
+    "ly_do": "La dien danh co ten"
+  },
+  "osm-node-13915583550": {
+    "name_key": "",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5370525523": {
+    "name_key": "",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-11292362198": {
+    "name_key": "ba ngoc - chuyen ca canh",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1518755288": {
+    "name_key": "cong vien bien ha noi",
+    "muc_uu_tien": 2,
+    "ly_do": "La cong vien"
+  },
+  "osm-way-28945667": {
+    "name_key": "cong vien thu le",
+    "muc_uu_tien": 2,
+    "ly_do": "La cong vien"
+  },
+  "osm-way-843085954": {
+    "name_key": "thien duong bao son",
+    "muc_uu_tien": 2,
+    "ly_do": "La khu du lich"
+  },
+  "osm-way-217436360": {
+    "name_key": "cong vien ho tay",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng"
+  },
+  "osm-node-13342054276": {
+    "name_key": "cong vien nuoc royal wave park",
+    "muc_uu_tien": 2,
+    "ly_do": "La cong vien nuoc"
+  },
+  "osm-node-11085187216": {
+    "name_key": "lotte world aquarium",
+    "muc_uu_tien": 2,
+    "ly_do": "La thu vien"
+  },
+  "osm-relation-16109340": {
+    "name_key": "lang van hoa - du lich cac dan toc viet nam",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng"
+  },
+  "osm-way-1474970180": {
+    "name_key": "le mat snake kingdom",
+    "muc_uu_tien": 2,
+    "ly_do": "La khu du lich"
+  },
+  "osm-node-11536736969": {
+    "name_key": "vuon tai che",
+    "muc_uu_tien": 3,
+    "ly_do": "Cong vien nho"
+  },
+  "osm-way-233480579": {
+    "name_key": "dap dang van phong",
+    "muc_uu_tien": 2,
+    "ly_do": "Dam dang ghe"
+  },
+  "osm-node-4172519489": {
+    "name_key": "ta cu moutain",
+    "muc_uu_tien": 2,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-node-11675219811": {
+    "name_key": "trung tam cuu ho linh truong dao tien",
+    "muc_uu_tien": 2,
+    "ly_do": "La trung tam cuu ho linh truong"
+  },
+  "osm-node-491587036": {
+    "name_key": "white dunes",
+    "muc_uu_tien": 1,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-node-7229023085": {
+    "name_key": "white sand",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1453744510": {
+    "name_key": "doi cat bay mui ne",
+    "muc_uu_tien": 1,
+    "ly_do": "La dia diem du lich noi tieng"
+  },
+  "osm-node-12483905101": {
+    "name_key": ".",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-3852310928": {
+    "name_key": "vita garden mini-zoo",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh"
+  },
+  "osm-node-7973115090": {
+    "name_key": "ho son tho",
+    "muc_uu_tien": 2,
+    "ly_do": "Hồ Sơn Thọ là một điểm du lịch"
+  },
+  "osm-way-1167513732": {
+    "name_key": "ironwood foot bridge",
+    "muc_uu_tien": 3,
+    "ly_do": "Ironwood Foot Bridge không nổi tiếng"
+  },
+  "osm-relation-17341287": {
+    "name_key": "khu du tru thien nhien phong dien",
+    "muc_uu_tien": 1,
+    "ly_do": "Khu Dự trữ thiên nhiên Phong Điền là điểm du lịch nổi tiếng"
+  },
+  "osm-relation-17351494": {
+    "name_key": "khu bao ton sao la hue",
+    "muc_uu_tien": 1,
+    "ly_do": "Khu bảo tồn Sao la Huế là điểm du lịch nổi tiếng"
+  },
+  "osm-node-7414666686": {
+    "name_key": "khu bao ton thien nhien dakrong",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu bảo tồn thiên nhiên Đakrông là điểm du lịch"
+  },
+  "osm-relation-17344722": {
+    "name_key": "khu bao ton thien nhien dakrong",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu bảo tồn thiên nhiên Đakrông là điểm du lịch"
+  },
+  "osm-node-5332978922": {
+    "name_key": "le duan",
+    "muc_uu_tien": 3,
+    "ly_do": "Le Duan không nổi tiếng"
+  },
+  "osm-node-9960139117": {
+    "name_key": "lien lang chuon",
+    "muc_uu_tien": 3,
+    "ly_do": "Liễn làng Chuồn không nổi tiếng"
+  },
+  "osm-node-9960036518": {
+    "name_key": "lang bun cam thach",
+    "muc_uu_tien": 3,
+    "ly_do": "Làng bún Cẩm Thạch không nổi tiếng"
+  },
+  "osm-node-9960123517": {
+    "name_key": "lang co phuoc tich",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng cổ Phước Tích là điểm du lịch"
+  },
+  "osm-node-9960093019": {
+    "name_key": "lang kim hoan ke mon",
+    "muc_uu_tien": 3,
+    "ly_do": "Làng kim hoàn Kế Môn không nổi tiếng"
+  },
+  "osm-node-9959987918": {
+    "name_key": "lang lam giay va voi pho lai",
+    "muc_uu_tien": 3,
+    "ly_do": "Làng làm giấy và vôi Phổ Lại không nổi tiếng"
+  },
+  "osm-node-5043949621": {
+    "name_key": "bau sau nam cat tien",
+    "muc_uu_tien": 3,
+    "ly_do": "nói tí ứng như công viên"
+  },
+  "osm-node-12288965901": {
+    "name_key": "bai cho ra ca di nhau",
+    "muc_uu_tien": 3,
+    "ly_do": "không phương pháp"
+  },
+  "osm-node-11430381711": {
+    "name_key": "cambodia bus companies (many)",
+    "muc_uu_tien": 3,
+    "ly_do": "công ty ô tổ"
+  },
+  "osm-way-77183584": {
+    "name_key": "chuong khi",
+    "muc_uu_tien": 3,
+    "ly_do": "không ứng"
+  },
+  "osm-node-4171823889": {
+    "name_key": "cu chi wildlife rescue station",
+    "muc_uu_tien": 2,
+    "ly_do": "trạm cậy giồng vật ông"
+  },
+  "osm-node-6045633961": {
+    "name_key": "ca sau",
+    "muc_uu_tien": 3,
+    "ly_do": "vươn thuức"
+  },
+  "osm-node-10729928005": {
+    "name_key": "cay tung co thu",
+    "muc_uu_tien": 3,
+    "ly_do": "cây cần"
+  },
+  "osm-node-4111509589": {
+    "name_key": "cong vien ven song an phu hung",
+    "muc_uu_tien": 2,
+    "ly_do": "công viên"
+  },
+  "osm-node-5388462723": {
+    "name_key": "cong vien bo song sai gon",
+    "muc_uu_tien": 2,
+    "ly_do": "công viên"
+  },
+  "osm-node-12505622803": {
+    "name_key": "cau",
+    "muc_uu_tien": 3,
+    "ly_do": "cầu"
+  },
+  "osm-way-286297477": {
+    "name_key": "cau mong",
+    "muc_uu_tien": 2,
+    "ly_do": "cầu"
+  },
+  "osm-node-5433188023": {
+    "name_key": "cau di bo so 7",
+    "muc_uu_tien": 3,
+    "ly_do": "cầu đi bộ"
+  },
+  "osm-way-1160002195": {
+    "name_key": "can cu xu uy nam bo",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-230395519": {
+    "name_key": "bao tang tinh",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-4758805136": {
+    "name_key": "hung khanh trung b",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4758805142": {
+    "name_key": "nga re",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4758804848": {
+    "name_key": "phuong 8 thanh pho ben tre",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4758805141": {
+    "name_key": "phuong nhi my cai lay",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4759000554": {
+    "name_key": "thanh pho tan an",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4758805139": {
+    "name_key": "tan trung",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4765880121": {
+    "name_key": "xa an thanh thuy",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4374995393": {
+    "name_key": "bao tang go thanh",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-4374974795": {
+    "name_key": "nha co ben kia cau",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-4758804852": {
+    "name_key": "ap binh tao xa trung an",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4293357289": {
+    "name_key": "nui sam",
+    "muc_uu_tien": 1,
+    "ly_do": "Núi Sam là điểm du lịch nổi tiếng tại Châu Đốc"
+  },
+  "osm-node-4344121490": {
+    "name_key": "nam gieng",
+    "muc_uu_tien": 2,
+    "ly_do": "Năm Giếng là điểm du lịch thú vị nhưng không quá nổi tiếng"
+  },
+  "osm-node-10548902010": {
+    "name_key": "caphe vong - gio mat",
+    "muc_uu_tien": 3,
+    "ly_do": "càphe Võng - gió mát không phải là điểm du lịch chính"
+  },
+  "osm-way-166192243": {
+    "name_key": "dinh than vtt",
+    "muc_uu_tien": 2,
+    "ly_do": "đình thần VTT là điểm du lịch thú vị nhưng không quá nổi tiếng"
+  },
+  "osm-way-1189409898": {
+    "name_key": "cong vien nuoc hai den",
+    "muc_uu_tien": 2,
+    "ly_do": "Công viên nước Hải Đến là điểm du lịch thú vị cho gia đình"
+  },
+  "osm-way-1189688530": {
+    "name_key": "cong vien nuoc thanh long",
+    "muc_uu_tien": 2,
+    "ly_do": "Công viên nước Thanh Long là điểm du lịch thú vị cho gia đình"
+  },
+  "osm-node-13848772902": {
+    "name_key": "chau battery power",
+    "muc_uu_tien": 3,
+    "ly_do": "châu battery power không phải là điểm du lịch chính"
+  },
+  "osm-node-4170056090": {
+    "name_key": "y ty",
+    "muc_uu_tien": 1,
+    "ly_do": "La mot dia diem du lich noi tieng o Sa Pa"
+  },
+  "osm-node-5634866922": {
+    "name_key": "stunning valley full of great views",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin chi tiet ve dia diem nay"
+  },
+  "osm-way-708047684": {
+    "name_key": "cung van hoa thieu nhi",
+    "muc_uu_tien": 3,
+    "ly_do": "La mot co so gia tri, khong phai la mot dia diem du lich noi tieng"
+  },
+  "osm-node-9959686917": {
+    "name_key": "lang moc dat tai",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng mọc có uy tín"
+  },
+  "osm-node-9959352817": {
+    "name_key": "lang nghe det nhieu hong do",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng nghề đệt nhiễu có tiếng"
+  },
+  "osm-node-9959358317": {
+    "name_key": "lang nghe duc dong che dong",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng nghề đúc đồng có uy tín"
+  },
+  "osm-node-9959630517": {
+    "name_key": "lang dieu khac da nhoi",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng điều khách đá có tiếng"
+  },
+  "osm-node-4929589834": {
+    "name_key": "park",
+    "muc_uu_tien": 3,
+    "ly_do": "Công viên nhỏ, không nổi tiếng"
+  },
+  "osm-relation-17353323": {
+    "name_key": "vuon quoc gia xuan lien",
+    "muc_uu_tien": 1,
+    "ly_do": "Vườn quốc gia có tiếng và rộng lớn"
+  },
+  "osm-node-3189545835": {
+    "name_key": "tien grotto",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng"
+  },
+  "osm-node-2089305122": {
+    "name_key": "dong huong tich",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng"
+  },
+  "osm-node-1725481657": {
+    "name_key": "dong nguoi xua",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1995508763": {
+    "name_key": "dong son cung",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1019040796": {
+    "name_key": "bao tang binh doan tay nguyen",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao tang co y nghia lich su"
+  },
+  "osm-way-672575639": {
+    "name_key": "bao tang pleiku",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao tang co y nghia lich su"
+  },
+  "osm-node-5740163625": {
+    "name_key": "bao tang tich ho chi minh cn gia lai",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao tang co y nghia lich su"
+  },
+  "osm-node-13105153109": {
+    "name_key": "bien ho pleiku",
+    "muc_uu_tien": 1,
+    "ly_do": "Dia danh du lich thuong tim"
+  },
+  "osm-node-6053632591": {
+    "name_key": "coon village",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1720384571": {
+    "name_key": "khu du lich dai vinh gia trang",
+    "muc_uu_tien": 1,
+    "ly_do": "Dia danh du lich thuong tim"
+  },
+  "osm-way-1148179691": {
+    "name_key": "nui lua chu dang ya",
+    "muc_uu_tien": 1,
+    "ly_do": "Dia danh du lich thuong tim"
+  },
+  "osm-way-1527724675": {
+    "name_key": "cong vien dong xanh",
+    "muc_uu_tien": 3,
+    "ly_do": "Cong vien nho"
+  },
+  "osm-node-10919514735": {
+    "name_key": "xe dien thanh dong",
+    "muc_uu_tien": 3,
+    "ly_do": "Không nổi tiếng"
+  },
+  "osm-node-9959201917": {
+    "name_key": "lang lam bun phong loc tay",
+    "muc_uu_tien": 2,
+    "ly_do": "Là dịa đẳng có ý nghĩa lịch sử và văn hóa"
+  },
+  "osm-node-9959145317": {
+    "name_key": "lang nghe banh da nem cheu",
+    "muc_uu_tien": 2,
+    "ly_do": "Là làng nghề bánh đa nem có uy tín"
+  },
+  "osm-node-9959151617": {
+    "name_key": "lang nghe ruou voc",
+    "muc_uu_tien": 3,
+    "ly_do": "Là làng nghề rượu nhỏ"
+  },
+  "osm-node-9959136017": {
+    "name_key": "lang nghe sung my nghe do hai",
+    "muc_uu_tien": 3,
+    "ly_do": "Là làng nghề sừng mỹ nghệ nhỏ"
+  },
+  "osm-way-1523890101": {
+    "name_key": "sun world ha nam",
+    "muc_uu_tien": 1,
+    "ly_do": "Là khu du lịch giải trí lớn"
+  },
+  "osm-way-845629735": {
+    "name_key": "bao tang tinh quang ngai",
+    "muc_uu_tien": 2,
+    "ly_do": "Bao tang tinh Quang Ngai la diem den du lich quan trong"
+  },
+  "osm-way-1332441514": {
+    "name_key": "son my / my lai memorial",
+    "muc_uu_tien": 1,
+    "ly_do": "Son My / My Lai memorial la diem du lich nong tinh"
+  },
+  "osm-node-14047635902": {
+    "name_key": "xuat phat",
+    "muc_uu_tien": 3,
+    "ly_do": "Xuat phat khong phai la diem den du lich"
+  },
+  "osm-node-14048115901": {
+    "name_key": "diem den",
+    "muc_uu_tien": 3,
+    "ly_do": "Diem den khong phai la diem den du lich"
+  },
+  "osm-node-12244431198": {
+    "name_key": "san bay de duc (da dong cua)",
+    "muc_uu_tien": 3,
+    "ly_do": "San bay da dong cua khong phai la diem den du lich"
+  },
+  "osm-node-5922616531": {
+    "name_key": "us vehicles graveyard",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-4695553190": {
+    "name_key": "video show place",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-relation-7145523": {
+    "name_key": "vuon quoc gia lo go - xa mat",
+    "muc_uu_tien": 1,
+    "ly_do": "vuon quoc gia"
+  },
+  "osm-node-10796648604": {
+    "name_key": "dau su duong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1162904824": {
+    "name_key": "khu du lich nui ba den",
+    "muc_uu_tien": 1,
+    "ly_do": "khu du lich noi tieng"
+  },
+  "osm-node-6239152659": {
+    "name_key": "dong thanh long",
+    "muc_uu_tien": 2,
+    "ly_do": "hang dong"
+  },
+  "osm-node-5490688956": {
+    "name_key": "nha rong kon pring",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng cua tinh Kon Tum"
+  },
+  "osm-node-5490606655": {
+    "name_key": "thac pa sy",
+    "muc_uu_tien": 2,
+    "ly_do": "La diem tham quan dang ghe neu con thoi gian"
+  },
+  "osm-node-5468811486": {
+    "name_key": "jungle boss sales office",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5573531923": {
+    "name_key": "ban arem",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5745158221": {
+    "name_key": "bong lai rattan house",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5340127526": {
+    "name_key": "cau bong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5339081323": {
+    "name_key": "cau bong lai ( only for walk and motorbikes )",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-14055943401": {
+    "name_key": "cay sao tram tuoi",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5538133321": {
+    "name_key": "canh duong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-5860705502": {
+    "name_key": "environmental interpretation",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la diem du lich noi tieng"
+  },
+  "osm-node-4318938089": {
+    "name_key": "hang 8 co",
+    "muc_uu_tien": 1,
+    "ly_do": "Hang 8 co la diem du lich noi tieng"
+  },
+  "osm-node-10239685067": {
+    "name_key": "hang ken dry",
+    "muc_uu_tien": 2,
+    "ly_do": "Hang Ken Dry la diem du lich dang ghe"
+  },
+  "osm-node-10239659651": {
+    "name_key": "hang ken wet",
+    "muc_uu_tien": 2,
+    "ly_do": "Hang Ken Wet la diem du lich dang ghe"
+  },
+  "osm-node-10239678722": {
+    "name_key": "hang sun oxalis",
+    "muc_uu_tien": 2,
+    "ly_do": "Hang Sun Oxalis la diem du lich dang ghe"
+  },
+  "osm-relation-10356027": {
+    "name_key": "bai an hai",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển đẹp, thu hút nhiều du khách"
+  },
+  "osm-way-753491824": {
+    "name_key": "bai bang",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển hoang sơ, ít du khách"
+  },
+  "osm-way-751858952": {
+    "name_key": "bai cat lon",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển rộng, nhiều hoạt động du lịch"
+  },
+  "osm-way-753518096": {
+    "name_key": "bai co van",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, ít nổi tiếng"
+  },
+  "osm-way-751858953": {
+    "name_key": "bai duong",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển đẹp, nhưng ít du khách"
+  },
+  "osm-way-753518100": {
+    "name_key": "bai hon cau",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển hoang sơ, không nổi tiếng"
+  },
+  "osm-way-751056506": {
+    "name_key": "bai lo voi",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-752991343": {
+    "name_key": "bai nho",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-relation-10377306": {
+    "name_key": "bai vong",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển đẹp, nhưng ít du khách"
+  },
+  "osm-way-753491821": {
+    "name_key": "bai ong cau",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-752991350": {
+    "name_key": "bai ong cuong",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-750745981": {
+    "name_key": "bai da cuoi",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-753491822": {
+    "name_key": "bai dat tham",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Đất Thắm là một trong những bãi biển đẹp và nổi tiếng nhất tại Côn Đảo"
+  },
+  "osm-node-8591412033": {
+    "name_key": "bai dam trau",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Đầm Trầu là một bãi biển đẹp và thu hút nhiều du khách"
+  },
+  "osm-node-12071058849": {
+    "name_key": "ong noe beach",
+    "muc_uu_tien": 2,
+    "ly_do": "Ong Noé beach là một bãi biển đẹp nhưng không quá nổi tiếng"
+  },
+  "osm-node-12071560380": {
+    "name_key": "ong toine beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Ong toine beach là một bãi biển không quá nổi tiếng"
+  },
+  "osm-node-12071094464": {
+    "name_key": "plage secrete",
+    "muc_uu_tien": 3,
+    "ly_do": "Plage secrète là một bãi biển không quá nổi tiếng"
+  },
+  "osm-way-751056607": {
+    "name_key": "bao tang con dao",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng Côn Đảo là một địa điểm du lịch văn hóa"
+  },
+  "osm-way-751056573": {
+    "name_key": "di tich so co",
+    "muc_uu_tien": 2,
+    "ly_do": "Di tích Sở Cò là một địa điểm du lịch văn hóa"
+  },
+  "osm-way-751056576": {
+    "name_key": "dinh chua dao",
+    "muc_uu_tien": 2,
+    "ly_do": "Dinh Chúa Đảo là một địa điểm du lịch văn hóa"
+  },
+  "osm-relation-7144054": {
+    "name_key": "vuon quoc gia con dao",
+    "muc_uu_tien": 1,
+    "ly_do": "Vườn quốc gia Côn Đảo là một khu bảo tồn thiên nhiên quan trọng"
+  },
+  "osm-node-7720996586": {
+    "name_key": "cay di san viet nam",
+    "muc_uu_tien": 3,
+    "ly_do": "Cây di sản Việt Nam là một điểm du lịch không quá nổi tiếng"
+  },
+  "osm-node-13513720101": {
+    "name_key": "con dao dive center",
+    "muc_uu_tien": 3,
+    "ly_do": "Con Dao Dive Center là một trung tâm lặn không quá nổi tiếng"
+  },
+  "osm-node-12647208262": {
+    "name_key": "bai bien son tra",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Biển Sơn Trà là một trong những bãi biển nổi tiếng nhất tại Đà Nẵng"
+  },
+  "osm-way-1415072216": {
+    "name_key": "bai ba da",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi Bà Đa là một bãi biển đẹp, nhưng không nổi tiếng như Bãi Biển Sơn Trà"
+  },
+  "osm-way-1265740821": {
+    "name_key": "bai cat vang",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi Cát Vàng là một bãi biển đẹp, nhưng không nổi tiếng như Bãi Biển Sơn Trà"
+  },
+  "osm-way-508243736": {
+    "name_key": "bai ham",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi Hầm là một bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-1415072215": {
+    "name_key": "bai sung co",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi Sủng Cỏ là một bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-508244759": {
+    "name_key": "bai xoan",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi Xoan là một bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-1330726238": {
+    "name_key": "bai bien bac",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển Bắc là một bãi biển đẹp, nhưng không nổi tiếng như Bãi Biển Sơn Trà"
+  },
+  "osm-way-630377259": {
+    "name_key": "bai bien tien sa",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển Tiên Sa là một bãi biển đẹp, nhưng không nổi tiếng như Bãi Biển Sơn Trà"
+  },
+  "osm-way-1205391949": {
+    "name_key": "bai bien tan tra",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi biển Tân Trà là một bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-1204900824": {
+    "name_key": "bai tam non nuoc",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi tắm Non Nước là một bãi biển nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-13040467529": {
+    "name_key": "bai da",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi Đá là một bãi biển nhỏ, không nổi tiếng"
+  },
+  "osm-way-256675637": {
+    "name_key": "lang co",
+    "muc_uu_tien": 1,
+    "ly_do": "Lăng Cô là một bãi biển nổi tiếng tại Đà Nẵng"
+  },
+  "osm-node-4347089780": {
+    "name_key": "my an beach",
+    "muc_uu_tien": 1,
+    "ly_do": "My An Beach la mot trong nhung bai bien dep nhat o Da Nang"
+  },
+  "osm-node-7095169367": {
+    "name_key": "art gallery",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5817580453": {
+    "name_key": "art in paradise da nang 3d museum",
+    "muc_uu_tien": 2,
+    "ly_do": "noi tieng nhung khong pho bien"
+  },
+  "osm-node-8474743417": {
+    "name_key": "bao tang phat giao",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1368599361": {
+    "name_key": "bao tang da nang",
+    "muc_uu_tien": 2,
+    "ly_do": "noi tieng nhung khong pho bien"
+  },
+  "osm-node-12622064034": {
+    "name_key": "marble mountains museum",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1474583779": {
+    "name_key": "nha trung bay hoang sa",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-5512742621": {
+    "name_key": "nha tho toc nguyen van",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-204790989": {
+    "name_key": "cho con",
+    "muc_uu_tien": 2,
+    "ly_do": "cho con la mot trong nhung dia diem mua sam o Da Nang"
+  },
+  "osm-node-13687068650": {
+    "name_key": "linh phong bao thap",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-11359603957": {
+    "name_key": "nam son pagoda",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-1109970009": {
+    "name_key": "nha tho saint denis",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-way-597505233": {
+    "name_key": "dinh bo ban",
+    "muc_uu_tien": 3,
+    "ly_do": "nơi thờ cúng địa phương"
+  },
+  "osm-way-303499553": {
+    "name_key": "dinh nai nam",
+    "muc_uu_tien": 3,
+    "ly_do": "nơi thờ cúng địa phương"
+  },
+  "osm-way-1547483081": {
+    "name_key": "dinh tuy loan",
+    "muc_uu_tien": 3,
+    "ly_do": "nơi thờ cúng địa phương"
+  },
+  "osm-node-12404434601": {
+    "name_key": "khu van hoa tam linh da son",
+    "muc_uu_tien": 3,
+    "ly_do": "khu văn hóa tâm linh"
+  },
+  "osm-node-11841089975": {
+    "name_key": "5 lakes",
+    "muc_uu_tien": 3,
+    "ly_do": "không rõ thông tin"
+  },
+  "osm-node-12815941401": {
+    "name_key": "7 wonders",
+    "muc_uu_tien": 3,
+    "ly_do": "không rõ thông tin"
+  },
+  "osm-node-10175727317": {
+    "name_key": "bho hoong village ethnique",
+    "muc_uu_tien": 2,
+    "ly_do": "làng văn hóa dân tộc"
+  },
+  "osm-node-5276547123": {
+    "name_key": "cau nguyen van troi bridge",
+    "muc_uu_tien": 3,
+    "ly_do": "cầu không nổi bật"
+  },
+  "osm-node-7301996085": {
+    "name_key": "cho dem helio",
+    "muc_uu_tien": 2,
+    "ly_do": "chợ đêm địa phương"
+  },
+  "osm-node-6528451001": {
+    "name_key": "cay da do xu",
+    "muc_uu_tien": 3,
+    "ly_do": "cây đa không nổi bật"
+  },
+  "osm-node-6346486685": {
+    "name_key": "cay da dai thu",
+    "muc_uu_tien": 3,
+    "ly_do": "cây đa không nổi bật"
+  },
+  "osm-node-7276380289": {
+    "name_key": "cau song han",
+    "muc_uu_tien": 1,
+    "ly_do": "cầu sông Hàn nổi bật"
+  },
+  "osm-node-10709724107": {
+    "name_key": "lang da my nghe non nuoc",
+    "muc_uu_tien": 2,
+    "ly_do": "Làng đá mỹ nghệ có ý nghĩa về văn hóa và mỹ thuật"
+  },
+  "osm-node-4172034499": {
+    "name_key": "non nuoc beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bĩnh Bảy Non Nức là một trong những bĩnh bảy khám phá đẹp nhất tại Đà Nẵng"
+  },
+  "osm-node-5286977425": {
+    "name_key": "nui than tai",
+    "muc_uu_tien": 3,
+    "ly_do": "Nuĩ Thần Tài có diện tích nhỏ và không có nhiều điểm du lịch"
+  },
+  "osm-node-10603622205": {
+    "name_key": "pont main",
+    "muc_uu_tien": 3,
+    "ly_do": "Pont main là một công trình kiến trúc nhỏ và không có ý nghĩa du lịch"
+  },
+  "osm-node-11934169470": {
+    "name_key": "queen cobra",
+    "muc_uu_tien": 3,
+    "ly_do": "Queen Cobra là một điểm du lịch nhỏ và không có nhiều khám phá"
+  },
+  "osm-relation-13129586": {
+    "name_key": "rung dac dung ba na - nui chua",
+    "muc_uu_tien": 2,
+    "ly_do": "Rừng đặc dụng Bà Nà - Nuĩ Chửa là một khu vực bảo tồn thiên nhiên"
+  },
+  "osm-relation-7055216": {
+    "name_key": "rung dac dung son tra",
+    "muc_uu_tien": 2,
+    "ly_do": "Rừng đặc dụng Sơn Trà là một khu vực bảo tồn thiên nhiên"
+  },
+  "osm-node-4222784590": {
+    "name_key": "saturday option",
+    "muc_uu_tien": 3,
+    "ly_do": "Saturday Option là một điểm du lịch nhỏ và không có nhiều khám phá"
+  },
+  "osm-node-1981026588": {
+    "name_key": "suoi voi",
+    "muc_uu_tien": 3,
+    "ly_do": "Suối Voi là một điểm du lịch nhỏ và không có nhiều khám phá"
+  },
+  "osm-node-1758586662": {
+    "name_key": "thuy son",
+    "muc_uu_tien": 2,
+    "ly_do": "Thủy Sơn là một điểm du lịch có ý nghĩa về lịch sử và văn hóa"
+  },
+  "osm-node-1036552571": {
+    "name_key": "deo hai van",
+    "muc_uu_tien": 1,
+    "ly_do": "Đềo Hải Vân là một điểm du lịch khám phá đẹp nhất tại Đà Nẵng"
+  },
+  "osm-node-13734880501": {
+    "name_key": "tuong phat phuoc ly",
+    "muc_uu_tien": 3,
+    "ly_do": "Tượng Phật Phước Lý là một điểm du lịch nhỏ và không có nhiều khám phá"
+  },
+  "osm-node-10154412164": {
+    "name_key": "fantasy park",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem den thu hut du khach"
+  },
+  "osm-node-11128058462": {
+    "name_key": "khe su 4 quan di huong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-11128058463": {
+    "name_key": "nha nau trai suoi khe su 3",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-359114064": {
+    "name_key": "sun world ba na hills",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem den noi tieng cua Da Nang"
+  },
+  "osm-node-11128058485": {
+    "name_key": "thac nhi ho",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem den thu hut du khach"
+  },
+  "osm-way-1098017450": {
+    "name_key": "waterpark 365 mikazuki hotel",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem den thu hut du khach"
+  },
+  "osm-way-1484919510": {
+    "name_key": "xanh design dn tiem cay va nuoc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4807957148": {
+    "name_key": "trung tam giai tri phuc hop helio center",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem den thu hut du khach"
+  },
+  "osm-node-5922491535": {
+    "name_key": "dong tang chon",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1758586757": {
+    "name_key": "huyen khong cave",
+    "muc_uu_tien": 2,
+    "ly_do": "Co the la diem den thu hut du khach"
+  },
+  "osm-node-2093848434": {
+    "name_key": "linh nham cave",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1758586716": {
+    "name_key": "van thong cave",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1758586686": {
+    "name_key": "dong am phu",
+    "muc_uu_tien": 1,
+    "ly_do": "La diem du lich noi tieng o Da Nang"
+  },
+  "osm-way-243480753": {
+    "name_key": "bai chuoi",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1545919861": {
+    "name_key": "bai cha la",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1383217347": {
+    "name_key": "bai ca tien",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1546195288": {
+    "name_key": "bai trang",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển nổi tiếng"
+  },
+  "osm-way-1189320678": {
+    "name_key": "bao tang ninh thuan",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng địa phương"
+  },
+  "osm-node-12433396861": {
+    "name_key": "trung tam nghien cuu van hoa cham",
+    "muc_uu_tien": 2,
+    "ly_do": "Trung tâm nghiên cứu văn hóa"
+  },
+  "osm-node-4817286823": {
+    "name_key": "che thap cam ngon 5 k",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch chính"
+  },
+  "osm-node-5091041221": {
+    "name_key": "nghe nhan dang xem gom bau truc",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch chính"
+  },
+  "osm-node-7288997385": {
+    "name_key": "bai hom",
+    "muc_uu_tien": 2,
+    "ly_do": "Địa danh địa phương"
+  },
+  "osm-node-5662987524": {
+    "name_key": "campus 6 night",
+    "muc_uu_tien": 3,
+    "ly_do": "Không phải điểm du lịch chính"
+  },
+  "osm-node-5233871122": {
+    "name_key": "hang rai",
+    "muc_uu_tien": 2,
+    "ly_do": "Địa danh địa phương"
+  },
+  "osm-node-5662987523": {
+    "name_key": "moc 3 tinh lam dong - ninh thuan - binh thuan 1701m",
+    "muc_uu_tien": 2,
+    "ly_do": "Địa danh địa phương"
+  },
+  "osm-way-669955460": {
+    "name_key": "bai khai long",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển đẹp, thu hút khách du lịch"
+  },
+  "osm-way-1119766490": {
+    "name_key": "khu di tich lich su can cu ban an ninh khu ix",
+    "muc_uu_tien": 1,
+    "ly_do": "Di tích lịch sử quan trọng"
+  },
+  "osm-way-1179808080": {
+    "name_key": "san chim dam doi",
+    "muc_uu_tien": 2,
+    "ly_do": "Sân chim đẹp, đa dạng loài chim"
+  },
+  "osm-way-1228650506": {
+    "name_key": "cot co mui ca mau",
+    "muc_uu_tien": 1,
+    "ly_do": "Cột cờ nổi tiếng, điểm check-in"
+  },
+  "osm-node-12766802559": {
+    "name_key": "hoa rung u minh",
+    "muc_uu_tien": 3,
+    "ly_do": "Hoa rừng đẹp nhưng không nổi tiếng"
+  },
+  "osm-node-5435416824": {
+    "name_key": "khu tuong niem chu tich ho chi minh",
+    "muc_uu_tien": 3,
+    "ly_do": "Khu tưởng niệm không nổi tiếng"
+  },
+  "osm-relation-19092525": {
+    "name_key": "khu bao ton bien tinh ca mau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khu bảo tồn biển không nổi tiếng"
+  },
+  "osm-relation-17189464": {
+    "name_key": "vuon chim bac lieu",
+    "muc_uu_tien": 3,
+    "ly_do": "Vườn chim không thuộc Cà Mau"
+  },
+  "osm-node-13518461501": {
+    "name_key": "duong xe may len ma thien lanh",
+    "muc_uu_tien": 3,
+    "ly_do": "Đường xe máy lên Ma Thiên Lãnh không nổi tiếng"
+  },
+  "osm-way-384652651": {
+    "name_key": "bai tra co",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi Trà Cổ là một trong những bãi biển nổi tiếng nhất tại Cô Tô"
+  },
+  "osm-way-150876066": {
+    "name_key": "bai bien minh chau",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển Minh Châu là một điểm đến phổ biến cho du khách"
+  },
+  "osm-way-150876067": {
+    "name_key": "bai bien quan lan",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển Quan Lạn là một điểm đến đẹp nhưng ít được biết đến"
+  },
+  "osm-way-150876064": {
+    "name_key": "bai bien son hao",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển Sơn Hào là một điểm đến đẹp nhưng cần thời gian để khám phá"
+  },
+  "osm-node-7645040503": {
+    "name_key": "bai da den",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi Đá Đen là một điểm đến đẹp nhưng cần thời gian để khám phá"
+  },
+  "osm-way-150859298": {
+    "name_key": "minh chau beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Minh Chau Beach là một điểm đến không nổi tiếng"
+  },
+  "osm-node-5784054226": {
+    "name_key": "bieu tuong du lich nga ba tra co",
+    "muc_uu_tien": 3,
+    "ly_do": "Biểu tượng du lịch ngã ba Trà Cổ là một điểm đến không nổi tiếng"
+  },
+  "osm-node-4940164422": {
+    "name_key": "bai lua trai",
+    "muc_uu_tien": 3,
+    "ly_do": "Bãi lửa trại là một điểm đến không nổi tiếng"
+  },
+  "osm-way-286780025": {
+    "name_key": "cau bac luan",
+    "muc_uu_tien": 3,
+    "ly_do": "Cầu Bắc Luân là một điểm đến không nổi tiếng"
+  },
+  "osm-way-498065942": {
+    "name_key": "hidden beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Hidden beach là một điểm đến không nổi tiếng"
+  },
+  "osm-way-1182219451": {
+    "name_key": "khu bao ton bien bach long vi",
+    "muc_uu_tien": 3,
+    "ly_do": "Khu bảo tồn biển Bạch Long Vĩ là một điểm đến không nổi tiếng"
+  },
+  "osm-relation-15981082": {
+    "name_key": "khu bao ton bien co to - dao tran",
+    "muc_uu_tien": 3,
+    "ly_do": "Khu bảo tồn biển Cô Tô - Đảo Trần là một điểm đến không nổi tiếng"
+  },
+  "osm-way-409741435": {
+    "name_key": "bai bien cat co 1",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển Cát Cỏ 1 là một trong những bãi biển nổi tiếng nhất tại Cát Bà"
+  },
+  "osm-way-409741436": {
+    "name_key": "bai bien cat co 2",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển Cát Cỏ 2 cũng là một điểm đến phổ biến tại Cát Bà"
+  },
+  "osm-way-409741434": {
+    "name_key": "bai bien cat co 3",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển Cát Cỏ 3 là một phần của khu vực bãi biển Cát Cỏ nổi tiếng"
+  },
+  "osm-way-690132854": {
+    "name_key": "bai bien tung thu",
+    "muc_uu_tien": 2,
+    "ly_do": "Bãi biển Tùng Thu là một điểm đến ít được biết đến hơn nhưng vẫn có cảnh quan đẹp"
+  },
+  "osm-relation-19902805": {
+    "name_key": "moodys beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Moody’s Beach không phải là một điểm đến nổi tiếng tại Cát Bà"
+  },
+  "osm-way-1195550420": {
+    "name_key": "storland beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Storland beach không phải là một điểm đến nổi tiếng tại Cát Bà"
+  },
+  "osm-relation-20402110": {
+    "name_key": "xuan dam beach",
+    "muc_uu_tien": 3,
+    "ly_do": "Xuan Dam beach không phải là một điểm đến nổi tiếng tại Cát Bà"
+  },
+  "osm-relation-20057203": {
+    "name_key": "cai beo",
+    "muc_uu_tien": 2,
+    "ly_do": "Cai Beo là một di tích lịch sử quan trọng tại Cát Bà"
+  },
+  "osm-node-6207400285": {
+    "name_key": "free cave entrance",
+    "muc_uu_tien": 3,
+    "ly_do": "Free Cave Entrance không phải là một điểm đến nổi tiếng tại Cát Bà"
+  },
+  "osm-node-5147203123": {
+    "name_key": "hang tien ong",
+    "muc_uu_tien": 2,
+    "ly_do": "Hang Tiên Ông là một di tích lịch sử quan trọng tại Cát Bà"
+  },
+  "osm-way-454322289": {
+    "name_key": "hospital cave",
+    "muc_uu_tien": 2,
+    "ly_do": "Hospital Cave là một di tích lịch sử quan trọng tại Cát Bà"
+  },
+  "osm-node-13649149601": {
+    "name_key": "shrine",
+    "muc_uu_tien": 3,
+    "ly_do": "Shrine không phải là một điểm đến nổi tiếng tại Cát Bà"
+  },
+  "osm-node-4587394292": {
+    "name_key": "van boi trong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-3494827665": {
+    "name_key": "dong thien long",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-3887713515": {
+    "name_key": "hang nic",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-4508895511": {
+    "name_key": "hang quan y",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-3887715188": {
+    "name_key": "hang trinh nu",
+    "muc_uu_tien": 2,
+    "ly_do": "dang ghe"
+  },
+  "osm-node-3887702636": {
+    "name_key": "skall cave",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-2649308278": {
+    "name_key": "dong minh chau",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-3494799892": {
+    "name_key": "dong hoa cuong",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-994065796": {
+    "name_key": "dong me cung",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-6474418794": {
+    "name_key": "dong trung trang",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-9946489226": {
+    "name_key": "bai bien nhat le",
+    "muc_uu_tien": 1,
+    "ly_do": "Bãi biển Nhật Lệ là một trong những điểm du lịch nổi tiếng nhất tại Đồng Hới"
+  },
+  "osm-way-693903044": {
+    "name_key": "nhat le beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Nhat Le Beach là một bãi biển đẹp và thu hút nhiều du khách"
+  },
+  "osm-way-870400500": {
+    "name_key": "bao tang chien thang khe sanh",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng chiến thắng Khe Sanh là một địa điểm lịch sử quan trọng"
+  },
+  "osm-node-1016631101": {
+    "name_key": "bao tang lich su cau hien luong",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng lịch sử Cầu Hiền Lương là một địa điểm lịch sử quan trọng"
+  },
+  "osm-node-10756203755": {
+    "name_key": "bao tang tong hop tinh quang tri",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng tổng hợp tỉnh Quảng Trị là một địa điểm lịch sử quan trọng"
+  },
+  "osm-node-5137781822": {
+    "name_key": "gieng ba",
+    "muc_uu_tien": 3,
+    "ly_do": "Giếng bà là một địa điểm nhỏ và không nổi tiếng"
+  },
+  "osm-node-5126103952": {
+    "name_key": "gieng co gio an",
+    "muc_uu_tien": 3,
+    "ly_do": "Giếng cổ Gio An là một địa điểm nhỏ và không nổi tiếng"
+  },
+  "osm-node-5137800021": {
+    "name_key": "gieng tep",
+    "muc_uu_tien": 3,
+    "ly_do": "Giếng tép là một địa điểm nhỏ và không nổi tiếng"
+  },
+  "osm-node-5126103953": {
+    "name_key": "gieng ong",
+    "muc_uu_tien": 3,
+    "ly_do": "Giếng ông là một địa điểm nhỏ và không nổi tiếng"
+  },
+  "osm-node-1016630582": {
+    "name_key": "vinh moc tunnels museum",
+    "muc_uu_tien": 2,
+    "ly_do": "Vịnh Mốc Tunnels Museum là một địa điểm lịch sử quan trọng"
+  },
+  "osm-way-693903041": {
+    "name_key": "bao ninh beach",
+    "muc_uu_tien": 1,
+    "ly_do": "Bao Ninh Beach là một bãi biển đẹp và thu hút nhiều du khách"
+  },
+  "osm-node-5323866724": {
+    "name_key": "cau nhat le",
+    "muc_uu_tien": 3,
+    "ly_do": "Cau Nhat Le là một địa điểm nhỏ và không nổi tiếng"
+  },
+  "osm-node-4667117489": {
+    "name_key": "compat base con thien",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5334861321": {
+    "name_key": "cau long dai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-1016631030": {
+    "name_key": "cot co cau hien luong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-relation-17347904": {
+    "name_key": "khu bao ton thien nhien bac huong hoa",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-relation-17348220": {
+    "name_key": "khu du tru thien nhien dong chau - khe nuoc trong",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe"
+  },
+  "osm-node-5334861322": {
+    "name_key": "long dai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-10133150917": {
+    "name_key": "ly hoa site pittoresque",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-9959967920": {
+    "name_key": "lang non quy hau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4409284590": {
+    "name_key": "nga ba rinh rinh nhanh dong hcm",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4409245091": {
+    "name_key": "nga ba rinh rinh nhanh tay hcm",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-12507462329": {
+    "name_key": "nut giao nga 5 quan hau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-10133138818": {
+    "name_key": "plage de da nhai",
+    "muc_uu_tien": 1,
+    "ly_do": "Thang canh"
+  },
+  "osm-way-1216978705": {
+    "name_key": "bai bien song hong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong phai la bai bien that su"
+  },
+  "osm-way-1063227186": {
+    "name_key": "bao tang bac ninh so 1",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh Ha Noi"
+  },
+  "osm-way-1282834049": {
+    "name_key": "bao tang tu son",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh Ha Noi"
+  },
+  "osm-way-661161561": {
+    "name_key": "khu tuong niem co tong bi thu nguyen van cu",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh Ha Noi"
+  },
+  "osm-way-1443021489": {
+    "name_key": "trung tam bao ton tranh dan gian dong ho",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh Ha Noi"
+  },
+  "osm-way-1019349488": {
+    "name_key": "bao tang bac ninh",
+    "muc_uu_tien": 3,
+    "ly_do": "Ngoai tinh Ha Noi"
+  },
+  "osm-node-11449233337": {
+    "name_key": "blue gallery",
+    "muc_uu_tien": 2,
+    "ly_do": "La mot galeri treo tranh"
+  },
+  "osm-node-4889087244": {
+    "name_key": "bao tang hau can",
+    "muc_uu_tien": 2,
+    "ly_do": "La mot bao tang quan su"
+  },
+  "osm-way-1019050229": {
+    "name_key": "bao tang binh chung hoa hoc",
+    "muc_uu_tien": 2,
+    "ly_do": "La mot bao tang quan su"
+  },
+  "osm-node-2810302635": {
+    "name_key": "bao tang binh chung thong tin lien lac",
+    "muc_uu_tien": 2,
+    "ly_do": "La mot bao tang quan su"
+  },
+  "osm-way-339936730": {
+    "name_key": "bao tang dan toc hoc viet nam",
+    "muc_uu_tien": 1,
+    "ly_do": "La mot bao tang danh tieng cua Viet Nam"
+  },
+  "osm-way-480826771": {
+    "name_key": "bao tang van hoc viet nam",
+    "muc_uu_tien": 1,
+    "ly_do": "La mot bao tang danh tieng cua Viet Nam"
+  },
+  "osm-node-12854695786": {
+    "name_key": "khu trai nghiem lang nghe gom phu lang",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-12492312460": {
+    "name_key": "khi mat do",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin"
+  },
+  "osm-node-4716178909": {
+    "name_key": "khi moc",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin"
+  },
+  "osm-node-4716178797": {
+    "name_key": "khi vang",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin"
+  },
+  "osm-node-12492265365": {
+    "name_key": "khi duoi lon",
+    "muc_uu_tien": 3,
+    "ly_do": "Không có thông tin"
+  },
+  "osm-node-12669568802": {
+    "name_key": "kid's house on the tree",
+    "muc_uu_tien": 2,
+    "ly_do": "Có thể là dịa đẳng du lịch"
+  },
+  "osm-node-10709724112": {
+    "name_key": "lang giang phu yen",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-10709738705": {
+    "name_key": "lang giay duong o",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-10709724409": {
+    "name_key": "lang go duc dong dai bai",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-10709724110": {
+    "name_key": "lang gom tho ha",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-10709738905": {
+    "name_key": "lang kham trai boi khe",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-node-10709738013": {
+    "name_key": "lang kham trai thon ngo",
+    "muc_uu_tien": 1,
+    "ly_do": "Là dịa đẳng có uy tín"
+  },
+  "osm-way-1482249427": {
+    "name_key": "ngoi lang than thoai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-6373563060": {
+    "name_key": "nha banh dau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249428": {
+    "name_key": "nong trai hoang gia",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-6315496287": {
+    "name_key": "pho duong tau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249424": {
+    "name_key": "tia chop nhiet doi",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5285124521": {
+    "name_key": "tuyet tinh coc",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-7795617286": {
+    "name_key": "tuyet tinh coc, hai phong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-11174401448": {
+    "name_key": "tuong phat",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1482249422": {
+    "name_key": "vong xoay thet gao",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-2495831858": {
+    "name_key": "cong vien",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1182814986": {
+    "name_key": "vinwonders vu yen",
+    "muc_uu_tien": 2,
+    "ly_do": "Dang ghe neu con thoi gian"
+  },
+  "osm-node-12015163618": {
+    "name_key": "waterpark",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5299153429": {
+    "name_key": "quoc hoc",
+    "muc_uu_tien": 2,
+    "ly_do": "La truong quan trong"
+  },
+  "osm-way-531031518": {
+    "name_key": "quoc tu giam",
+    "muc_uu_tien": 1,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-node-5302765921": {
+    "name_key": "song o lau",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-12318159702": {
+    "name_key": "stele pavilion",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-node-13503143701": {
+    "name_key": "thanh toan bridge",
+    "muc_uu_tien": 1,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-node-5326790724": {
+    "name_key": "to quoc ghi cong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-618267901": {
+    "name_key": "truong an mon",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-way-617437880": {
+    "name_key": "tay khuyet dai",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4430357690": {
+    "name_key": "tuong dai quan the am bo tat",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-way-39411515": {
+    "name_key": "dien bien phu",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-531031513": {
+    "name_key": "dong khuyet dai",
+    "muc_uu_tien": 2,
+    "ly_do": "La di tinh cua Hue"
+  },
+  "osm-node-9960090217": {
+    "name_key": "duc dong duong xuan",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-1518080743": {
+    "name_key": "dinh than xuan hiep",
+    "muc_uu_tien": 3,
+    "ly_do": "nơi thờ cúng địa phương"
+  },
+  "osm-way-1480800646": {
+    "name_key": "dai thanh tam",
+    "muc_uu_tien": 3,
+    "ly_do": "không thuộc TP.HCM"
+  },
+  "osm-way-39514793": {
+    "name_key": "buu dien trung tam sai gon",
+    "muc_uu_tien": 2,
+    "ly_do": "địa điểm du lịch nổi tiếng"
+  },
+  "osm-node-5137981655": {
+    "name_key": "disco travel - du lich quoc te kham pha",
+    "muc_uu_tien": 3,
+    "ly_do": "công ty du lịch"
+  },
+  "osm-way-1540771314": {
+    "name_key": "the commons thu thiem",
+    "muc_uu_tien": 2,
+    "ly_do": "khu phức hợp giải trí"
+  },
+  "osm-way-1159206296": {
+    "name_key": "nha tram cot",
+    "muc_uu_tien": 3,
+    "ly_do": "không thuộc TP.HCM"
+  },
+  "osm-way-801710792": {
+    "name_key": "nha hat thanh pho",
+    "muc_uu_tien": 1,
+    "ly_do": "nơi biểu diễn nghệ thuật"
+  },
+  "osm-way-341504305": {
+    "name_key": "tru so uy ban nhan dan thanh pho ho chi minh",
+    "muc_uu_tien": 3,
+    "ly_do": "trụ sở chính quyền"
+  },
+  "osm-node-13655067905": {
+    "name_key": "7 wonders",
+    "muc_uu_tien": 3,
+    "ly_do": "không rõ thông tin"
+  },
+  "osm-node-12351093402": {
+    "name_key": "ben nghe street food",
+    "muc_uu_tien": 3,
+    "ly_do": "quán ăn đường phố"
+  },
+  "osm-way-806860791": {
+    "name_key": "biet thu nguyen van hao",
+    "muc_uu_tien": 2,
+    "ly_do": "di tích lịch sử"
+  },
+  "osm-node-5072875722": {
+    "name_key": "bau sau",
+    "muc_uu_tien": 3,
+    "ly_do": "không rõ thông tin"
+  },
+  "osm-node-5344833130": {
+    "name_key": "noi quy",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-9959781117": {
+    "name_key": "nuoc mam van phan",
+    "muc_uu_tien": 3,
+    "ly_do": "khong noi tieng"
+  },
+  "osm-node-13038535919": {
+    "name_key": "thanh co vinh",
+    "muc_uu_tien": 1,
+    "ly_do": "thang canh"
+  },
+  "osm-node-2329585163": {
+    "name_key": "buu dien kien luong",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-way-671362739": {
+    "name_key": "bao tang an giang",
+    "muc_uu_tien": 1,
+    "ly_do": "Bao tang An Giang la diem du lich noi tieng"
+  },
+  "osm-node-5424213524": {
+    "name_key": "hoi lap mieu",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-5424237224": {
+    "name_key": "kenh xa-tuyt",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4598040190": {
+    "name_key": "photocopy canh hao 2",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-4375003890": {
+    "name_key": "bao tang go",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong noi tieng"
+  },
+  "osm-node-9992439400": {
+    "name_key": "kdl anh vu son",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong o tinh Chau Doc"
+  },
+  "osm-node-9992439396": {
+    "name_key": "kdl rung tram tra su",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong o tinh Chau Doc"
+  },
+  "osm-node-10932916144": {
+    "name_key": "ho ta pa",
+    "muc_uu_tien": 2,
+    "ly_do": "Diem du lich dang ghe"
+  },
+  "osm-node-11046777432": {
+    "name_key": "kdl lam vien nui cam",
+    "muc_uu_tien": 2,
+    "ly_do": "Diem du lich dang ghe"
+  },
+  "osm-relation-17189466": {
+    "name_key": "khu bao ton dat ngap nuoc lang sen",
+    "muc_uu_tien": 2,
+    "ly_do": "Diem du lich dang ghe"
+  },
+  "osm-node-4344147191": {
+    "name_key": "len 5 ong",
+    "muc_uu_tien": 2,
+    "ly_do": "Diem du lich dang ghe"
+  },
+  "osm-node-1490413978": {
+    "name_key": "bao tang pac bo",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng Pắc Bó là một điểm đến hấp dẫn"
+  },
+  "osm-way-1368088427": {
+    "name_key": "bao tang tinh cao bang",
+    "muc_uu_tien": 2,
+    "ly_do": "Bảo tàng tỉnh Cao Bằng có nhiều triển lãm thú vị"
+  },
+  "osm-way-1415191977": {
+    "name_key": "truc lam phat tich pagoda",
+    "muc_uu_tien": 1,
+    "ly_do": "Truc Lam Phat Tich Pagoda là một ngôi chùa nổi tiếng"
+  },
+  "osm-relation-19438542": {
+    "name_key": "ben thuyen di thac ban gioc(2)",
+    "muc_uu_tien": 1,
+    "ly_do": "Bến thuyền đi Thác Bản Giốc là một điểm du lịch phổ biến"
+  },
+  "osm-node-13378647088": {
+    "name_key": "chestnut heritage tree",
+    "muc_uu_tien": 3,
+    "ly_do": "Chestnut Heritage Tree không phải là điểm đến nổi tiếng"
+  },
+  "osm-node-13162197539": {
+    "name_key": "cong troi ngu lao",
+    "muc_uu_tien": 2,
+    "ly_do": "Cổng Trời Ngũ Lão là một điểm đến thú vị"
+  },
+  "osm-way-1375555501": {
+    "name_key": "du lich xuan hoa son",
+    "muc_uu_tien": 3,
+    "ly_do": "Du lịch Xuân Hoà Sơn không phải là điểm đến nổi tiếng"
+  },
+  "osm-node-13378657643": {
+    "name_key": "ironsmith village",
+    "muc_uu_tien": 3,
+    "ly_do": "Ironsmith Village không phải là điểm đến nổi tiếng"
+  },
+  "osm-way-1385746690": {
+    "name_key": "khu di tich lich su chien thang dong khe",
+    "muc_uu_tien": 2,
+    "ly_do": "Khu di tích lịch sử chiến thắng Đông Khê là một điểm đến lịch sử"
+  },
+  "osm-node-13378657667": {
+    "name_key": "khuoi ky stone village",
+    "muc_uu_tien": 3,
+    "ly_do": "Khuoi Ky Stone Village không phải là điểm đến nổi tiếng"
+  },
+  "osm-node-13162197540": {
+    "name_key": "nui thung",
+    "muc_uu_tien": 2,
+    "ly_do": "Núi Thủng là một điểm đến thú vị"
+  },
+  "osm-node-13381816850": {
+    "name_key": "orchid house",
+    "muc_uu_tien": 3,
+    "ly_do": "Orchid House không phải là điểm đến nổi tiếng"
+  },
+  "osm-node-13441797601": {
+    "name_key": "cang bac me",
+    "muc_uu_tien": 3,
+    "ly_do": "Bao tang khong noi tieng"
+  },
+  "osm-node-5302842823": {
+    "name_key": "lang van hoa dan toc pa then",
+    "muc_uu_tien": 3,
+    "ly_do": "Lang van hoa dan toc nho"
+  },
+  "osm-node-13358813001": {
+    "name_key": "aucune attraction touristique",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-13358812901": {
+    "name_key": "aucune attraction touristique here",
+    "muc_uu_tien": 3,
+    "ly_do": "Khong co thong tin"
+  },
+  "osm-node-4823483325": {
+    "name_key": "cho trung tam hoang su phi",
+    "muc_uu_tien": 2,
+    "ly_do": "Cho trung tam"
+  },
+  "osm-way-863501296": {
+    "name_key": "cau treo khuoi my",
+    "muc_uu_tien": 1,
+    "ly_do": "Cau treo khuoi my"
+  },
+  "osm-node-6057950186": {
+    "name_key": "duong thuong revolutionary base",
+    "muc_uu_tien": 3,
+    "ly_do": "Co so cach mang"
+  },
+  "osm-node-5634895221": {
+    "name_key": "fork road, take right side up the hill",
+    "muc_uu_tien": 3,
+    "ly_do": "Duong dan"
+  },
+  "osm-node-5888509086": {
+    "name_key": "gardens by the locals",
+    "muc_uu_tien": 3,
+    "ly_do": "Vuon cay cua dan"
+  },
+  "osm-node-5599691222": {
+    "name_key": "lake",
+    "muc_uu_tien": 3,
+    "ly_do": "Ho nho"
+  },
+  "osm-node-5417771221": {
+    "name_key": "lung tam linen cooperative",
+    "muc_uu_tien": 3,
+    "ly_do": "Hop tac xa"
+  }
+}

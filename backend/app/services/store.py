@@ -404,6 +404,34 @@ class MemoryStore:
         self.log(session_id, "dong_y_chinh_sach", {"phien_ban": policy_version})
         return user
 
+    def get_user_by_username(self, username: str) -> dict | None:
+        normalized = username.casefold().strip()
+        return next(
+            (user for user in self.users.values() if user.get("username", "").casefold() == normalized),
+            None,
+        )
+
+    def create_password_user_and_claim(
+        self, username: str, password_hash: str, session_id: str, policy_version: str,
+        phone: str | None = None,
+    ) -> dict:
+        normalized = username.casefold().strip()
+        if self.get_user_by_username(normalized):
+            raise ValueError("USERNAME_EXISTS")
+        user = {
+            "id": str(uuid4()),
+            "email": f"{normalized}@local.account",
+            "ten": normalized,
+            "nha_cung_cap": "password",
+            "username": normalized,
+            "mat_khau_hash": password_hash,
+            "so_dien_thoai": phone,
+        }
+        self.users[user["id"]] = user
+        self.claim_session(session_id, user["id"])
+        self.log(session_id, "dong_y_chinh_sach", {"phien_ban": policy_version})
+        return user
+
     def penalize_tags(self, session_id: str, tags: tuple[str, ...]) -> None:
         profile = self.profile.setdefault(session_id, {})
         for tag in tags:

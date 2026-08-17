@@ -428,8 +428,20 @@ class PostgresStore:
     def get_user_by_id(self, user_id: str) -> dict | None:
         with self._connect() as connection:
             row = connection.execute(
-                "SELECT id,email,ten,nha_cung_cap FROM nguoi_dung WHERE id=%s",
+                "SELECT id,email,ten,nha_cung_cap,username,mat_khau_hash,so_dien_thoai "
+                "FROM nguoi_dung WHERE id=%s",
                 (UUID(user_id),),
+            ).fetchone()
+        if not row:
+            return None
+        return {key: str(value) if isinstance(value, UUID) else value for key, value in row.items()}
+
+    def get_user_by_username(self, username: str) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT id,email,ten,nha_cung_cap,username,mat_khau_hash,so_dien_thoai "
+                "FROM nguoi_dung WHERE lower(username)=lower(%s)",
+                (username,),
             ).fetchone()
         if not row:
             return None
@@ -541,6 +553,30 @@ class PostgresStore:
             )
         return {"id": str(user["id"]), "email": user["email"], "ten": user["ten"],
                 "nha_cung_cap": user["nha_cung_cap"]}
+
+    def create_password_user_and_claim(
+        self, username: str, password_hash: str, session_id: str, policy_version: str,
+        phone: str | None = None,
+    ) -> dict:
+        try:
+            with self._connect() as connection, connection.transaction():
+                user = connection.execute(
+                    "INSERT INTO nguoi_dung(nha_cung_cap,email,ten,username,mat_khau_hash,so_dien_thoai) "
+                    "VALUES('password',%s,%s,%s,%s,%s) "
+                    "RETURNING id,email,ten,nha_cung_cap,username,mat_khau_hash,so_dien_thoai",
+                    (f"{username}@local.account", username, username, password_hash, phone),
+                ).fetchone()
+                connection.execute(
+                    "INSERT INTO consent(nguoi_dung_id,ma_phien,phien_ban_chinh_sach) "
+                    "VALUES(%s,%s,%s)", (user["id"], session_id, policy_version),
+                )
+                connection.execute(
+                    "UPDATE ke_hoach SET nguoi_dung_id=%s,ngay_het_han=NULL WHERE ma_phien=%s",
+                    (user["id"], session_id),
+                )
+        except psycopg.errors.UniqueViolation as exc:
+            raise ValueError("USERNAME_EXISTS") from exc
+        return {key: str(value) if isinstance(value, UUID) else value for key, value in user.items()}
 
     def log(self, session_id: str, event: str, data: dict | None = None) -> None:
         with self._connect() as connection:
