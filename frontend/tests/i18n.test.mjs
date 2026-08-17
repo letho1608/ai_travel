@@ -230,6 +230,7 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.doesNotMatch(planViewSource,/className="itinerary-summary"/);
   assert.equal((planViewSource.match(/className="itinerary-panel card"/g)||[]).length,1);
   assert.match(planViewSource,/className="itinerary-card-hero"/);
+  assert.doesNotMatch(planViewSource,/itinerary-summary-badge/);
   assert.match(planViewSource,/slot\.bat_dau/);
   assert.match(planViewSource,/slot\.ket_thuc/);
   assert.match(planViewSource,/slot\.mo_ta/);
@@ -291,8 +292,8 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.doesNotMatch(planViewSource,/window\.history\.back\(\)/);
   assert.match(planViewSource,/className="result-ready card"[\s\S]*t\("aiFinished"\)[\s\S]*t\("itinerarySuggestionTitle"\)/);
   assert.match(globalsSource,/\.result-back-to-chat\{display:inline-flex/);
-  assert.match(planViewSource,/quickActions\.map/);
-  assert.match(planViewSource,/applyRefine\(prompt\)/);
+  assert.doesNotMatch(planViewSource,/quickActions\.map/);
+  assert.doesNotMatch(planViewSource,/applyRefine\(prompt\)/);
   assert.doesNotMatch(planViewSource,/<article role="button"/);
   assert.match(planViewSource,/setTimeout\(\(\)=>controller\.abort\(\),30000\)/);
   assert.match(planViewSource,/"X-Session-Id":session,\.\.\.authHeader\(\)/);
@@ -358,6 +359,10 @@ test("history page uses durable session helper for list and mutation actions",()
 
 test("Vietnamese navigation labels the trip archive as history",()=>{
   assert.match(source,/vi:\{roadtrip:"Road trip",inventory:"Vé & lưu trú",trips:"Lịch sử"/);
+  assert.match(navigationSource,/const links: Array<\[string, string\]> = \[\["\/history", "trips"\]\]/);
+  assert.doesNotMatch(navigationSource,/"\/roadtrip"/);
+  assert.doesNotMatch(navigationSource,/"\/explore"/);
+  assert.doesNotMatch(navigationSource,/"\/settings"/);
 });
 
 test("history sidebar contains long plan titles without losing mobile scrolling",()=>{
@@ -405,6 +410,11 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/requestNonce\(fingerprint\)/);
   assert.match(plannerSource,/clearNonce\(\);\s*setSession/);
   assert.match(plannerSource,/function inferDuration\(value: string\)/);
+  assert.match(plannerSource,/function inferClockRange\(/);
+  assert.match(plannerSource,/function inferHourSpan\(/);
+  assert.match(plannerSource,/function inferDateRange\(/);
+  assert.match(plannerSource,/ngay_di: ngayDi/);
+  assert.match(plannerSource,/từ 20\/8 đến 22\/8/);
   assert.match(plannerSource,/setNeedsDuration\(true\)/);
   assert.match(plannerSource,/needsDuration &&/);
   assert.match(plannerSource,/const \[pendingContext, setPendingContext\]/);
@@ -420,9 +430,9 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/const DEFAULT_LOCATION/);
   assert.match(plannerSource,/const DESTINATION_LOCATIONS/);
   assert.match(plannerSource,/function destinationLocation\(value: string\)/);
-  assert.match(plannerSource,/location: destinationLocation\(requestContext\)/);
+  assert.match(plannerSource,/location: destinationLocation\(composedContext\)/);
   assert.match(plannerSource,/lat: 16\.0544, lng: 108\.2022/);
-  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration\)/);
+  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration, inferPairedPeople\(answer\)\)/);
   assert.match(plannerSource,/Hà Nội/);
   assert.match(plannerSource,/Hạ Long/);
   assert.match(plannerSource,/Đà Nẵng/);
@@ -434,6 +444,9 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/className="chat-send"/);
   assert.match(plannerSource,/const \[needsPeople, setNeedsPeople\]/);
   assert.match(plannerSource,/function inferPeople\(value: string\)/);
+  assert.match(plannerSource,/function inferDayCount\(value: string\)/);
+  assert.match(plannerSource,/function inferPairedPeople\(value: string\)/);
+  assert.match(plannerSource,/function composeRequestContext\(/);
   assert.match(plannerSource,/function peopleQuestion\(\)/);
   assert.match(plannerSource,/function answerPeople\(answer: string\)/);
   assert.match(plannerSource,/if \(needsPeople\) \{/);
@@ -447,9 +460,9 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/if \(needsDuration\) \{/);
   assert.match(plannerSource,/if \(!duration\) \{/);
   assert.match(plannerSource,/const requestContext = `\$\{pendingContext\.trim\(\)\}\\n\$\{answer\.trim\(\)\}`/);
-  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration\)/);
-  assert.match(plannerSource,/lastRequest\.current = \{ context: requestContext, duration, people: travelers \}/);
-  assert.match(plannerSource,/lastRequest\.current = null/);
+  assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration, inferPairedPeople\(answer\)\)/);
+  assert.match(plannerSource,/lastRequest\.current = \{ context: composedContext, duration, people: travelers \}/);
+  assert.doesNotMatch(plannerSource,/chat-prompt-chips/);
   assert.match(plannerSource,/onClick=\{retryGenerate\}/);
   for(const duration of ["vai_gio","nua_ngay","ca_ngay","nhieu_ngay"]) assert.match(plannerSource,new RegExp(`\\[\\"[^\\"]+\\", \\"${duration}\\"\\]`));
   assert.match(plannerSource,/t\("durationLabel"\)/);

@@ -38,9 +38,13 @@ POSTGRES_STYLE_CATALOGUE = data_module.finalize_catalogue(data_module.IMPORTED_P
 
 def test_finalize_catalogue_appends_all_curated_anchors_when_catalogue_is_empty():
     merged = data_module.finalize_catalogue([])
-    ids = {place.id for place in merged}
-    assert {"curated-ho-guom", "curated-hang-dao", "curated-pho-ta-hien"} <= ids
-    # no two merged curated rows share a normalized name
+    names = {place_name_key(place.name) for place in merged}
+    assert {
+        place_name_key("Hồ Gươm"),
+        place_name_key("Hàng Đào"),
+        place_name_key("Phố Tạ Hiện"),
+    } <= names
+    # no two merged rows share a normalized name
     keys = [place_name_key(place.name) for place in merged]
     assert len(keys) == len(set(keys))
 

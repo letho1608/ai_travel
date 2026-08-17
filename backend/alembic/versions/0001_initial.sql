@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS nguoi_dung (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(), nha_cung_cap text NOT NULL,
   email text NOT NULL UNIQUE, ten text, ngay_tao timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE nguoi_dung ADD COLUMN IF NOT EXISTS username text UNIQUE;
+ALTER TABLE nguoi_dung ADD COLUMN IF NOT EXISTS mat_khau_hash text;
+ALTER TABLE nguoi_dung ADD COLUMN IF NOT EXISTS so_dien_thoai text;
 CREATE TABLE IF NOT EXISTS consent (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(), nguoi_dung_id uuid REFERENCES nguoi_dung(id),
   ma_phien text, phien_ban_chinh_sach text NOT NULL, dong_y_luc timestamptz NOT NULL DEFAULT now()

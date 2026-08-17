@@ -113,6 +113,129 @@ def test_roadtrip_rate_limiter_failure_is_closed():
     assert response.status_code == 429
 
 
+def test_password_auth_creates_then_logs_in_existing_user():
+    created = client.post("/api/auth/password", json={
+        "username": "MinhTravel",
+        "password": "abc12345",
+        "so_dien_thoai": "0912345678",
+        "hanh_dong": "dang_ky",
+        "ma_phien": "password-session",
+        "consent": True,
+    })
+    assert created.status_code == 200
+    body = created.json()
+    assert body["token"].startswith("mock-jwt-")
+    assert body["nguoi_dung"]["username"] == "minhtravel"
+    assert body["nguoi_dung"]["so_dien_thoai"] == "+84912345678"
+    assert "mat_khau_hash" not in body["nguoi_dung"]
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['token']}"})
+    assert me.status_code == 200
+    assert me.json()["username"] == "minhtravel"
+    assert me.json()["so_dien_thoai"] == "+84912345678"
+    assert "mat_khau_hash" not in me.json()
+
+    missing = client.post("/api/auth/password", json={
+        "username": "nobodyyet",
+        "password": "abc12345",
+        "hanh_dong": "dang_nhap",
+        "ma_phien": "missing-session",
+        "consent": True,
+    })
+    assert missing.status_code == 401
+
+    duplicate = client.post("/api/auth/password", json={
+        "username": "MinhTravel",
+        "password": "abc12345",
+        "so_dien_thoai": "0987654321",
+        "hanh_dong": "dang_ky",
+        "ma_phien": "password-session-dup",
+        "consent": True,
+    })
+    assert duplicate.status_code == 409
+
+    logged_in = client.post("/api/auth/password", json={
+        "username": "MinhTravel",
+        "password": "abc12345",
+        "hanh_dong": "dang_nhap",
+        "ma_phien": "password-session-2",
+        "consent": True,
+    })
+    assert logged_in.status_code == 200
+    assert logged_in.json()["nguoi_dung"]["id"] == body["nguoi_dung"]["id"]
+
+
+def test_password_auth_rejects_weak_or_wrong_password():
+    weak = client.post("/api/auth/password", json={
+        "username": "weakuser",
+        "password": "abcdefgh",
+        "hanh_dong": "dang_ky",
+        "so_dien_thoai": "0912345678",
+        "ma_phien": "weak-session",
+        "consent": True,
+    })
+    assert weak.status_code == 422
+    digits = client.post("/api/auth/password", json={
+        "username": "digituser",
+        "password": "12345678",
+        "hanh_dong": "dang_ky",
+        "so_dien_thoai": "0912345678",
+        "ma_phien": "digit-session",
+        "consent": True,
+    })
+    assert digits.status_code == 422
+    no_phone = client.post("/api/auth/password", json={
+        "username": "nophone",
+        "password": "abc12345",
+        "hanh_dong": "dang_ky",
+        "ma_phien": "nophone-session",
+        "consent": True,
+    })
+    assert no_phone.status_code == 422
+
+    client.post("/api/auth/password", json={
+        "username": "rightuser",
+        "password": "abc12345",
+        "so_dien_thoai": "0912345678",
+        "hanh_dong": "dang_ky",
+        "ma_phien": "right-session",
+        "consent": True,
+    })
+    wrong = client.post("/api/auth/password", json={
+        "username": "rightuser",
+        "password": "wrong1234",
+        "hanh_dong": "dang_nhap",
+        "ma_phien": "right-session-2",
+        "consent": True,
+    })
+    assert wrong.status_code == 401
+
+
+def test_password_forgot_always_succeeds_without_leaking_account():
+    response = client.post("/api/auth/password/forgot", json={
+        "username": "unknownuser",
+        "ma_phien": "forgot-session",
+    })
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_google_oauth_issues_session_without_password_hash():
+    login = client.post(
+        "/api/auth/oauth",
+        json={"provider": "google", "token": "mock-google-user-123",
+              "ma_phien": "google-login-session", "consent": True},
+    )
+    assert login.status_code == 200
+    body = login.json()
+    assert body["token"].startswith("mock-jwt-")
+    assert body["nguoi_dung"]["email"] == "user-123@demo.local"
+    assert "mat_khau_hash" not in body["nguoi_dung"]
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['token']}"})
+    assert me.status_code == 200
+    assert me.json()["email"] == "user-123@demo.local"
+    assert "mat_khau_hash" not in me.json()
+
+
 def test_generate_sse_and_shared_read_only():
     response = client.post("/api/plan/generate", json=PAYLOAD)
     assert response.status_code == 200

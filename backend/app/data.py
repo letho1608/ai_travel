@@ -1,6 +1,6 @@
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import psycopg
@@ -302,33 +302,115 @@ def _load_imported_places() -> tuple[list[Place], dict]:
 
 
 IMPORTED_PLACES, PLACE_METADATA = _load_imported_places()
+_VIETNAM_AREA_KEYS = {"viet nam", "vietnam"}
+
+
+def _load_famous_items() -> tuple[list[dict], dict]:
+    configured = os.getenv("FAMOUS_PLACES_FILE", "").strip() or "famous_places.json"
+    path = Path(configured)
+    if not path.is_absolute():
+        path = DATA_DIR / path
+    if not path.exists():
+        return [], {"exists": False, "resolved_path": str(path), "count": 0}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    items = [item for item in payload.get("places", []) if item.get("id") and item.get("name")]
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    return items, {**metadata, "exists": True, "resolved_path": str(path), "count": len(items)}
+
+
+def _place_from_famous_item(item: dict) -> Place:
+    tags = [str(tag) for tag in item.get("tags") or []]
+    if "famous" not in tags:
+        tags.append("famous")
+    area = str(item.get("area") or item.get("tinh") or "Việt Nam")
+    return Place(
+        id=str(item["id"]),
+        name=str(item["name"]),
+        kind=str(item.get("kind") or "dia_danh"),
+        area=area,
+        lat=float(item["lat"]),
+        lng=float(item["lng"]),
+        cost=int(item.get("cost") or 0),
+        duration_min=int(item.get("duration_min") or 60),
+        tags=tuple(tags),
+        open_hour=int(item.get("open_hour") or 7),
+        close_hour=int(item.get("close_hour") or 22),
+        source=str(item.get("source") or "curated"),
+        source_url=item.get("source_url"),
+        image_url=item.get("image_url"),
+        image_credit=item.get("image_credit"),
+    )
+
+
+RAW_FAMOUS_ITEMS, FAMOUS_METADATA = _load_famous_items()
+FAMOUS_PLACES = [_place_from_famous_item(item) for item in RAW_FAMOUS_ITEMS]
+FAMOUS_IDS = {item["id"] for item in RAW_FAMOUS_ITEMS}
+FAMOUS_NAME_KEYS = {place_name_key(str(item["name"])) for item in RAW_FAMOUS_ITEMS}
+FAMOUS_PRIORITY_BY_ID = {item["id"]: int(item.get("muc_uu_tien") or 2) for item in RAW_FAMOUS_ITEMS}
+FAMOUS_PRIORITY_BY_NAME = {
+    place_name_key(str(item["name"])): int(item.get("muc_uu_tien") or 2) for item in RAW_FAMOUS_ITEMS
+}
+FAMOUS_TINH_BY_ID = {item["id"]: str(item["tinh"]) for item in RAW_FAMOUS_ITEMS if item.get("tinh")}
+FAMOUS_TINH_BY_NAME = {
+    place_name_key(str(item["name"])): str(item["tinh"]) for item in RAW_FAMOUS_ITEMS if item.get("tinh")
+}
+
+
+def is_famous_place(place: Place) -> bool:
+    """True when the place was collected into famous_places.json."""
+    return place.id in FAMOUS_IDS or place_name_key(place.name) in FAMOUS_NAME_KEYS
+
+
+def famous_priority(place: Place) -> int:
+    """1 = must-see, 2 = should include, 3 = extra; 0 = not in the famous file."""
+    if place.id in FAMOUS_PRIORITY_BY_ID:
+        return FAMOUS_PRIORITY_BY_ID[place.id]
+    return FAMOUS_PRIORITY_BY_NAME.get(place_name_key(place.name), 0)
+
+
+def _annotate_famous(place: Place) -> Place:
+    tinh = FAMOUS_TINH_BY_ID.get(place.id) or FAMOUS_TINH_BY_NAME.get(place_name_key(place.name))
+    famous = is_famous_place(place)
+    if not famous:
+        return place
+    tags = place.tags if "famous" in place.tags else (*place.tags, "famous")
+    area = place.area
+    if tinh and (not area or ascii_fold(area) in _VIETNAM_AREA_KEYS):
+        area = tinh
+    if tags == place.tags and area == place.area:
+        return place
+    return replace(place, tags=tags, area=area)
 
 
 def finalize_catalogue(rows: list[Place]) -> list[Place]:
-    """Merge catalogue rows with the curated Hanoi anchors/dining.
+    """Merge catalogue rows with famous-file stops and curated anchors/dining.
 
     Catalogue rows always win a name collision (they carry OSM verification and
-    route-matrix ids); a curated anchor is only appended when no row shares its
-    normalized name. This single step keeps the local (places.json/offline seed) and
-    Postgres (`ma_nguon`) catalogues consistent, so planning logic sees the
-    same curated stops in every mode.
+    route-matrix ids); a famous/curated row is only appended when no row shares
+    its normalized name. Famous OSM ids already in the catalogue are annotated
+    instead of duplicated. This single step keeps the local
+    (places.json/offline seed) and Postgres (`ma_nguon`) catalogues consistent,
+    so planning logic sees the same curated stops in every mode.
     """
-    merged = list(rows)
+    merged = [_annotate_famous(place) for place in rows]
     seen_ids = {place.id for place in merged}
     seen_names = {place_name_key(place.name) for place in merged}
-    for curated in (
+    extras = (
+        *FAMOUS_PLACES,
         *CURATED_HANOI_ANCHORS,
         *CURATED_HANOI_DINING,
         *CURATED_NHA_TRANG_ANCHORS,
         *CURATED_OTHER_PROVINCE_ANCHORS,
-    ):
-        if curated.id in seen_ids:
+        *CURATED_VN_ANCHORS,
+    )
+    for extra in extras:
+        if extra.id in seen_ids:
             continue
-        key = place_name_key(curated.name)
+        key = place_name_key(extra.name)
         if key in seen_names:
             continue
-        merged.append(curated)
-        seen_ids.add(curated.id)
+        merged.append(_annotate_famous(extra))
+        seen_ids.add(extra.id)
         seen_names.add(key)
     return merged
 
@@ -598,6 +680,45 @@ CURATED_OTHER_PROVINCE_ANCHORS = [
     Place("curated-hai-san-xin-chao", "Nhà hàng Xin Chào Phú Quốc", "nha_hang", "Phú Quốc", 10.2144, 103.9575, 250_000, 60, ("am_thuc", "hai_san", "view_dep", "sunset"), 11, 22, "curated", None, rating=4.5, review_count=4300),
 ]
 
+CURATED_VN_ANCHORS = [
+    Place("curated-cau-vang", "Cầu Vàng", "dia_danh", "Đà Nẵng", 15.9956, 107.9964, 0, 90, ("da_nang_icon", "cau_vang", "ba_na", "view_dep", "checkin", "ngoai_troi"), 8, 17, "curated", None),
+    Place("curated-ba-na-hills", "Bà Nà Hills", "giai_tri", "Đà Nẵng", 15.9955, 107.9944, 750_000, 180, ("da_nang_icon", "ba_na", "giai_tri", "gia_dinh", "checkin"), 8, 17, "curated", None),
+    Place("curated-my-khe", "Bãi biển Mỹ Khê", "bai_bien", "Đà Nẵng", 16.0598, 108.2475, 0, 90, ("da_nang_icon", "beach", "bien", "my_khe", "chill", "ngoai_troi"), 5, 22, "curated", None),
+    Place("curated-ngu-hanh-son", "Ngũ Hành Sơn", "nui", "Đà Nẵng", 16.0035, 108.2633, 40_000, 90, ("da_nang_icon", "marble_mountains", "heritage", "view_dep", "checkin"), 7, 18, "curated", None),
+    Place("curated-chua-linh-ung", "Chùa Linh Ứng Sơn Trà", "den_chua", "Đà Nẵng", 16.1005, 108.2783, 0, 75, ("da_nang_icon", "son_tra", "den_chua", "van_hoa", "view_dep"), 6, 18, "curated", None),
+    Place("curated-cau-rong", "Cầu Rồng", "dia_danh", "Đà Nẵng", 16.0610, 108.2274, 0, 45, ("da_nang_icon", "cau_rong", "checkin", "ngoai_troi"), 5, 23, "curated", None),
+    Place("curated-bao-tang-cham", "Bảo tàng Điêu khắc Chăm", "bao_tang", "Đà Nẵng", 16.0603, 108.2234, 60_000, 75, ("da_nang_icon", "museum", "van_hoa", "heritage", "lich_su"), 8, 17, "curated", None),
+    Place("curated-pho-co-hoi-an", "Phố cổ Hội An", "dia_danh", "Hội An", 15.8777, 108.3269, 0, 120, ("hoi_an_icon", "pho_co", "heritage", "di_bo", "checkin", "nightlife"), 7, 23, "curated", None),
+    Place("curated-chua-cau", "Chùa Cầu", "di_tich", "Hội An", 15.8770, 108.3250, 50_000, 45, ("hoi_an_icon", "heritage", "historic", "van_hoa", "checkin"), 8, 18, "curated", None),
+    Place("curated-dai-noi-hue", "Đại Nội Huế", "di_tich", "Huế", 16.4699, 107.5780, 200_000, 120, ("hue_icon", "dai_noi", "heritage", "lich_su", "van_hoa"), 8, 17, "curated", None),
+    Place("curated-chua-thien-mu", "Chùa Thiên Mụ", "den_chua", "Huế", 16.4536, 107.5732, 0, 75, ("hue_icon", "thien_mu", "den_chua", "heritage", "view_dep"), 7, 18, "curated", None),
+    Place("curated-song-huong", "Sông Hương", "dia_danh", "Huế", 16.4624, 107.5850, 0, 75, ("hue_icon", "song_huong", "chill", "ngoai_troi", "view_dep"), 6, 21, "curated", None),
+    Place("curated-lang-khai-dinh", "Lăng Khải Định", "di_tich", "Huế", 16.3987, 107.5905, 150_000, 90, ("hue_icon", "heritage", "lich_su", "van_hoa"), 8, 17, "curated", None),
+    Place("curated-cho-ben-thanh", "Chợ Bến Thành", "cho", "TP.HCM", 10.7725, 106.6980, 0, 75, ("hcm_icon", "cho", "am_thuc", "checkin", "van_hoa"), 7, 19, "curated", None),
+    Place("curated-nha-tho-duc-ba", "Nhà thờ Đức Bà", "di_tich", "TP.HCM", 10.7798, 106.6990, 0, 45, ("hcm_icon", "heritage", "kien_truc", "checkin"), 8, 17, "curated", None),
+    Place("curated-dinh-doc-lap", "Dinh Độc Lập", "di_tich", "TP.HCM", 10.7770, 106.6955, 40_000, 90, ("hcm_icon", "heritage", "lich_su", "van_hoa", "museum"), 8, 17, "curated", None),
+    Place("curated-bao-tang-chung-tich", "Bảo tàng Chứng tích Chiến tranh", "bao_tang", "TP.HCM", 10.7795, 106.6922, 40_000, 90, ("hcm_icon", "museum", "lich_su", "van_hoa"), 8, 17, "curated", None),
+    Place("curated-pho-di-bo-nguyen-hue", "Phố đi bộ Nguyễn Huệ", "dia_danh", "TP.HCM", 10.7744, 106.7035, 0, 60, ("hcm_icon", "di_bo", "checkin", "chill", "ngoai_troi"), 6, 23, "curated", None),
+    Place("curated-vinh-ha-long", "Vịnh Hạ Long", "dia_danh", "Hạ Long", 20.9101, 107.1839, 0, 180, ("ha_long_icon", "heritage", "view_dep", "bien", "ngoai_troi"), 7, 18, "curated", None),
+    Place("curated-dao-titop", "Đảo Titop", "dia_danh", "Hạ Long", 20.9108, 107.0732, 0, 120, ("ha_long_icon", "dao", "bien", "view_dep", "ngoai_troi"), 7, 17, "curated", None),
+    Place("curated-bai-chay", "Bãi Cháy", "bai_bien", "Hạ Long", 20.9612, 107.0448, 0, 75, ("ha_long_icon", "beach", "bien", "chill", "ngoai_troi"), 6, 21, "curated", None),
+    Place("curated-tam-coc", "Tam Cốc", "dia_danh", "Ninh Bình", 20.2135, 105.9230, 0, 150, ("ninh_binh_icon", "heritage", "hang_dong", "ngoai_troi", "view_dep"), 7, 17, "curated", None),
+    Place("curated-trang-an", "Tràng An", "dia_danh", "Ninh Bình", 20.2500, 105.9167, 250_000, 180, ("ninh_binh_icon", "heritage", "hang_dong", "ngoai_troi", "view_dep"), 7, 17, "curated", None),
+    Place("curated-hang-mua", "Hang Múa", "dia_danh", "Ninh Bình", 20.2506, 105.9081, 100_000, 90, ("ninh_binh_icon", "nui", "view_dep", "checkin", "ngoai_troi"), 7, 18, "curated", None),
+    Place("curated-co-do-hoa-lu", "Cố đô Hoa Lư", "di_tich", "Ninh Bình", 20.2566, 105.9528, 30_000, 75, ("ninh_binh_icon", "heritage", "lich_su", "van_hoa"), 7, 17, "curated", None),
+    Place("curated-ho-xuan-huong", "Hồ Xuân Hương", "dia_danh", "Đà Lạt", 11.9415, 108.4383, 0, 60, ("da_lat_icon", "ho", "di_bo", "chill", "ngoai_troi", "checkin"), 5, 22, "curated", None),
+    Place("curated-nha-tho-con-ga", "Nhà thờ Con Gà", "di_tich", "Đà Lạt", 11.9352, 108.4370, 0, 45, ("da_lat_icon", "kien_truc", "heritage", "checkin"), 7, 18, "curated", None),
+    Place("curated-hang-nga", "Biệt thự Hằng Nga", "dia_danh", "Đà Lạt", 11.9347, 108.4313, 60_000, 60, ("da_lat_icon", "checkin", "kien_truc", "giai_tri"), 8, 18, "curated", None),
+    Place("curated-thung-lung-tinh-yeu", "Thung lũng Tình Yêu", "cong_vien", "Đà Lạt", 11.9683, 108.4506, 70_000, 90, ("da_lat_icon", "ngoai_troi", "chill", "view_dep", "gia_dinh"), 7, 18, "curated", None),
+    Place("curated-fansipan", "Núi Fansipan", "nui", "Sa Pa", 22.3033, 103.7753, 0, 180, ("sa_pa_icon", "peak", "nui", "view_dep", "ngoai_troi"), 7, 17, "curated", None),
+    Place("curated-ban-cat-cat", "Bản Cát Cát", "dia_danh", "Sa Pa", 22.3265, 103.8250, 80_000, 90, ("sa_pa_icon", "van_hoa", "heritage", "ngoai_troi"), 7, 17, "curated", None),
+    Place("curated-dinh-cau", "Dinh Cậu", "dia_danh", "Phú Quốc", 10.2156, 103.9572, 0, 45, ("phu_quoc_icon", "checkin", "bien", "view_dep"), 6, 21, "curated", None),
+    Place("curated-bai-sao", "Bãi Sao", "bai_bien", "Phú Quốc", 10.1367, 104.0144, 0, 90, ("phu_quoc_icon", "beach", "bien", "chill", "ngoai_troi"), 6, 18, "curated", None),
+    Place("curated-cho-noi-cai-rang", "Chợ nổi Cái Răng", "cho", "Cần Thơ", 10.0080, 105.7560, 0, 120, ("can_tho_icon", "cho", "am_thuc", "van_hoa", "ngoai_troi"), 5, 11, "curated", None),
+    Place("curated-tuong-chua-kito", "Tượng Chúa Kitô Vũng Tàu", "dia_danh", "Vũng Tàu", 10.3262, 107.0844, 0, 75, ("vung_tau_icon", "checkin", "view_dep", "nui", "ngoai_troi"), 6, 18, "curated", None),
+    Place("curated-bai-sau", "Bãi Sau", "bai_bien", "Vũng Tàu", 10.3468, 107.0920, 0, 90, ("vung_tau_icon", "beach", "bien", "chill", "ngoai_troi"), 5, 21, "curated", None),
+]
+
 # Canonical id -> display name for every curated/local-seed place, so planning code
 # can resolve a `curated-*`/local-seed id against a Postgres-style catalogue by name.
 KNOWN_PLACE_NAMES_BY_ID: dict[str, str] = {
@@ -608,6 +729,7 @@ KNOWN_PLACE_NAMES_BY_ID: dict[str, str] = {
         *CURATED_HANOI_DINING,
         *CURATED_NHA_TRANG_ANCHORS,
         *CURATED_OTHER_PROVINCE_ANCHORS,
+        *CURATED_VN_ANCHORS,
     )
 }
 for _place_id in KNOWN_PLACE_NAMES_BY_ID:

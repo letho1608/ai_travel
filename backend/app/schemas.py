@@ -318,6 +318,57 @@ class OAuthRequest(BaseModel):
     consent: bool
 
 
+class PasswordAuthRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=8, max_length=128)
+    ma_phien: str = Field(min_length=8, max_length=100)
+    consent: bool
+    hanh_dong: Literal["dang_nhap", "dang_ky"] = "dang_nhap"
+    so_dien_thoai: str | None = Field(default=None, max_length=20)
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value: str) -> str:
+        if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số")
+        return value
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("so_dien_thoai")
+    @classmethod
+    def normalize_phone(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        digits = "".join(char for char in value if char.isdigit())
+        if digits.startswith("84") and len(digits) >= 11:
+            digits = digits[2:]
+        if digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) < 9 or len(digits) > 10:
+            raise ValueError("Số điện thoại Việt Nam không hợp lệ")
+        return f"+84{digits}"
+
+    @model_validator(mode="after")
+    def phone_required_on_signup(self):
+        if self.hanh_dong == "dang_ky" and not self.so_dien_thoai:
+            raise ValueError("Cần số điện thoại khi đăng ký")
+        return self
+
+
+class PasswordForgotRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_.-]+$")
+    ma_phien: str = Field(min_length=8, max_length=100)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_forgot_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class AccountDeleteRequest(BaseModel):
     confirmation: Literal["XOA TAI KHOAN"]
 

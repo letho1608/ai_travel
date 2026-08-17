@@ -26,22 +26,24 @@ export default function Home() {
   return (
     <main>
       <section className="hero">
-        <div className="hero-left">
-          <span className="eyebrow">{t("heroEyebrow")}</span>
-          <h1>
-            {t("heroTitleFirst")}
-            <br />
-            {t("heroTitleSecond")}
-          </h1>
-          <p className="lead">{t("heroLead")}</p>
-          <div className="social-proof">
-            <span className="dot" />
-            <span>
-              <span className="stat">100%</span> {t("heroTrust")}
-            </span>
+        <div className="hero-row">
+          <div className="hero-left">
+            <span className="eyebrow" aria-hidden="true" />
+            <h1>
+              {t("heroTitleFirst")}
+              <br />
+              {t("heroTitleSecond")}
+            </h1>
+            <p className="lead">{t("heroLead")}</p>
+            <div className="social-proof">
+              <span className="dot" />
+              <span>
+                <span className="stat">100%</span> {t("heroTrust")}
+              </span>
+            </div>
           </div>
+          <Planner />
         </div>
-        <Planner />
       </section>
 
       <section className="landing-section" aria-labelledby="featured-heading">

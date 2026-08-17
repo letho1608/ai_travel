@@ -34,8 +34,7 @@ const DESTINATION_LOCATIONS: { pattern: RegExp; location: Coordinate }[] = [
 
 export default function Planner() {
   const { locale, t } = useLocale();
-  const ideaKeys = ["ideaCoffee", "ideaFood", "ideaCulture"] as const;
-  const [context, setContext] = useState(() => t("ideaCoffee"));
+  const [context, setContext] = useState("");
   const [people, setPeople] = useState<number | "">("");
   const [needsDuration, setNeedsDuration] = useState(false);
   const [needsDestination, setNeedsDestination] = useState(false);
@@ -50,7 +49,6 @@ export default function Planner() {
   const submitting = useRef(false);
   const mounted = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
-  const previousDefault = useRef(context);
   const messageId = useRef(0);
   const lastRequest = useRef<{ context: string; duration: Duration; people: number } | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
@@ -62,12 +60,6 @@ export default function Planner() {
       controllerRef.current?.abort();
     };
   }, []);
-
-  useEffect(() => {
-    const next = t("ideaCoffee");
-    setContext((current) => (current === previousDefault.current ? next : current));
-    previousDefault.current = next;
-  }, [locale, t]);
 
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ block: "nearest" });
@@ -102,11 +94,106 @@ export default function Planner() {
     return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
+  function inferClockRange(value: string): { startHour: number; minutes: number; label: string } | null {
+    const normalized = normalizeText(value);
+    const match = normalized.match(
+      /(?:(?:tu|from)\s+)?(?:luc\s+)?(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|am|pm)?\s*(?:-|–|—|~|den|toi|to|until)\s*(?:luc\s+)?(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|toi|am|pm)?/,
+    );
+    if (!match) return null;
+    const startHour = hourWithMeridiem(Number(match[1]), match[2]);
+    const endHour = hourWithMeridiem(Number(match[3]), match[4]);
+    if (startHour > 23 || endHour > 23) return null;
+    let minutes = endHour * 60 - startHour * 60;
+    if (minutes <= 0) minutes += 24 * 60;
+    if (minutes < 45 || minutes > 16 * 60) return null;
+    return { startHour, minutes, label: `${startHour}h–${endHour}h` };
+  }
+
+  function hourWithMeridiem(hour: number, meridiem: string | undefined) {
+    if (!meridiem) return hour;
+    if ((meridiem === "pm" || meridiem === "chieu") && hour < 12) return hour + 12;
+    if ((meridiem === "am" || meridiem === "sang") && hour === 12) return 0;
+    return hour;
+  }
+
+  function inferHourSpan(value: string): number | null {
+    const normalized = normalizeText(value);
+    const labeled = normalized.match(/\b(\d{1,2}(?:[.,]\d+)?)\s*(?:gio(?:\s+dong\s+ho)?|tieng|hours?|hrs?)\b/);
+    if (labeled) {
+      const hours = Number(labeled[1].replace(",", "."));
+      if (hours >= 0.75 && hours <= 12) return hours;
+    }
+    const compact = normalized.match(/\b(\d{1,2})h\b/);
+    if (compact) {
+      const hours = Number(compact[1]);
+      if (hours >= 1 && hours <= 12) return hours;
+    }
+    const words: [RegExp, number][] = [
+      [/\b(mot|one)\s+(gio|tieng|hour)\b/, 1],
+      [/\b(hai|two)\s+(gio|tieng|hours)\b/, 2],
+      [/\b(ba|three)\s+(gio|tieng|hours)\b/, 3],
+      [/\b(bon|four)\s+(gio|tieng|hours)\b/, 4],
+      [/\b(nam|five)\s+(gio|tieng|hours)\b/, 5],
+    ];
+    return words.find(([pattern]) => pattern.test(normalized))?.[1] ?? null;
+  }
+
+  function parseSlashDate(day: string, month: string, year: string | undefined, today: Date): Date | null {
+    const parsedYear = year ? Number(year.length === 2 ? `20${year}` : year) : today.getFullYear();
+    const date = new Date(parsedYear, Number(month) - 1, Number(day));
+    if (Number.isNaN(date.getTime()) || date.getDate() !== Number(day) || date.getMonth() !== Number(month) - 1) return null;
+    return date;
+  }
+
+  function inferDateRange(value: string): { start: Date; days: number; label: string } | null {
+    const normalized = normalizeText(value);
+    const today = new Date();
+    const slash = normalized.match(
+      /(?:(?:tu|from)\s+)?(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\s*(?:-|–|—|den|toi|to|until)\s*(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/,
+    );
+    if (slash) {
+      const start = parseSlashDate(slash[1], slash[2], slash[3], today);
+      let end = parseSlashDate(slash[4], slash[5], slash[6], today);
+      if (start && end) {
+        if (end.getTime() < start.getTime()) end = new Date(end.getFullYear() + 1, end.getMonth(), end.getDate());
+        const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+        if (days >= 1 && days <= 5) {
+          return { start, days, label: `${start.getDate()}/${start.getMonth() + 1}–${end.getDate()}/${end.getMonth() + 1}` };
+        }
+      }
+    }
+    const monthDays = normalized.match(/(?:tu|from)\s+ngay\s+(\d{1,2})\s+(?:den|toi|to)\s+ngay\s+(\d{1,2})/);
+    if (monthDays) {
+      const startDay = Number(monthDays[1]);
+      const endDay = Number(monthDays[2]);
+      const start = new Date(today.getFullYear(), today.getMonth(), startDay);
+      let end = new Date(today.getFullYear(), today.getMonth(), endDay);
+      if (end.getTime() < start.getTime()) end = new Date(today.getFullYear(), today.getMonth() + 1, endDay);
+      const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+      if (days >= 1 && days <= 5) return { start, days, label: `${days} ngày` };
+    }
+    return null;
+  }
+
+  function durationFromMinutes(minutes: number): Duration {
+    if (minutes <= 240) return "vai_gio";
+    if (minutes <= 420) return "nua_ngay";
+    return "ca_ngay";
+  }
+
   function inferDuration(value: string): Duration | null {
     const normalized = normalizeText(value);
-    if (/^\s*([2-9]|[12][0-9]|30)\s*$/.test(normalized)) return "nhieu_ngay";
+    const dates = inferDateRange(value);
+    if (dates && dates.days >= 2) return "nhieu_ngay";
+    const clock = inferClockRange(value);
+    if (clock) return durationFromMinutes(clock.minutes);
+    const hours = inferHourSpan(value);
+    if (hours != null) return durationFromMinutes(hours * 60);
+    if (dates?.days === 1) return "ca_ngay";
+    if (/^\s*1\s*$/.test(normalized)) return "ca_ngay";
+    if (/(?:vai gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
+    if (/^\s*([2-9]|[12][0-9]|30)(?:\s*[,/]+\s*([1-9]|[12][0-9]|30)|\s+([1-9]|[12][0-9]|30))?\s*$/.test(normalized)) return "nhieu_ngay";
     if (/(?:vai ngay|2 ngay|hai ngay|3 ngay|ba ngay|4 ngay|bon ngay|nhieu ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
-    if (/(?:vai gio|2 gio|3 gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
     if (/(?:nua ngay|half day|buoi sang|buoi chieu|morning|afternoon)/.test(normalized)) return "nua_ngay";
     if (/(?:ca ngay|mot ngay|1 ngay|nguyen ngay|full day|one day|cuoi tuan|weekend)/.test(normalized)) return "ca_ngay";
     return null;
@@ -116,7 +203,29 @@ export default function Planner() {
     return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 1 && value <= 30;
   }
 
+  function inferDayCount(value: string): number | null {
+    const normalized = normalizeText(value);
+    const labeled = normalized.match(/\b([1-9]|[12][0-9]|30)\s*(?:ngay|days?)\b/);
+    if (labeled) return Number(labeled[1]);
+    const dates = inferDateRange(value);
+    if (dates) return dates.days;
+    const pair = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*[,/ ]+\s*(?:[1-9]|[12][0-9]|30)\s*$/);
+    if (pair) return Number(pair[1]);
+    const bareNumber = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*$/);
+    if (bareNumber) return Number(bareNumber[1]);
+    return null;
+  }
+
+  function inferPairedPeople(value: string): number | null {
+    const normalized = normalizeText(value);
+    const pair = normalized.match(/^\s*(?:[1-9]|[12][0-9]|30)\s*[,/]+\s*([1-9]|[12][0-9]|30)\s*$/)
+      || normalized.match(/^\s*(?:[1-9]|[12][0-9]|30)\s+([1-9]|[12][0-9]|30)\s*$/);
+    return pair ? Number(pair[1]) : null;
+  }
+
   function inferPeople(value: string): number | null {
+    const paired = inferPairedPeople(value);
+    if (paired) return paired;
     const normalized = normalizeText(value);
     const bareNumber = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*$/);
     if (bareNumber) return Number(bareNumber[1]);
@@ -133,7 +242,9 @@ export default function Planner() {
   }
 
   function durationQuestion() {
-    return `${t("dayPrompt")} ${t("durationLabel")}: ${t("fewHours")}, ${t("halfDay")}, ${t("fullDay")}, ${t("multiDay")}.`;
+    return locale === "vi"
+      ? `${t("dayPrompt")} Có thể ghi 2 giờ, từ 9h đến 17h, từ 20/8 đến 22/8, hoặc chọn: ${t("fewHours")}, ${t("halfDay")}, ${t("fullDay")}, ${t("multiDay")}.`
+      : `${t("dayPrompt")} You can type 2 hours, 9am to 5pm, 20/8 to 22/8, or choose: ${t("fewHours")}, ${t("halfDay")}, ${t("fullDay")}, ${t("multiDay")}.`;
   }
 
   function destinationQuestion() {
@@ -156,6 +267,43 @@ export default function Planner() {
 
   function addMessage(role: ChatMessage["role"], text: string) {
     setMessages((current) => [...current, { id: ++messageId.current, role, text }]);
+  }
+
+  function stripBareCounts(value: string) {
+    return value
+      .split("\n")
+      .map((part) => part.trim())
+      .filter((part) => part && !/^(?:[1-9]|[12][0-9]|30)(?:\s*[,/ ]+\s*(?:[1-9]|[12][0-9]|30))?$/.test(part))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function composeRequestContext(raw: string, duration: Duration, travelers: number) {
+    const idea = stripBareCounts(raw);
+    const days = inferDayCount(raw) ?? (duration === "nhieu_ngay" ? 2 : 1);
+    const dayText = locale === "vi"
+      ? duration === "vai_gio"
+        ? "vài giờ"
+        : duration === "nua_ngay"
+          ? "nửa ngày"
+          : duration === "ca_ngay"
+            ? "1 ngày"
+            : `${days} ngày`
+      : duration === "vai_gio"
+        ? "a few hours"
+        : duration === "nua_ngay"
+          ? "half day"
+          : duration === "ca_ngay"
+            ? "1 day"
+            : `${days} days`;
+    const peopleText = locale === "vi"
+      ? `${travelers} người`
+      : `${travelers} ${travelers === 1 ? "person" : "people"}`;
+    const alreadyDays = /(?:vai gio|nua ngay|\d+\s*(?:ngay|days?|gio|tieng|hours?)|few hours|half day|\d{1,2}\s*h|\d{1,2}\s*(?:-|den|toi)\s*\d{1,2}|\d{1,2}[/\-.]\d{1,2})/.test(normalizeText(idea));
+    const alreadyPeople = /\d+\s*(?:nguoi|people|person|persons|travelers?)/.test(normalizeText(idea));
+    const extras = [...(alreadyDays ? [] : [dayText]), ...(alreadyPeople ? [] : [peopleText])];
+    return extras.length ? `${idea}, ${extras.join(" ")}` : idea;
   }
 
   function continueOrAskPeople(requestContext: string, duration: Duration, peopleHint: number | null = null) {
@@ -184,7 +332,12 @@ export default function Planner() {
       setErrorKey("generateFailed");
       return;
     }
-    lastRequest.current = { context: requestContext, duration, people: travelers };
+    const composedContext = composeRequestContext(requestContext, duration, travelers);
+    const tripStart = inferDateRange(composedContext)?.start ?? inferDateRange(requestContext)?.start;
+    const ngayDi = tripStart
+      ? `${tripStart.getFullYear()}-${String(tripStart.getMonth() + 1).padStart(2, "0")}-${String(tripStart.getDate()).padStart(2, "0")}`
+      : undefined;
+    lastRequest.current = { context: composedContext, duration, people: travelers };
     submitting.current = true;
     setBusy(true);
     setNeedsDuration(false);
@@ -193,7 +346,7 @@ export default function Planner() {
     setErrorDetail(null);
     setStatusKey("sendingRequest");
     const session = getSession();
-    const fingerprint = JSON.stringify({ context: requestContext.trim(), duration, people: travelers, locale, session });
+    const fingerprint = JSON.stringify({ context: composedContext.trim(), duration, people: travelers, locale, session });
     const nonce = requestNonce(fingerprint);
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -204,11 +357,12 @@ export default function Planner() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          context: requestContext,
-          location: destinationLocation(requestContext),
+          context: composedContext,
+          location: destinationLocation(composedContext),
           thoi_luong: duration,
           so_nguoi: travelers,
           ngan_sach: 1000000,
+          ...(ngayDi ? { ngay_di: ngayDi } : {}),
           ma_phien: session,
           ngon_ngu: locale,
           nonce,
@@ -283,7 +437,7 @@ export default function Planner() {
       setStatusKey(null);
       return;
     }
-    continueOrAskPeople(requestContext, duration);
+    continueOrAskPeople(requestContext, duration, inferPairedPeople(answer));
   }
 
   function answerDestination(answer: string) {
@@ -397,7 +551,7 @@ export default function Planner() {
           )}
           {needsDestination && (
             <div className="duration-suggestions" role="group" aria-label={t("destinationPrompt")}>
-              {(["Hà Nội", "Hạ Long", "Đà Nẵng"] as const).map((destination) => (
+              {(["Hà Nội", "Hạ Long", "Huế", "Đà Nẵng", "Hội An", "Nha Trang", "Đà Lạt", "TP.HCM"] as const).map((destination) => (
                 <button type="button" className="chip" key={destination} onClick={() => answerDestination(destination)} disabled={busy}>
                   {destination}
                 </button>
@@ -408,36 +562,6 @@ export default function Planner() {
         </div>
       )}
       <div className="chat-composer">
-        <div className="quick-actions chat-prompt-chips" aria-label={t("dayPrompt")}>
-          {ideaKeys.map((key) => {
-            const idea = t(key);
-            return (
-              <button
-                type="button"
-                className="chip"
-                key={key}
-                aria-pressed={context === idea}
-                onClick={() => {
-                  setContext(idea);
-                  setNeedsDuration(false);
-                  setNeedsDestination(false);
-                  setNeedsPeople(false);
-                  setPendingContext(null);
-                  setPendingDuration(null);
-                  setMessages([]);
-                  setPeople("");
-                  setErrorKey(null);
-                  setErrorDetail(null);
-                  setStatusKey(null);
-                  lastRequest.current = null;
-                }}
-                disabled={busy}
-              >
-                {idea}
-              </button>
-            );
-          })}
-        </div>
         <div className="chat-box chat-input-shell">
           <span className="chat-input-icon" aria-hidden="true">
             ⌕

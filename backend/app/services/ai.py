@@ -188,6 +188,7 @@ class OpenAICompatibleAIAdapter:
         candidates: list[dict],
         count: int,
         locale: str = "vi",
+        destination: str | None = None,
     ) -> list[str]:
         if not breaker.allow():
             raise RuntimeError("Cầu dao AI đang mở")
@@ -199,14 +200,17 @@ class OpenAICompatibleAIAdapter:
             "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
         }[locale]
         trusted_ids = {str(item["id"]) for item in candidates}
+        city = destination or "Vietnam"
         prompt = {
             "yeu_cau": (
-                f"Select exactly {count} place ids for a useful, non-generic Hanoi itinerary. "
+                f"Select exactly {count} place ids for a useful, non-generic {city} itinerary. "
                 f"Optimize for the user's request and explainable flow. Use {language} reasoning internally, "
-                "but return JSON only. Prefer iconic Hanoi anchors when relevant. Balance landmarks, food/cafe, "
-                "and rest stops. Never invent ids; choose only from candidates."
+                f"but return JSON only. Prefer iconic, well-known tourist attractions of {city} when candidates "
+                "are marked iconic. Avoid obscure shops, unnamed parks, and generic POIs. Balance landmarks, "
+                "food/cafe, and rest stops. Never invent ids; choose only from candidates."
             ),
             "ngu_canh_nguoi_dung": context,
+            "diem_den": city,
             "json_mau": {"place_ids": ["id1", "id2"]},
             "candidates": candidates[:60],
         }
@@ -265,6 +269,7 @@ class OpenAICompatibleAIAdapter:
         context: str,
         count: int,
         locale: str = "vi",
+        destination: str | None = None,
     ) -> list[dict]:
         if not breaker.allow():
             raise RuntimeError("Cầu dao AI đang mở")
@@ -275,19 +280,21 @@ class OpenAICompatibleAIAdapter:
             "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
             "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
         }[locale]
+        city = destination or "Vietnam"
         prompt = {
             "yeu_cau": (
-                f"Create a rich Hanoi itinerary concept in {language}. "
-                f"Return exactly {count} real place names in Hanoi, Vietnam. "
-                "Prefer useful, recognizable places over obscure POIs. For first-time Hanoi tourism, include "
-                "iconic places such as Hồ Gươm, Lăng Chủ tịch Hồ Chí Minh, Hồ Tây, and Phố cổ Hà Nội when appropriate. "
-                "If the user mentions evening/night, include a real evening segment such as the Old Quarter, night market, "
-                "Tạ Hiện, or Hoàn Kiếm walking streets when appropriate. Balance landmarks, food/cafe, rest stops, "
-                "and realistic pacing. Think like a local trip designer, not a POI list. Do not invent fictional places. "
+                f"Create a rich {city} itinerary concept in {language}. "
+                f"Return exactly {count} real, famous tourist place names in {city}, Vietnam. "
+                f"Prefer well-known landmarks, heritage sites, museums, beaches, and viewpoints that first-time visitors to {city} actually go to. "
+                "Do not suggest obscure unnamed parks, street art, shops, or generic POIs. "
+                "Do not invent fictional places, and do not use places from a different city. "
+                "If the user mentions evening/night, include a real local evening area. "
+                "Balance landmarks, food/cafe, rest stops, and realistic pacing. Think like a local trip designer, not a POI list. "
                 "For every place, include why it belongs in the route, what the traveler should actually do there, "
                 "one local tip, optional food/drink suggestion, and practical movement advice."
             ),
             "ngu_canh_nguoi_dung": context,
+            "diem_den": city,
             "json_mau": {
                 "places": [
                     {
@@ -371,6 +378,12 @@ class OpenAICompatibleAIAdapter:
                 f"Write all editable itinerary copy naturally in {language}. "
                 "Use only the supplied ids. Preserve place names, proper nouns, source names, "
                 "source URLs, coordinates, times, costs and all quantitative facts exactly. "
+                "For tieu_de, write one catchy itinerary title in that language. "
+                "Vietnamese titles MUST start with 'Lịch trình du lịch'. "
+                "Weave in the traveler's original request from context_goc "
+                "(coffee, food, walking, weekend, mood) plus the real destination. "
+                "Do not write a label like 'Hà Nội · 2 giờ · 2 người'. "
+                "Keep it to 8-18 words, no quotes, no trailing period. "
                 "For each place description, write 3-5 vivid and practical sentences: set the scene, "
                 "explain why it fits this trip, say exactly what to do there, mention nearby food/cafe "
                 "or photo angles when useful, and include a local-feeling tip. Avoid generic phrases "
@@ -381,6 +394,7 @@ class OpenAICompatibleAIAdapter:
                 "mo_ta_theo_id": {"id": "string"}, "luu_y": ["string"],
             },
             "id_tin_cay": sorted(trusted_ids),
+            "context_goc": (draft.get("dau_vao_da_hieu") or {}).get("context_goc") or draft.get("tieu_de") or "",
             "ke_hoach": draft,
         }
         last_error: Exception | None = None

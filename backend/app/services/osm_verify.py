@@ -57,6 +57,9 @@ NON_TRAVEL_RAW_HINTS = {
     "bất động sản",
     "văn phòng",
 }
+VERIFY_RADIUS_KM = 70.0
+VIETNAM_LAT = (8.0, 24.5)
+VIETNAM_LNG = (102.0, 110.5)
 
 
 def _fold(value: str) -> str:
@@ -117,34 +120,45 @@ def _catalog_match(name: str, origin: tuple[float, float]) -> Place | None:
     return min(matches, key=lambda place: haversine_km(origin[0], origin[1], place.lat, place.lng))
 
 
-def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
+def verify_place_name(name: str, origin: tuple[float, float], city: str | None = None) -> Place | None:
     catalog = _catalog_match(name, origin)
     if catalog:
         return catalog
-    cache_key = _fold(f"hanoi:{name}")
+    city_key = _fold(city or "")
+    cache_keys = [_fold(f"{city_key}:{origin[0]:.2f}:{origin[1]:.2f}:{name}")]
+    if city_key in {"", "ha noi", "hanoi"} or haversine_km(origin[0], origin[1], 21.0285, 105.8542) <= 20:
+        cache_keys.append(_fold(f"hanoi:{name}"))
     cache = _load_cache()
-    cached = cache.get(cache_key)
-    if cached:
+    for cache_key in cache_keys:
+        cached = cache.get(cache_key)
+        if not cached:
+            continue
         try:
             cached_place = Place(**cached)
             if (
                 cached_place.id.startswith("osm-verified-")
                 and cached_place.source == "Nominatim"
                 and cached_place.source_url
-                and 20.8 <= cached_place.lat <= 21.3
-                and 105.5 <= cached_place.lng <= 106.1
+                and VIETNAM_LAT[0] <= cached_place.lat <= VIETNAM_LAT[1]
+                and VIETNAM_LNG[0] <= cached_place.lng <= VIETNAM_LNG[1]
+                and haversine_km(origin[0], origin[1], cached_place.lat, cached_place.lng) <= VERIFY_RADIUS_KM
             ):
                 return cached_place
         except (TypeError, ValueError):
             pass
+    delta = 0.65
+    viewbox = f"{origin[1] - delta},{origin[0] + delta},{origin[1] + delta},{origin[0] - delta}"
+    query = f"{name}, {city}, Vietnam" if city else f"{name}, Vietnam"
     try:
         response = httpx.get(
             NOMINATIM_URL,
             params={
-                "q": f"{name}, Hanoi, Vietnam",
+                "q": query,
                 "format": "jsonv2",
                 "limit": 5,
                 "addressdetails": 1,
+                "viewbox": viewbox,
+                "bounded": 1,
             },
             headers={"User-Agent": USER_AGENT},
             timeout=httpx.Timeout(6, connect=2),
@@ -169,14 +183,14 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
     folded_display_name = _fold(display_name)
     if "viet nam" not in folded_display_name and "vietnam" not in folded_display_name:
         return None
-    if "ha noi" not in folded_display_name and "hanoi" not in folded_display_name:
-        return None
     try:
         lat = float(row["lat"])
         lng = float(row["lon"])
     except (KeyError, TypeError, ValueError):
         return None
-    if not (20.8 <= lat <= 21.3 and 105.5 <= lng <= 106.1):
+    if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
+        return None
+    if haversine_km(origin[0], origin[1], lat, lng) > VERIFY_RADIUS_KM:
         return None
     osm_id, osm_type = row.get("osm_id"), str(row.get("osm_type", "")).casefold()
     if not isinstance(osm_id, int) or osm_type not in {"node", "way", "relation"}:
@@ -185,7 +199,7 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
         id=f"osm-verified-{osm_type}-{osm_id}",
         name=str(row.get("name") or name),
         kind="dia_danh",
-        area="Hà Nội",
+        area=city or "Việt Nam",
         lat=lat,
         lng=lng,
         cost=0,
@@ -196,6 +210,6 @@ def verify_place_name(name: str, origin: tuple[float, float]) -> Place | None:
         source="Nominatim",
         source_url=f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
     )
-    cache[cache_key] = place.__dict__
+    cache[cache_keys[0]] = place.__dict__
     _save_cache(cache)
     return place
