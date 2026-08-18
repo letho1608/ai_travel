@@ -6,10 +6,8 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/components/LocaleProvider";
 
 const links: Array<[string, string]> = [
-  ["/roadtrip", "roadtrip"],
   ["/history", "trips"],
   ["/feedback", "feedback"],
-  ["/settings", "settings"],
 ];
 
 export default function Navigation() {

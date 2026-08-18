@@ -342,40 +342,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Road trip banner */}
-      <section className="landing-section" aria-labelledby="tools-heading">
-        <div className="shell">
-          <div className="card roadtrip-banner" style={{ padding: "40px", borderRadius: "var(--radius-xl)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "24px", background: "linear-gradient(135deg, var(--surface), var(--surface-2))", border: "1px solid var(--line)" }}>
-            <div style={{ maxWidth: "680px" }}>
-              <span className="eyebrow" style={{ marginBottom: "10px", display: "inline-block" }}>Lộ trình xuyên Việt</span>
-              <h2 id="tools-heading" style={{ fontSize: "clamp(26px, 3.5vw, 36px)", margin: "0 0 10px" }}>
-                Road Trip Builder — Xếp tuyến phượt đa điểm dừng
-              </h2>
-              <p style={{ color: "var(--muted)", fontSize: "16px", lineHeight: 1.6, margin: 0 }}>
-                Tự do thiết lập danh sách điểm dừng chân, tính toán quãng đường lái xe thực tế, thời gian di chuyển và bản đồ lộ trình chi tiết.
-              </p>
-            </div>
-            <Link
-              href="/roadtrip"
-              className="primary"
-              style={{
-                padding: "14px 28px",
-                borderRadius: "var(--radius-full)",
-                fontWeight: 800,
-                fontSize: "15px",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Tạo lộ trình phượt →
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* Community Testimonials */}
       <section className="landing-section" aria-labelledby="reviews-heading">
         <div className="shell">
