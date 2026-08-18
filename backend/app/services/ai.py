@@ -99,6 +99,9 @@ class OfflineAIAdapter:
     def extract_request_intent(self, context: str, locale: str = "vi") -> dict:
         return {}
 
+    def extract_planning_intent(self, context: str, locale: str = "vi") -> dict:
+        return {}
+
     def propose_place_ids(
         self,
         context: str,
@@ -203,6 +206,92 @@ class OpenAICompatibleAIAdapter:
                 last_error = exc
                 breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không bóc tách được yêu cầu an toàn: {last_error}") from last_error
+
+    def extract_planning_intent(self, context: str, locale: str = "vi") -> dict:
+        if not breaker.allow():
+            raise RuntimeError("Cầu dao AI đang mở")
+        language = {
+            "vi": "Vietnamese", "en": "English", "ar": "Arabic", "bg": "Bulgarian",
+            "de": "German", "es": "Spanish", "fr": "French", "he": "Hebrew",
+            "hi": "Hindi", "it": "Italian", "ja": "Japanese", "nl": "Dutch",
+            "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
+            "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
+        }[locale]
+        prompt = {
+            "yeu_cau": (
+                f"Normalize this travel request in {language} into structured JSON. "
+                "Extract the user's meaning, not literal regex tokens. Do not invent missing facts. "
+                "If a value is ambiguous, put it in ambiguities and leave the normalized field null. "
+                "Examples: '10h' alone may mean 10 hours or start at 10:00; mark ambiguous. "
+                "'30p' or '0.5h' means 30 minutes. '20 ngày' means 20 days. "
+                "Return JSON only."
+            ),
+            "text": context,
+            "json_mau": {
+                "schema_version": "intent-parse-v2",
+                "destination_text": "string|null",
+                "trip_purpose": "general_travel|healing|beach|mountain|food|cafe|null",
+                "duration_value": "number|null",
+                "duration_unit": "minute|hour|day|week|null",
+                "time_window": {
+                    "start_hour": "number|null",
+                    "start_minute": "number|null",
+                    "end_hour": "number|null",
+                    "end_minute": "number|null",
+                },
+                "people": "number|null",
+                "budget": "number|null",
+                "preferences": ["string"],
+                "dislikes": ["string"],
+                "must_visit": ["string"],
+                "ambiguities": [{"field": "string", "value": "string", "reason": "string", "question": "string"}],
+            },
+        }
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                response = self.client.post(
+                    "/chat/completions",
+                    json={
+                        "model": settings.ai_model,
+                        "messages": [
+                            {"role": "system", "content": "Only return a valid JSON object."},
+                            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.0,
+                        "max_tokens": 900,
+                    },
+                )
+                response.raise_for_status()
+                body = response.json()
+                choice = body["choices"][0]
+                if choice.get("finish_reason") != "stop":
+                    raise ValueError("AI intent normalization was incomplete")
+                content = choice["message"].get("content")
+                if not content:
+                    raise ValueError("AI returned empty intent normalization")
+                payload = json.loads(content)
+                if not isinstance(payload, dict):
+                    raise TypeError("AI intent normalization is not an object")
+                usage = body.get("usage", {})
+                input_tokens = int(usage.get("prompt_tokens", 0))
+                output_tokens = int(usage.get("completion_tokens", 0))
+                amount = (
+                    input_tokens * settings.ai_input_usd_per_million
+                    + output_tokens * settings.ai_output_usd_per_million
+                ) / 1_000_000
+                store.record_ai_usage(
+                    getattr(self, "provider", settings.ai_mode), settings.ai_model,
+                    input_tokens, output_tokens, amount,
+                    settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
+                )
+                breaker.record_success()
+                return payload
+            except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+                breaker.record_failure(_error_kind(exc))
+        raise RuntimeError(f"AI không chuẩn hóa được yêu cầu an toàn: {last_error}") from last_error
 
     def propose_place_ids(
         self,

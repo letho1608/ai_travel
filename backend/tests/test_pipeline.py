@@ -95,6 +95,46 @@ def test_destination_region_filters_candidates_before_ranking():
     )
 
 
+def test_intent_policy_filters_sight_candidates_by_theme():
+    req = request().model_copy(update={
+        "context": "muốn đi leo núi ở Sa Pa 1 ngày 2 người",
+        "intent_policy": {
+            "schema_version": "intent-parse-v2",
+            "primary_intent": "mountain",
+            "planner_mode": "day_trip",
+            "allowed_place_themes": ["mountain", "trekking", "viewpoint", "nature"],
+            "avoid_place_themes": ["museum", "urban_landmark"],
+        },
+    })
+    museum = planner.Place(
+        id="test-museum",
+        name="Bảo tàng đô thị",
+        kind="bao_tang",
+        area="Sa Pa",
+        lat=22.33,
+        lng=103.84,
+        cost=0,
+        duration_min=60,
+        tags=("museum", "history"),
+    )
+    peak = planner.Place(
+        id="test-peak",
+        name="Đỉnh núi thử nghiệm",
+        kind="nui",
+        area="Sa Pa",
+        lat=22.34,
+        lng=103.85,
+        cost=0,
+        duration_min=90,
+        tags=("nui", "view_dep", "trekking"),
+    )
+
+    filtered, evidence = planner._apply_intent_policy_to_sights([museum, peak], req, 1)
+
+    assert evidence["che_do"] == "strict_filter"
+    assert [place.id for place in filtered] == ["test-peak"]
+
+
 def test_plan_title_labels_days_and_people_instead_of_raw_numbers():
     req = request().model_copy(
         update={
@@ -209,6 +249,42 @@ def test_trip_timing_understands_relative_dates():
     timing = planner._trip_timing(bare_weekend, today=today)
     assert timing.start_date is None
     assert timing.date_label is None
+
+
+def test_trip_timing_prefers_structured_intent_policy_over_context_regex():
+    today = date(2026, 8, 18)
+    clock = request().model_copy(update={
+        "context": "du lịch Hà Nội 2 giờ nhưng intent đã chuẩn hóa 15h-18h",
+        "thoi_luong": "vai_gio",
+        "intent_policy": {
+            "schema_version": "intent-parse-v2",
+            "duration": "vai_gio",
+            "duration_minutes": 180,
+            "time_window": {
+                "start_hour": 15,
+                "start_minute": 0,
+                "end_hour": 18,
+                "end_minute": 0,
+                "minutes": 180,
+                "label": "15h–18h",
+            },
+        },
+    })
+    timing = planner._trip_timing(clock, today=today)
+    assert timing.start_hour == 15
+    assert timing.max_minutes == 180
+    assert timing.clock_label == "15h–18h"
+
+    long_trip = request().model_copy(update={
+        "context": "du lịch Hà Nội",
+        "thoi_luong": "ca_ngay",
+        "intent_policy": {
+            "schema_version": "intent-parse-v2",
+            "duration": "nhieu_ngay",
+            "duration_days": 20,
+        },
+    })
+    assert planner._trip_timing(long_trip, today=today).days == 20
 
 
 def test_safe_ai_intent_accepts_valid_ai_payload(monkeypatch):

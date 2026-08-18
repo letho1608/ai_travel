@@ -45,6 +45,25 @@ def test_global_request_body_limit_rejects_oversized_json_before_route_parsing()
     assert response.json()["detail"] == "Request body too large"
 
 
+def test_intent_parse_endpoint_returns_ask_back_and_suggestions(monkeypatch):
+    from app.pipeline import intent_parse
+
+    class FakeAIAdapter:
+        def extract_planning_intent(self, _context: str, _locale: str = "vi") -> dict:
+            return {"trip_purpose": "healing"}
+
+    monkeypatch.setattr(intent_parse, "ai_adapter", FakeAIAdapter())
+    response = client.post("/api/intent/parse", json={"context": "Tôi muốn đi chữa lành", "ngon_ngu": "vi"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ask_user_missing_fields"
+    assert body["extraction_source"] == "ai"
+    assert "destination" in body["missing_fields"]
+    assert body["parsed"]["primary_intent"] == "healing"
+    assert body["parsed"]["planner_mode"] == "intent_discovery"
+    assert len(body["suggestions"]) >= 2
+
+
 def test_all_inventory_search_routes_enforce_ip_and_session_limit(monkeypatch):
     from app.routers import inventory as inventory_router
 

@@ -426,7 +426,8 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/const DEFAULT_LOCATION/);
   assert.match(plannerSource,/const DESTINATION_LOCATIONS/);
   assert.match(plannerSource,/function destinationLocation\(value: string\)/);
-  assert.match(plannerSource,/location: destinationLocation\(composedContext\)/);
+  assert.match(plannerSource,/pendingIntentLocation/);
+  assert.match(plannerSource,/location: pendingIntentLocation\.current \?\? destinationLocation\(composedContext\)/);
   assert.match(plannerSource,/lat: 16\.0544, lng: 108\.2022/);
   assert.match(plannerSource,/continueOrAskPeople\(requestContext, duration, inferPairedPeople\(answer\)\)/);
   assert.match(plannerSource,/Hà Nội/);

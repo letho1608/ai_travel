@@ -25,6 +25,39 @@ class GlobalCoordinate(BaseModel):
     lng: float = Field(ge=-180, le=180)
 
 
+class IntentTimeWindow(BaseModel):
+    start_hour: int = Field(ge=0, le=23)
+    start_minute: int = Field(default=0, ge=0, le=59)
+    end_hour: int = Field(ge=0, le=23)
+    end_minute: int = Field(default=0, ge=0, le=59)
+    minutes: int = Field(ge=45, le=960)
+    label: str | None = Field(default=None, max_length=40)
+
+
+class IntentPolicy(BaseModel):
+    schema_version: str = Field(default="intent-parse-v2", max_length=40)
+    primary_intent: str | None = Field(default=None, max_length=40)
+    planner_mode: str | None = Field(default=None, max_length=40)
+    duration: Duration | None = None
+    duration_value: float | None = Field(default=None, gt=0, le=30)
+    duration_unit: Literal["minute", "hour", "day", "week"] | None = None
+    duration_minutes: int | None = Field(default=None, ge=45, le=960)
+    duration_days: int | None = Field(default=None, ge=1, le=30)
+    time_window: IntentTimeWindow | None = None
+    allowed_place_themes: list[str] = Field(default_factory=list, max_length=12)
+    avoid_place_themes: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("allowed_place_themes", "avoid_place_themes")
+    @classmethod
+    def clean_themes(cls, value: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for item in value:
+            normalized = item.strip().lower().replace(" ", "_")[:40]
+            if normalized and normalized not in cleaned:
+                cleaned.append(normalized)
+        return cleaned
+
+
 class PlanRequest(BaseModel):
     context: str = Field(min_length=2, max_length=500)
     location: Coordinate
@@ -37,6 +70,7 @@ class PlanRequest(BaseModel):
     ma_phien: str | None = Field(default=None, max_length=100)
     ngon_ngu: Locale = "vi"
     nonce: str | None = Field(default=None, min_length=8, max_length=100)
+    intent_policy: IntentPolicy | None = None
 
     @field_validator("context")
     @classmethod
@@ -50,6 +84,19 @@ class PlanRequest(BaseModel):
     @classmethod
     def clean_lodging_name(cls, value: str | None) -> str | None:
         return " ".join(value.replace("<", "").replace(">", "").split()) if value else value
+
+
+class IntentParseRequest(BaseModel):
+    context: str = Field(min_length=2, max_length=500)
+    ngon_ngu: Locale = "vi"
+
+    @field_validator("context")
+    @classmethod
+    def clean_context(cls, value: str) -> str:
+        cleaned = " ".join(value.replace("<", "").replace(">", "").split())
+        if not cleaned:
+            raise ValueError("Nội dung không hợp lệ")
+        return cleaned
 
 
 class AIEvidence(BaseModel):

@@ -19,10 +19,12 @@ from app.pipeline.planner import (
     travel_minutes,
     validate_plan,
 )
+from app.pipeline.intent_parse import parse_intent
 from app.routers.auth import resolve_user
 from app.schemas import (
     CommentRequest,
     DeleteSlotRequest,
+    IntentParseRequest,
     PlanRequest,
     ReadNotificationRequest,
     RefineRequest,
@@ -117,6 +119,11 @@ def read_notification(
     except (ValueError, TypeError) as exc:
         raise HTTPException(404, "Không tìm thấy thông báo") from exc
     return {"thong_bao": item}
+
+
+@router.post("/intent/parse")
+def parse_user_intent(payload: IntentParseRequest):
+    return parse_intent(payload.context, payload.ngon_ngu)
 
 
 @router.post("/plan/generate")

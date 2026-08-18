@@ -38,6 +38,7 @@ from app.pipeline.cp_sat_solver import (
     select_places_with_cp_sat,
     verify_fixed_schedule_with_cp_sat,
 )
+from app.pipeline.intent_parse import place_matches_policy, place_policy_score
 from app.schemas import AIExtractPayload, PlanRequest
 from pydantic import ValidationError
 from app.pipeline.solar import sunset_for_date
@@ -323,6 +324,21 @@ def _relative_trip_date(folded: str, today: date, locale: str) -> tuple[date, st
     return None
 
 
+def _policy_get(policy: object, key: str):
+    if isinstance(policy, dict):
+        return policy.get(key)
+    return getattr(policy, key, None)
+
+
+def _structured_time_window(policy: object) -> dict | None:
+    window = _policy_get(policy, "time_window") if policy else None
+    if not window:
+        return None
+    if not isinstance(window, dict):
+        window = window.model_dump() if hasattr(window, "model_dump") else None
+    return window if isinstance(window, dict) else None
+
+
 def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
     today = today or datetime.now(UTC).date()
     _, default_minutes, default_days = LIMITS[request.thoi_luong]
@@ -333,9 +349,29 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
     start_date = request.ngay_di
     clock_label = None
     date_label = None
+    policy = request.intent_policy
+    structured_duration_minutes = int(_policy_get(policy, "duration_minutes") or 0) if policy else 0
+    structured_duration_days = int(_policy_get(policy, "duration_days") or 0) if policy else 0
+    structured_window = _structured_time_window(policy)
 
-    hour_span = _HOUR_SPAN_RE.search(folded)
-    compact_hour = None if hour_span else _HOUR_COMPACT_RE.search(folded)
+    if structured_duration_minutes:
+        max_minutes = max(45, min(structured_duration_minutes, 16 * 60))
+        hours = max_minutes / 60
+        clock_label = f"{hours:g} giờ" if request.ngon_ngu == "vi" else f"{hours:g} hours"
+    if structured_duration_days:
+        days = min(MAX_TRIP_DAYS, max(1, structured_duration_days))
+    if structured_window:
+        span = int(structured_window.get("minutes") or 0)
+        start_h = int(structured_window.get("start_hour") or 0)
+        start_m = int(structured_window.get("start_minute") or 0)
+        if 45 <= span <= 16 * 60 and 0 <= start_h <= 23 and 0 <= start_m < 60:
+            start_hour = start_h
+            start_minute = start_m
+            max_minutes = span
+            clock_label = structured_window.get("label") or f"{start_hour}h"
+
+    hour_span = None if structured_duration_minutes or structured_window else _HOUR_SPAN_RE.search(folded)
+    compact_hour = None if hour_span or structured_duration_minutes or structured_window else _HOUR_COMPACT_RE.search(folded)
     if hour_span:
         hours = float(hour_span.group(1).replace(",", "."))
         if 0.75 <= hours <= 12:
@@ -346,14 +382,14 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
         if 1 <= hours <= 12:
             max_minutes = hours * 60
             clock_label = f"{hours} giờ" if request.ngon_ngu == "vi" else f"{hours} hours"
-    else:
+    elif not structured_duration_minutes and not structured_window:
         for phrase, hours in _HOUR_WORD.items():
             if phrase in folded:
                 max_minutes = hours * 60
                 clock_label = f"{hours} giờ" if request.ngon_ngu == "vi" else f"{hours} hours"
                 break
 
-    clock = _CLOCK_RANGE_RE.search(folded)
+    clock = None if structured_window else _CLOCK_RANGE_RE.search(folded)
     if clock:
         start_h = _hour_with_meridiem(int(clock.group(1)), clock.group(3))
         end_h = _hour_with_meridiem(int(clock.group(4)), clock.group(6))
@@ -364,7 +400,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
             max_minutes = span
             clock_label = f"{start_hour}h–{end_h}h"
 
-    night_shift = re.search(r"\b(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm)\s*(?:den|-|toi)\s*(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm|sang|am)?\b", folded)
+    night_shift = None if structured_window else re.search(r"\b(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm)\s*(?:den|-|toi)\s*(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm|sang|am)?\b", folded)
     if night_shift and not clock:
         start_raw = int(night_shift.group(1))
         end_raw = int(night_shift.group(2))
@@ -376,7 +412,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
             max_minutes = span_min
             clock_label = f"{start_hour}h–{e_h % 24}h"
 
-    dated = _DATE_RANGE_RE.search(folded)
+    dated = None if structured_duration_days else _DATE_RANGE_RE.search(folded)
     if dated:
         year1 = _parse_year(dated.group(3), today)
         year2 = _parse_year(dated.group(6), today) if dated.group(6) else year1
@@ -394,7 +430,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
                 start_date = request.ngay_di or left
                 date_label = f"{left.day}/{left.month}–{right.day}/{right.month}"
     else:
-        month_days = _DAY_RANGE_RE.search(folded)
+        month_days = None if structured_duration_days else _DAY_RANGE_RE.search(folded)
         if month_days:
             start_day = int(month_days.group(1))
             end_day = int(month_days.group(2))
@@ -420,7 +456,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
                     start_date = request.ngay_di or left
                     date_label = f"{span_days} ngày"
 
-    labeled_days = re.search(r"\b([2-9]|[1-2][0-9]|30)\s*(?:ngay|days?)\b", folded)
+    labeled_days = None if structured_duration_days else re.search(r"\b([2-9]|[1-2][0-9]|30)\s*(?:ngay|days?)\b", folded)
     if labeled_days and not date_label:
         days = min(MAX_TRIP_DAYS, max(days, int(labeled_days.group(1))))
 
@@ -429,7 +465,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
         if relative:
             start_date, date_label = relative
 
-    if request.thoi_luong != "nhieu_ngay" and not date_label:
+    if request.thoi_luong != "nhieu_ngay" and not date_label and not structured_duration_days:
         days = 1
     return TripTiming(start_hour, start_minute, max_minutes, days, start_date, clock_label, date_label)
 
@@ -2049,6 +2085,56 @@ def _sight_candidates(candidates: list[Place], request: PlanRequest | None = Non
         return non_dining or candidates
     without_cafe = [place for place in non_dining if place.kind != "cafe"]
     return without_cafe or non_dining or candidates
+
+
+def _intent_policy_sets(request: PlanRequest) -> tuple[set[str], set[str]]:
+    policy = request.intent_policy
+    if not policy:
+        return set(), set()
+    if isinstance(policy, dict):
+        return set(policy.get("allowed_place_themes") or []), set(policy.get("avoid_place_themes") or [])
+    return set(policy.allowed_place_themes), set(policy.avoid_place_themes)
+
+
+def _apply_intent_policy_to_sights(sights: list[Place], request: PlanRequest, sight_count: int) -> tuple[list[Place], dict | None]:
+    allowed, avoided = _intent_policy_sets(request)
+    if not allowed and not avoided:
+        return sights, None
+    strict = [place for place in sights if place_matches_policy(place, allowed, avoided)]
+    min_needed = min(sight_count, 2)
+    if len(strict) >= min_needed:
+        ranked = sorted(
+            strict,
+            key=lambda place: (
+                -place_policy_score(place, allowed, avoided),
+                -_tourism_quality_score(place),
+                place.id,
+            ),
+        )
+        return ranked, {
+            "ap_dung": True,
+            "che_do": "strict_filter",
+            "allowed_place_themes": sorted(allowed),
+            "avoid_place_themes": sorted(avoided),
+            "so_ung_vien_truoc": len(sights),
+            "so_ung_vien_sau": len(ranked),
+        }
+    ranked = sorted(
+        sights,
+        key=lambda place: (
+            -place_policy_score(place, allowed, avoided),
+            -_tourism_quality_score(place),
+            place.id,
+        ),
+    )
+    return ranked, {
+        "ap_dung": True,
+        "che_do": "soft_rank_not_enough_strict_matches",
+        "allowed_place_themes": sorted(allowed),
+        "avoid_place_themes": sorted(avoided),
+        "so_ung_vien_truoc": len(sights),
+        "so_ung_vien_sau": len(strict),
+    }
 
 
 def _anchor_for_places(places: list[Place], fallback: tuple[float, float]) -> tuple[float, float]:
@@ -4164,6 +4250,7 @@ def _select_sight_places(
     number_of_days: int,
 ) -> tuple[list[Place], dict[str, dict], dict]:
     sight_pool = _dedupe_places(_sight_candidates(candidates, request))
+    sight_pool, policy_evidence = _apply_intent_policy_to_sights(sight_pool, request, sight_count)
     llm_details_by_id: dict[str, dict] = {}
     allow_cafe = _wants_coffee(request)
     llm_first = _select_llm_first_places(sight_pool, sight_count, request)
@@ -4177,16 +4264,22 @@ def _select_sight_places(
             ]
         )
         if len(chosen) >= min(sight_count, 2):
-            return chosen[:sight_count], llm_details_by_id, {
+            evidence: dict[str, object] = {
                 "phuong_phap": "llm_catalog_guarded",
                 "ghi_chu": "LLM chỉ chọn id có trong catalog tin cậy; planner vẫn kiểm tra ràng buộc sau đó.",
             }
+            if policy_evidence:
+                evidence["intent_policy"] = policy_evidence
+            return chosen[:sight_count], llm_details_by_id, evidence
     ai_chosen = _select_ai_places(sight_pool, sight_count, request)
     if ai_chosen:
-        return _dedupe_places(ai_chosen)[:sight_count], llm_details_by_id, {
+        evidence: dict[str, object] = {
             "phuong_phap": "ai_catalog_selection",
             "ghi_chu": "AI chọn danh sách từ ứng viên hợp lệ trong catalog.",
         }
+        if policy_evidence:
+            evidence["intent_policy"] = policy_evidence
+        return _dedupe_places(ai_chosen)[:sight_count], llm_details_by_id, evidence
     score_by_id = {
         place.id: max(1, (len(sight_pool) - index) * 10 + _tourism_quality_score(place))
         for index, place in enumerate(sight_pool)
@@ -4209,7 +4302,7 @@ def _select_sight_places(
             by_id = {place.id: place for place in sight_pool}
             chosen = [by_id[place_id] for place_id in cp_day.selected_ids if place_id in by_id]
             if len(chosen) >= min(sight_count, 2):
-                return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+                evidence: dict[str, object] = {
                     "phuong_phap": "ortools_cp_sat_day_joint_selection",
                     "thu_vien": "ortools.sat.python.cp_model",
                     "trang_thai": cp_day.status,
@@ -4224,6 +4317,9 @@ def _select_sight_places(
                     },
                     "chan_bo": list(cp_day.blockers),
                 }
+                if policy_evidence:
+                    evidence["intent_policy"] = policy_evidence
+                return _dedupe_places(chosen)[:sight_count], llm_details_by_id, evidence
     cp_selection = select_places_with_cp_sat(
         sight_pool,
         sight_count,
@@ -4256,7 +4352,7 @@ def _select_sight_places(
             if order.ordered_ids:
                 ordered_by_id = {place.id: place for place in chosen}
                 chosen = [ordered_by_id[place_id] for place_id in order.ordered_ids if place_id in ordered_by_id]
-            return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+            evidence: dict[str, object] = {
                 "phuong_phap": "ortools_cp_sat_selection",
                 "thu_vien": "ortools.sat.python.cp_model",
                 "trang_thai": cp_selection.status,
@@ -4272,6 +4368,9 @@ def _select_sight_places(
                 },
                 "chan_bo": list(cp_selection.blockers),
             }
+            if policy_evidence:
+                evidence["intent_policy"] = policy_evidence
+            return _dedupe_places(chosen)[:sight_count], llm_details_by_id, evidence
     chosen = (
         _select_ai_places(sight_pool, sight_count, request)
         or _select_within_budget(sight_pool, sight_count, request.ngan_sach)
@@ -4281,7 +4380,7 @@ def _select_sight_places(
         for place in chosen
         if not _is_dining_place(place) and _is_sight_place(place, allow_cafe=allow_cafe)
     ]
-    return _dedupe_places(chosen)[:sight_count], llm_details_by_id, {
+    evidence: dict[str, object] = {
         "phuong_phap": "fallback_ranked_budget",
         "cp_sat": {
             "co_san": cp_selection.available,
@@ -4299,6 +4398,9 @@ def _select_sight_places(
             else {"co_san": False, "trang_thai": "not_applicable_multi_day_or_disabled"}
         ),
     }
+    if policy_evidence:
+        evidence["intent_policy"] = policy_evidence
+    return _dedupe_places(chosen)[:sight_count], llm_details_by_id, evidence
 
 
 def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_understanding: dict | None = None) -> dict:

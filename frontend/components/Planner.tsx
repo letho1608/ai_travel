@@ -9,6 +9,48 @@ import type { PlannerTranslationKey } from "@/lib/i18n-core";
 type Duration = "vai_gio" | "nua_ngay" | "ca_ngay" | "nhieu_ngay";
 type ChatMessage = { id: number; role: "user" | "assistant"; text: string };
 type Coordinate = { lat: number; lng: number };
+type DestinationSuggestion = { label: string; lat?: number; lng?: number };
+type IntentTimeWindow = {
+  start_hour: number;
+  start_minute?: number;
+  end_hour: number;
+  end_minute?: number;
+  minutes: number;
+  label?: string | null;
+};
+type ParsedIntent = {
+  status?: "ready_to_plan" | "ask_user_missing_fields";
+  question?: string | null;
+  missing_fields?: string[];
+  suggestions?: DestinationSuggestion[];
+  parsed?: {
+    duration?: Duration | null;
+    people?: number | null;
+    primary_intent?: string | null;
+    planner_mode?: string | null;
+    duration_value?: number | null;
+    duration_unit?: "minute" | "hour" | "day" | "week" | null;
+    duration_minutes?: number | null;
+    duration_days?: number | null;
+    time_window?: IntentTimeWindow | null;
+    allowed_place_themes?: string[];
+    avoid_place_themes?: string[];
+    destination?: { name?: string; lat?: number; lng?: number } | null;
+  };
+};
+type IntentPolicy = {
+  schema_version: "intent-parse-v2";
+  primary_intent?: string | null;
+  planner_mode?: string | null;
+  duration?: Duration | null;
+  duration_value?: number | null;
+  duration_unit?: "minute" | "hour" | "day" | "week" | null;
+  duration_minutes?: number | null;
+  duration_days?: number | null;
+  time_window?: IntentTimeWindow | null;
+  allowed_place_themes: string[];
+  avoid_place_themes: string[];
+};
 
 const DEFAULT_LOCATION: Coordinate = { lat: 21.0285, lng: 105.8542 };
 const DESTINATION_LOCATIONS: { pattern: RegExp; location: Coordinate }[] = [
@@ -31,6 +73,9 @@ const DESTINATION_LOCATIONS: { pattern: RegExp; location: Coordinate }[] = [
   { pattern: /\b(ha giang|dong van|ma pi leng)\b/, location: { lat: 22.8233, lng: 104.9839 } },
   { pattern: /\b(hai phong|cat ba|do son)\b/, location: { lat: 20.8449, lng: 106.6881 } },
 ];
+const DEFAULT_DESTINATION_SUGGESTIONS: DestinationSuggestion[] = [
+  "Hà Nội", "Hạ Long", "Huế", "Đà Nẵng", "Hội An", "Nha Trang", "Đà Lạt", "TP.HCM",
+].map((label) => ({ label }));
 
 const plannerPromptListeners = new Set<(value: string) => void>();
 
@@ -69,6 +114,7 @@ export default function Planner() {
   const [needsDuration, setNeedsDuration] = useState(false);
   const [needsDestination, setNeedsDestination] = useState(false);
   const [needsPeople, setNeedsPeople] = useState(false);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<DestinationSuggestion[]>([]);
   const [pendingContext, setPendingContext] = useState<string | null>(null);
   const [pendingDuration, setPendingDuration] = useState<Duration | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -81,6 +127,8 @@ export default function Planner() {
   const controllerRef = useRef<AbortController | null>(null);
   const messageId = useRef(0);
   const lastRequest = useRef<{ context: string; duration: Duration; people: number } | null>(null);
+  const pendingIntentPolicy = useRef<IntentPolicy | null>(null);
+  const pendingIntentLocation = useRef<Coordinate | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -342,6 +390,44 @@ export default function Planner() {
     setMessages((current) => [...current, { id: ++messageId.current, role, text }]);
   }
 
+  async function parseIntent(value: string): Promise<ParsedIntent | null> {
+    const response = await fetch(`${API_URL}/api/intent/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context: value, ngon_ngu: locale }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data && typeof data === "object" ? data as ParsedIntent : null;
+  }
+
+  function policyFromIntent(intent: ParsedIntent | null): IntentPolicy | null {
+    const parsed = intent?.parsed;
+    if (!parsed) return null;
+    const allowed = Array.isArray(parsed.allowed_place_themes) ? parsed.allowed_place_themes.filter(Boolean) : [];
+    const avoided = Array.isArray(parsed.avoid_place_themes) ? parsed.avoid_place_themes.filter(Boolean) : [];
+    if (!parsed.primary_intent && !parsed.planner_mode && allowed.length === 0 && avoided.length === 0) return null;
+    return {
+      schema_version: "intent-parse-v2",
+      primary_intent: parsed.primary_intent ?? null,
+      planner_mode: parsed.planner_mode ?? null,
+      duration: parsed.duration ?? null,
+      duration_value: parsed.duration_value ?? null,
+      duration_unit: parsed.duration_unit ?? null,
+      duration_minutes: parsed.duration_minutes ?? null,
+      duration_days: parsed.duration_days ?? null,
+      time_window: parsed.time_window ?? null,
+      allowed_place_themes: allowed,
+      avoid_place_themes: avoided,
+    };
+  }
+
+  function locationFromIntent(intent: ParsedIntent | null): Coordinate | null {
+    const destination = intent?.parsed?.destination;
+    if (!destination || typeof destination.lat !== "number" || typeof destination.lng !== "number") return null;
+    return { lat: destination.lat, lng: destination.lng };
+  }
+
   function stripBareCounts(value: string) {
     return value
       .split("\n")
@@ -457,7 +543,7 @@ export default function Planner() {
         signal: controller.signal,
         body: JSON.stringify({
           context: composedContext,
-          location: destinationLocation(composedContext),
+          location: pendingIntentLocation.current ?? destinationLocation(composedContext),
           thoi_luong: duration,
           so_nguoi: travelers,
           ngan_sach: nganSach,
@@ -465,6 +551,7 @@ export default function Planner() {
           ma_phien: session,
           ngon_ngu: locale,
           nonce,
+          ...(pendingIntentPolicy.current ? { intent_policy: pendingIntentPolicy.current } : {}),
         }),
       });
       if (response.status === 401) {
@@ -548,7 +635,7 @@ export default function Planner() {
   }
 
   function answerDestination(answer: string) {
-    if (submitting.current || !pendingContext || !pendingDuration) return;
+    if (submitting.current || !pendingContext) return;
     const destination = answer.trim();
     if (!destination) return;
     addMessage("user", destination);
@@ -564,6 +651,15 @@ export default function Planner() {
     const duration = pendingDuration;
     setContext("");
     setNeedsDestination(false);
+    setDestinationSuggestions([]);
+    if (!duration) {
+      setPendingContext(requestContext);
+      setNeedsDuration(true);
+      addMessage("assistant", durationQuestion());
+      setErrorKey(null);
+      setStatusKey(null);
+      return;
+    }
     continueOrAskPeople(requestContext, duration, inferPeople(destination));
   }
 
@@ -589,7 +685,7 @@ export default function Planner() {
     continueOrAskPeople(requestContext, duration, travelers);
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (submitting.current) return;
     const answer = context.trim();
@@ -612,6 +708,65 @@ export default function Planner() {
     const peopleHint = inferPeople(answer);
     if (peopleHint) setPeople(peopleHint);
     addMessage("user", answer);
+
+    try {
+      const intent = await parseIntent(answer);
+      pendingIntentPolicy.current = policyFromIntent(intent);
+      pendingIntentLocation.current = locationFromIntent(intent);
+      const missing = intent?.missing_fields ?? [];
+      const parsedDuration = intent?.parsed?.duration ?? inferDuration(answer);
+      const parsedPeople = intent?.parsed?.people ?? peopleHint;
+      if (intent?.status === "ask_user_missing_fields" && missing.includes("destination")) {
+        setPendingContext(answer);
+        setPendingDuration(parsedDuration ?? null);
+        setNeedsDestination(true);
+        setNeedsDuration(false);
+        setNeedsPeople(false);
+        setContext("");
+        setDestinationSuggestions(
+          (intent.suggestions ?? [])
+            .filter((item) => Boolean(item.label))
+            .map((item) => ({ label: item.label || "", lat: item.lat, lng: item.lng })),
+        );
+        addMessage("assistant", intent.question || destinationQuestion());
+        setErrorKey(null);
+        setStatusKey(null);
+        return;
+      }
+      if (intent?.status === "ask_user_missing_fields" && missing.includes("duration")) {
+        setPendingContext(answer);
+        setPendingDuration(null);
+        setNeedsDuration(true);
+        setNeedsDestination(false);
+        setNeedsPeople(false);
+        setContext("");
+        addMessage("assistant", intent.question || durationQuestion());
+        setErrorKey(null);
+        setStatusKey(null);
+        return;
+      }
+      if (intent?.status === "ask_user_missing_fields" && missing.includes("people") && parsedDuration) {
+        setPendingContext(answer);
+        setPendingDuration(parsedDuration);
+        setNeedsPeople(true);
+        setNeedsDuration(false);
+        setNeedsDestination(false);
+        setContext("");
+        addMessage("assistant", intent.question || peopleQuestion());
+        setErrorKey(null);
+        setStatusKey(null);
+        return;
+      }
+      if (intent?.status === "ready_to_plan" && parsedDuration && parsedPeople) {
+        continueOrAskPeople(answer, parsedDuration, parsedPeople);
+        return;
+      }
+    } catch {
+      pendingIntentPolicy.current = null;
+      pendingIntentLocation.current = null;
+      // Fall through to the legacy local parser if the backend intent endpoint is unavailable.
+    }
+
     const duration = inferDuration(answer);
     if (!duration) {
       setPendingContext(answer);
@@ -672,9 +827,20 @@ export default function Planner() {
           )}
           {needsDestination && (
             <div className="duration-suggestions" role="group" aria-label={t("destinationPrompt")}>
-              {(["Hà Nội", "Hạ Long", "Huế", "Đà Nẵng", "Hội An", "Nha Trang", "Đà Lạt", "TP.HCM"] as const).map((destination) => (
-                <button type="button" className="chip" key={destination} onClick={() => answerDestination(destination)} disabled={busy}>
-                  {destination}
+              {(destinationSuggestions.length ? destinationSuggestions : DEFAULT_DESTINATION_SUGGESTIONS).map((destination) => (
+                <button
+                  type="button"
+                  className="chip"
+                  key={destination.label}
+                  onClick={() => {
+                    if (typeof destination.lat === "number" && typeof destination.lng === "number") {
+                      pendingIntentLocation.current = { lat: destination.lat, lng: destination.lng };
+                    }
+                    answerDestination(destination.label);
+                  }}
+                  disabled={busy}
+                >
+                  {destination.label}
                 </button>
               ))}
             </div>
