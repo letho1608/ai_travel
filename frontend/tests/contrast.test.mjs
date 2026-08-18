@@ -39,7 +39,9 @@ function contrast(a, b) {
 function parseVars(block) {
   const tokens = {};
   for (const m of block.matchAll(/--[\w-]+\s*:\s*[^;}]+/g)) {
-    const [name, value] = m[0].split(":");
+    const parts = m[0].split(":");
+    const name = parts[0];
+    const value = parts.slice(1).join(":");
     tokens[name.replace(/\s+/g, "").replace(/^--/, "")] = value.trim();
   }
   return tokens;
@@ -57,7 +59,7 @@ function resolve(value, tokens, seen = new Set()) {
 }
 
 function extractMediaDark() {
-  const start = css.indexOf("@media(prefers-color-scheme:dark)");
+  const start = css.indexOf("@media(prefers-color-scheme:dark){:root{");
   if (start === -1) return "";
   let depth = 0;
   for (let i = start; i < css.length; i++) {
@@ -112,7 +114,7 @@ const targets = [
 
 for (const sel of targets) {
   test(`contrast ≥ 4.5:1 for ${sel} (light + dark)`, () => {
-    const light = extractPair(css.slice(0, css.indexOf("@media(prefers-color-scheme:dark)")), sel, lightRoot);
+    const light = extractPair(css.slice(0, css.indexOf("@media(prefers-color-scheme:dark){:root{")), sel, lightRoot);
     const dark = extractPair(darkBlock, sel, darkRoot);
     const lightBg = light.dbg.startsWith("#") ? light.dbg : "bg-not-resolved";
     const darkBg = dark.dbg.startsWith("#") ? dark.dbg : "bg-not-resolved";
@@ -127,7 +129,7 @@ for (const sel of targets) {
 }
 
 test("globals.css has a single light :root block", () => {
-  const outsideDark = css.slice(0, css.indexOf("@media(prefers-color-scheme:dark)"));
+  const outsideDark = css.slice(0, css.indexOf("@media(prefers-color-scheme:dark){:root{"));
   const roots = outsideDark.match(/:root\{/g);
   assert.deepEqual(roots, [":root{"], `expected one light :root, got ${roots?.length}`);
 });

@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from app.data import PLACES, Place, place_name_key, source_for
 from app.pipeline import planner
@@ -172,6 +172,93 @@ def test_trip_timing_understands_hours_clock_and_date_ranges():
     day_timing = planner._trip_timing(month_days, today=today)
     assert day_timing.days == 3
     assert day_timing.start_date == date(2026, 8, 20)
+
+
+def test_trip_timing_understands_relative_dates():
+    today = date(2026, 8, 17)
+
+    tomorrow = request().model_copy(update={"context": "Hà Nội ngày mai", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(tomorrow, today=today)
+    assert timing.start_date == today + timedelta(days=1)
+    assert timing.date_label == "18/8"
+
+    day_after = request().model_copy(update={"context": "Hà Nội ngày mốt", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(day_after, today=today)
+    assert timing.start_date == today + timedelta(days=2)
+
+    next_sat = request().model_copy(update={"context": "Hà Nội thứ bảy tuần sau", "thoi_luong": "nhieu_ngay"})
+    timing = planner._trip_timing(next_sat, today=today)
+    assert timing.start_date == today + timedelta(days=(5 - today.weekday()) % 7 + 7)
+    assert timing.date_label == "Thứ 7"
+
+    this_sat = request().model_copy(update={"context": "Hà Nội thứ bảy", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(this_sat, today=today)
+    expected = (5 - today.weekday()) % 7
+    assert timing.start_date == today + timedelta(days=expected or 7)
+
+    next_week = request().model_copy(update={"context": "Hà Nội tuần sau", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(next_week, today=today)
+    assert timing.start_date == today + timedelta(days=(7 - today.weekday()) % 7 or 7)
+
+    october = request().model_copy(update={"context": "Hà Nội tháng 10", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(october, today=today)
+    assert timing.start_date == date(2026, 10, 1)
+    assert timing.date_label == "1/10"
+
+    bare_weekend = request().model_copy(update={"context": "cuối tuần chill và ăn ngon", "thoi_luong": "ca_ngay"})
+    timing = planner._trip_timing(bare_weekend, today=today)
+    assert timing.start_date is None
+    assert timing.date_label is None
+
+
+def test_safe_ai_intent_accepts_valid_ai_payload(monkeypatch):
+    class ValidAI:
+        def extract_request_intent(self, context, locale):
+            return {
+                "destination_text": {"value": "Hà Nội", "evidence": "user said"},
+                "preferences": [{"value": "cà phê", "evidence": "coffee"}],
+            }
+
+    monkeypatch.setattr(planner, "ai_adapter", ValidAI())
+    payload, source = planner._safe_ai_intent("đi Hà Nội uống cà phê", "vi")
+    assert source == "ai_extracted"
+    assert payload["destination_text"]["value"] == "Hà Nội"
+    assert payload["preferences"] == [{"value": "cà phê", "evidence": "coffee"}]
+
+
+def test_safe_ai_intent_rejects_malformed_ai_payload(monkeypatch):
+    class MalformedAI:
+        def extract_request_intent(self, context, locale):
+            return {
+                "destination_text": {"value": "Hà Nội", "evidence": "user said"},
+                "preferences": "not-a-list",
+            }
+
+    monkeypatch.setattr(planner, "ai_adapter", MalformedAI())
+    payload, source = planner._safe_ai_intent("đi Hà Nội", "vi")
+    assert source == "rule_based_fallback"
+    assert payload == {}
+
+
+def test_dislike_detection_precision():
+    assert "coffee" not in planner._disliked_profiles("ghé quán cà phê uống nước")
+    assert "coffee" not in planner._disliked_profiles("ghé cafe checkin view đẹp")
+    assert "coffee" not in planner._disliked_profiles("đi xem tranh ở bảo tàng")
+
+    assert "coffee" in planner._disliked_profiles("không thích cà phê")
+    assert "coffee" in planner._disliked_profiles("ghét cafe")
+    assert "coffee" in planner._disliked_profiles("sợ cafe")
+    assert "food" in planner._disliked_profiles("không muốn nhà hàng")
+    assert "night" in planner._disliked_profiles("không muốn chợ đêm")
+
+
+def test_dislike_hard_filter_keeps_positive_cafe_and_drops_disliked():
+    cafe = next(place for place in PLACES if place.kind == "cafe")
+    positive = planner._disliked_profiles("ghé quán cà phê uống nước")
+    assert not planner._is_place_disliked(cafe, positive, "ghé quán cà phê uống nước")
+
+    disliked = planner._disliked_profiles("không thích cà phê")
+    assert planner._is_place_disliked(cafe, disliked, "không thích cà phê")
 
 
 def test_short_hour_and_clock_windows_actually_pack():

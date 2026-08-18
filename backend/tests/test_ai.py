@@ -1,6 +1,13 @@
+import httpx
 import pytest
 
-from app.services.ai import _apply_copy, breaker, breaker_status
+from app.services.ai import (
+    OfflineAIAdapter,
+    _apply_copy,
+    _error_kind,
+    breaker,
+    breaker_status,
+)
 
 
 def draft() -> dict:
@@ -63,3 +70,63 @@ def test_deepseek_prompt_requests_locale_and_preserves_provenance(monkeypatch):
     assert "Preserve place names, proper nouns, source names" in prompt
     assert "Lịch trình du lịch" in prompt
     assert "context_goc" in prompt
+
+
+def test_error_kind_classifies_provider_vs_validation_errors():
+    request = httpx.Request("POST", "http://example.test")
+    rate = httpx.HTTPStatusError("rate", request=request, response=httpx.Response(429))
+    assert _error_kind(rate) == "rate_limited"
+    server = httpx.HTTPStatusError("boom", request=request, response=httpx.Response(502))
+    assert _error_kind(server) == "server_error"
+    assert _error_kind(httpx.ConnectTimeout("slow")) == "network_error"
+    assert _error_kind(httpx.ReadTimeout("slow")) == "network_error"
+    assert _error_kind(ValueError("bad json")) == "validation_error"
+    assert _error_kind(TypeError("no")) == "validation_error"
+
+
+def test_breaker_validation_failures_do_not_trip():
+    breaker.record_success()
+    for _ in range(5):
+        breaker.record_failure("validation_error")
+    assert breaker.opened_at is None
+    assert breaker.allow() is True
+    status = breaker_status()
+    assert status["validation_failures"] == 5
+    assert status["recent_failures"] == 0
+
+
+def test_breaker_provider_failures_trip_after_three():
+    breaker.record_success()
+    for _ in range(3):
+        breaker.record_failure("rate_limited")
+    assert breaker.opened_at is not None
+    assert breaker.allow() is False
+    status = breaker_status()
+    assert status["state"] == "open"
+    breaker.record_success()
+
+
+def test_create_ai_adapter_falls_back_offline_in_local_without_key(monkeypatch):
+    import app.services.ai as ai_module
+
+    class FakeSettings:
+        ai_mode = "groq"
+        app_env = "local"
+        ai_api_key = None
+
+    monkeypatch.setattr(ai_module, "settings", FakeSettings())
+    adapter = ai_module.create_ai_adapter()
+    assert isinstance(adapter, OfflineAIAdapter)
+
+
+def test_create_ai_adapter_raises_outside_local_without_key(monkeypatch):
+    import app.services.ai as ai_module
+
+    class FakeSettings:
+        ai_mode = "groq"
+        app_env = "production"
+        ai_api_key = None
+
+    monkeypatch.setattr(ai_module, "settings", FakeSettings())
+    with pytest.raises(RuntimeError):
+        ai_module.create_ai_adapter()

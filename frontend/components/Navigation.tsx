@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useLocale } from "@/components/LocaleProvider";
 
-const links: Array<[string, string]> = [["/history", "trips"]];
+const links: Array<[string, string]> = [
+  ["/history", "trips"],
+  ["/roadtrip", "roadtrip"],
+];
 
 export default function Navigation() {
   const { t } = useLocale();

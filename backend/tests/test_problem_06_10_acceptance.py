@@ -478,11 +478,11 @@ def test_problem_10_general_ai_baseline_maps_hanoi_landmark_alias(monkeypatch):
     assert baseline["unmatched_names"] == []
 
 
-def test_problem_01_extraction_benchmark_has_100_to_200_labelled_vietnamese_cases():
+def test_problem_01_extraction_benchmark_has_100_to_300_labelled_vietnamese_cases():
     report = run_extraction_benchmark(planner._request_understanding)
 
     assert report["version"] == "input-extraction-benchmark-v1"
-    assert 100 <= report["scenario_count"] <= 200
+    assert 100 <= report["scenario_count"] <= 300
     assert report["label_source"] == "editorial_fixture_pending_human_adjudication"
     assert report["summary"]["hallucination_failures"] == 0
     assert report["summary"]["pass_rate"] >= 0.95

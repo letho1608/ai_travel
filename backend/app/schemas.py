@@ -52,6 +52,21 @@ class PlanRequest(BaseModel):
         return " ".join(value.replace("<", "").replace(">", "").split()) if value else value
 
 
+class AIEvidence(BaseModel):
+    value: str | None = Field(default=None, max_length=500)
+    evidence: str | None = Field(default=None, max_length=500)
+
+
+class AIExtractPayload(BaseModel):
+    """Contract cho payload AI bóc tách định tính; payload lệch shape sẽ bị chặn ở _safe_ai_intent."""
+
+    destination_text: AIEvidence | None = None
+    preferences: list[AIEvidence] = Field(default_factory=list, max_length=12)
+    dislikes: list[AIEvidence] = Field(default_factory=list, max_length=12)
+    constraints: list[AIEvidence] = Field(default_factory=list, max_length=12)
+    must_visit: list[AIEvidence] = Field(default_factory=list, max_length=12)
+
+
 class SwipeRequest(BaseModel):
     diem_bi_loai: str
     dia_diem_thay_the: str | None = Field(default=None, min_length=1, max_length=200)

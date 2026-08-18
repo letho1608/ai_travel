@@ -32,9 +32,39 @@ const DESTINATION_LOCATIONS: { pattern: RegExp; location: Coordinate }[] = [
   { pattern: /\b(hai phong|cat ba|do son)\b/, location: { lat: 20.8449, lng: 106.6881 } },
 ];
 
+const plannerPromptListeners = new Set<(value: string) => void>();
+
+export function promptPlanner(value: string) {
+  plannerPromptListeners.forEach((listener) => listener(value));
+}
+
+export function focusPlanner() {
+  focusPlannerInput?.();
+}
+
+function isUncertainReply(value: string): boolean {
+  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
+  return /\b(?:ko|khg|khong|k|chang|chua)\s*biet\b|\btuy\b|\ban dinh\b|\bchua du quyet dinh\b|\bidk\b|\bdon'?t know\b|\bnot sure\b|\bno idea\b/.test(normalized);
+}
+
+let focusPlannerInput: (() => void) | null = null;
+
 export default function Planner() {
   const { locale, t } = useLocale();
   const [context, setContext] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    focusPlannerInput = () => inputRef.current?.focus();
+    const applyPrompt = (value: string) => {
+      setContext(value);
+      inputRef.current?.focus();
+    };
+    plannerPromptListeners.add(applyPrompt);
+    return () => {
+      plannerPromptListeners.delete(applyPrompt);
+      if (focusPlannerInput) focusPlannerInput = null;
+    };
+  }, []);
   const [people, setPeople] = useState<number | "">("");
   const [needsDuration, setNeedsDuration] = useState(false);
   const [needsDestination, setNeedsDestination] = useState(false);
@@ -91,7 +121,7 @@ export default function Planner() {
   }
 
   function normalizeText(value: string) {
-    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
   }
 
   function inferClockRange(value: string): { startHour: number; minutes: number; label: string } | null {
@@ -157,7 +187,7 @@ export default function Planner() {
       if (start && end) {
         if (end.getTime() < start.getTime()) end = new Date(end.getFullYear() + 1, end.getMonth(), end.getDate());
         const days = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-        if (days >= 1 && days <= 5) {
+        if (days >= 1 && days <= 30) {
           return { start, days, label: `${start.getDate()}/${start.getMonth() + 1}–${end.getDate()}/${end.getMonth() + 1}` };
         }
       }
@@ -181,32 +211,36 @@ export default function Planner() {
     return "ca_ngay";
   }
 
-  function inferDuration(value: string): Duration | null {
-    const normalized = normalizeText(value);
-    const dates = inferDateRange(value);
-    if (dates && dates.days >= 2) return "nhieu_ngay";
-    const clock = inferClockRange(value);
-    if (clock) return durationFromMinutes(clock.minutes);
-    const hours = inferHourSpan(value);
-    if (hours != null) return durationFromMinutes(hours * 60);
-    if (dates?.days === 1) return "ca_ngay";
-    if (/^\s*1\s*$/.test(normalized)) return "ca_ngay";
-    if (/(?:vai gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
-    if (/^\s*([2-9]|[12][0-9]|30)(?:\s*[,/]+\s*([1-9]|[12][0-9]|30)|\s+([1-9]|[12][0-9]|30))?\s*$/.test(normalized)) return "nhieu_ngay";
-    if (/(?:vai ngay|2 ngay|hai ngay|3 ngay|ba ngay|4 ngay|bon ngay|nhieu ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
-    if (/(?:nua ngay|half day|buoi sang|buoi chieu|morning|afternoon)/.test(normalized)) return "nua_ngay";
-    if (/(?:ca ngay|mot ngay|1 ngay|nguyen ngay|full day|one day|cuoi tuan|weekend)/.test(normalized)) return "ca_ngay";
-    return null;
-  }
+  const DAY_COUNT_WORDS: [RegExp, number][] = [
+    [/\b(mot|one)\s+(ngay|day)\b/, 1],
+    [/\b(hai|two)\s+(ngay|days)\b/, 2],
+    [/\b(ba|three)\s+(ngay|days)\b/, 3],
+    [/\b(bon|four)\s+(ngay|days)\b/, 4],
+    [/\b(nam|five)\s+(ngay|days)\b/, 5],
+    [/\b(sau|six)\s+(ngay|days)\b/, 6],
+    [/\b(bay|seven)\s+(ngay|days)\b/, 7],
+    [/\b(tam|eight)\s+(ngay|days)\b/, 8],
+    [/\b(chin|nine)\s+(ngay|days)\b/, 9],
+    [/\b(muoi|ten)\s+(ngay|days)\b/, 10],
+  ];
 
-  function validPeopleValue(value: number | ""): value is number {
-    return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 1 && value <= 30;
-  }
+  const WEEK_COUNT_WORDS: [RegExp, number][] = [
+    [/\b(mot|one)\s+(tuan|week)\b/, 1],
+    [/\b(hai|two)\s+(tuan|weeks)\b/, 2],
+    [/\b(ba|three)\s+(tuan|weeks)\b/, 3],
+    [/\b(bon|four)\s+(tuan|weeks)\b/, 4],
+  ];
 
   function inferDayCount(value: string): number | null {
     const normalized = normalizeText(value);
+    const weeks = normalized.match(/\b(\d{1,2})\s*(?:tuan|weeks?)\b/);
+    if (weeks) return Math.min(Number(weeks[1]) * 7, 30);
+    const wordWeeks = WEEK_COUNT_WORDS.find(([pattern]) => pattern.test(normalized));
+    if (wordWeeks) return Math.min(wordWeeks[1] * 7, 30);
     const labeled = normalized.match(/\b([1-9]|[12][0-9]|30)\s*(?:ngay|days?)\b/);
     if (labeled) return Number(labeled[1]);
+    const wordDays = DAY_COUNT_WORDS.find(([pattern]) => pattern.test(normalized));
+    if (wordDays) return wordDays[1];
     const dates = inferDateRange(value);
     if (dates) return dates.days;
     const pair = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*[,/ ]+\s*(?:[1-9]|[12][0-9]|30)\s*$/);
@@ -216,6 +250,30 @@ export default function Planner() {
     return null;
   }
 
+  function inferDuration(value: string): Duration | null {
+    const normalized = normalizeText(value);
+    const dates = inferDateRange(value);
+    if (dates && dates.days >= 2) return "nhieu_ngay";
+    const clock = inferClockRange(value);
+    if (clock) return durationFromMinutes(clock.minutes);
+    const hours = inferHourSpan(value);
+    if (hours != null) return durationFromMinutes(hours * 60);
+    if (dates?.days === 1) return "ca_ngay";
+    const days = inferDayCount(value);
+    if (days != null) return days >= 2 ? "nhieu_ngay" : "ca_ngay";
+    if (/^\s*1\s*$/.test(normalized)) return "ca_ngay";
+    if (/(?:vai gio|may tieng|few hours)/.test(normalized)) return "vai_gio";
+    if (/(?:nhieu ngay|multi|multiple)/.test(normalized)) return "nhieu_ngay";
+    if (/(?:vai ngay|2 ngay|hai ngay|3 ngay|ba ngay|4 ngay|bon ngay)/.test(normalized)) return "nhieu_ngay";
+    if (/(?:nua ngay|half day|buoi sang|buoi chieu|morning|afternoon)/.test(normalized)) return "nua_ngay";
+    if (/(?:ca ngay|mot ngay|1 ngay|nguyen ngay|full day|one day|cuoi tuan|weekend)/.test(normalized)) return "ca_ngay";
+    return null;
+  }
+
+  function validPeopleValue(value: number | ""): value is number {
+    return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 1 && value <= 30;
+  }
+
   function inferPairedPeople(value: string): number | null {
     const normalized = normalizeText(value);
     const pair = normalized.match(/^\s*(?:[1-9]|[12][0-9]|30)\s*[,/]+\s*([1-9]|[12][0-9]|30)\s*$/)
@@ -223,22 +281,37 @@ export default function Planner() {
     return pair ? Number(pair[1]) : null;
   }
 
+  const PEOPLE_UNITS = "(?:nguoi|nguoi lon|ng|ban|dua|tre em|tre con|con|vo chong|em be|khach|pax|adults?|kids?|children|people|person|travelers?)";
+
   function inferPeople(value: string): number | null {
     const paired = inferPairedPeople(value);
     if (paired) return paired;
     const normalized = normalizeText(value);
     const bareNumber = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*$/);
     if (bareNumber) return Number(bareNumber[1]);
-    const digitMatch = normalized.match(/\b([1-9]|[12][0-9]|30)\s*(?:nguoi|ng|ban|khach|pax|people|person|traveler|travelers)\b/);
-    if (digitMatch) return Number(digitMatch[1]);
+    const labeled: RegExpExecArray[] = [];
+    const peoplePattern = new RegExp(`\\b([1-9]|[12][0-9]|30)\\s*${PEOPLE_UNITS}\\b`, "g");
+    let peopleMatch: RegExpExecArray | null;
+    while ((peopleMatch = peoplePattern.exec(normalized)) !== null) labeled.push(peopleMatch);
+    if (labeled.length >= 2) {
+      return Math.min(labeled.reduce((sum, match) => sum + Number(match[1]), 0), 30);
+    }
+    if (labeled[0]) return Math.min(Number(labeled[0][1]), 30);
     const wordMap: [RegExp, number][] = [
       [/\b(mot|one)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 1],
       [/\b(hai|two)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 2],
       [/\b(ba|three)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 3],
       [/\b(bon|tu|four)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 4],
       [/\b(nam|five)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 5],
+      [/\b(sau|six)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 6],
+      [/\b(bay|seven)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 7],
+      [/\b(tam|eight)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 8],
+      [/\b(chin|nine)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 9],
+      [/\b(muoi|ten)\s+(?:nguoi|ban|khach|pax|people|person|traveler|travelers)\b/, 10],
     ];
-    return wordMap.find(([pattern]) => pattern.test(normalized))?.[1] ?? null;
+    const wordMatch = wordMap.find(([pattern]) => pattern.test(normalized));
+    if (wordMatch) return wordMatch[1];
+    return /\bvo chong\b|\bcouple\b/.test(normalized) ? 2 : null;
   }
 
   function durationQuestion() {
@@ -257,7 +330,7 @@ export default function Planner() {
 
   function hasDestination(value: string) {
     const normalized = normalizeText(value);
-    return /\b(ha noi|hanoi|ha long|halong|da nang|hoi an|nha trang|phu quoc|sa pa|sapa|tp hcm|ho chi minh|sai gon|vung tau|da lat|hue|can tho|ninh binh)\b/.test(normalized);
+    return DESTINATION_LOCATIONS.some((item) => item.pattern.test(normalized));
   }
 
   function destinationLocation(value: string): Coordinate {
@@ -277,6 +350,31 @@ export default function Planner() {
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function inferBudget(value: string): number | null {
+    const normalized = normalizeText(value);
+    const million = normalized.match(/\b(\d{1,3}(?:[.,]\d+)?)\s*(?:trieu|trien|tr)\b/);
+    if (million) {
+      const parsed = Math.round(Number(million[1].replace(",", ".")) * 1_000_000);
+      if (parsed >= 50_000 && parsed <= 100_000_000) return parsed;
+    }
+    const thousand = normalized.match(/\b(\d{1,6}(?:[.,]\d+)?)\s*(?:nghin|ngan|nghìn|k)\b/);
+    if (thousand) {
+      const parsed = Math.round(Number(thousand[1].replace(",", ".")) * 1_000);
+      if (parsed >= 50_000 && parsed <= 100_000_000) return parsed;
+    }
+    const dong = normalized.match(/\b(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{3})?)\s*(?:d|dong|đ|vnd)\b/);
+    if (dong) {
+      const parsed = Number(dong[1].replace(/[.,]/g, ""));
+      if (parsed >= 50_000 && parsed <= 100_000_000) return parsed;
+    }
+    const compact = normalized.match(/\b(\d{5,9})\s*(?:d|dong|đ|vnd)\b/);
+    if (compact) {
+      const parsed = Number(compact[1]);
+      if (parsed >= 50_000 && parsed <= 100_000_000) return parsed;
+    }
+    return null;
   }
 
   function composeRequestContext(raw: string, duration: Duration, travelers: number) {
@@ -333,6 +431,7 @@ export default function Planner() {
       return;
     }
     const composedContext = composeRequestContext(requestContext, duration, travelers);
+    const nganSach = inferBudget(composedContext) ?? inferBudget(requestContext) ?? 1000000;
     const tripStart = inferDateRange(composedContext)?.start ?? inferDateRange(requestContext)?.start;
     const ngayDi = tripStart
       ? `${tripStart.getFullYear()}-${String(tripStart.getMonth() + 1).padStart(2, "0")}-${String(tripStart.getDate()).padStart(2, "0")}`
@@ -361,7 +460,7 @@ export default function Planner() {
           location: destinationLocation(composedContext),
           thoi_luong: duration,
           so_nguoi: travelers,
-          ngan_sach: 1000000,
+          ngan_sach: nganSach,
           ...(ngayDi ? { ngay_di: ngayDi } : {}),
           ma_phien: session,
           ngon_ngu: locale,
@@ -420,10 +519,18 @@ export default function Planner() {
     addMessage("user", answer);
     setContext("");
     if (!duration) {
-      addMessage("assistant", durationQuestion());
-      setErrorKey(null);
-      setStatusKey(null);
-      return;
+      if (isUncertainReply(answer)) {
+        const fallback: Duration = "ca_ngay";
+        addMessage("assistant", locale === "vi"
+          ? "Mình sẽ xếp mặc định một chuyến đi 1 ngày nhé. Bạn có thể đổi sau."
+          : "I'll default to a 1-day trip. You can adjust it later.");
+        duration = fallback;
+      } else {
+        addMessage("assistant", durationQuestion());
+        setErrorKey(null);
+        setStatusKey(null);
+        return;
+      }
     }
     const requestContext = `${pendingContext.trim()}\n${answer.trim()}`;
     if (!hasDestination(requestContext)) {
@@ -446,6 +553,14 @@ export default function Planner() {
     if (!destination) return;
     addMessage("user", destination);
     const requestContext = `${pendingContext.trim()}\n${destination}`;
+    if (!hasDestination(destination)) {
+      addMessage(
+        "assistant",
+        locale === "vi"
+          ? `Mình chưa nhận diện được "${destination}" trong danh bạ điểm đến đã biết. Mình sẽ thử tìm trong dữ liệu; nếu kết quả không đúng, hãy chọn một thành phố phía trên.`
+          : `I couldn't recognize "${destination}" in my known destinations. I'll try to find it in the data; if the result isn't right, pick one of the cities above.`,
+      );
+    }
     const duration = pendingDuration;
     setContext("");
     setNeedsDestination(false);
@@ -454,9 +569,15 @@ export default function Planner() {
 
   function answerPeople(answer: string) {
     if (submitting.current || !pendingContext || !pendingDuration) return;
-    const travelers = inferPeople(answer);
     addMessage("user", answer);
     setContext("");
+    let travelers = inferPeople(answer);
+    if (travelers === null && isUncertainReply(answer)) {
+      travelers = 2;
+      addMessage("assistant", locale === "vi"
+        ? "Mình sẽ xếp mặc định cho 2 người nhé. Bạn có thể đổi sau."
+        : "I'll default to 2 people. You can adjust it later.");
+    }
     if (!travelers) {
       addMessage("assistant", peopleQuestion());
       setErrorKey(null);
@@ -568,6 +689,7 @@ export default function Planner() {
           </span>
           <input
             id="planner-context"
+            ref={inputRef}
             value={context}
             maxLength={500}
             onChange={(event) => {

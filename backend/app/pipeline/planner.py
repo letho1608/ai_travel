@@ -2,9 +2,12 @@ import hashlib
 import inspect
 import random
 import re
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from typing import NamedTuple
 from functools import lru_cache
+
+UTC = timezone.utc
 
 import httpx
 
@@ -35,7 +38,8 @@ from app.pipeline.cp_sat_solver import (
     select_places_with_cp_sat,
     verify_fixed_schedule_with_cp_sat,
 )
-from app.schemas import PlanRequest
+from app.schemas import AIExtractPayload, PlanRequest
+from pydantic import ValidationError
 from app.pipeline.solar import sunset_for_date
 from app.services.ai import ai_adapter
 from app.services.osm_verify import verify_place_name
@@ -151,7 +155,7 @@ def _finalize_plan_title(
     return cleaned
 
 
-MAX_TRIP_DAYS = 5
+MAX_TRIP_DAYS = 30
 _CLOCK_RANGE_RE = re.compile(
     r"(?:(?:tu|from)\s+)?(?:luc\s+)?"
     r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
@@ -243,6 +247,82 @@ def _safe_date(year: int, month: int, day: int) -> date | None:
         return None
 
 
+_WEEKDAY_NAMES_VI = {
+    "hai": 0,
+    "ba": 1,
+    "tu": 2,
+    "nam": 3,
+    "sau": 4,
+    "bay": 5,
+    "nhat": 6,
+}
+_WEEKDAY_LABELS_VI = ("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật")
+_WEEKDAY_LABELS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _date_label(d: date, locale: str) -> str:
+    return f"{d.day}/{d.month}"
+
+
+def _relative_trip_date(folded: str, today: date, locale: str) -> tuple[date, str] | None:
+    """Trả về (ngày bắt đầu, nhãn) cho mốc thời gian tương đối; None nếu không nhận diện được.
+
+    Chỉ nhận diện cụm không mập mờ: hôm nay, ngày mai, ngày mốt, thứ N (+ tuần sau/này),
+    cuối tuần sau, tuần sau, tháng N. Không chạm cụm "cuối tuần" trần vì thường là motif
+    (cuối tuần chill) chứ không phải ngày đi cụ thể.
+    """
+    if re.search(r"\bhom nay\b", folded):
+        return today, ("Hôm nay" if locale == "vi" else "Today")
+    if re.search(r"\bngay mot\b", folded):
+        target = today + timedelta(days=2)
+        return target, _date_label(target, locale)
+    if re.search(r"\b(?:ngay )?mai\b", folded):
+        target = today + timedelta(days=1)
+        return target, _date_label(target, locale)
+
+    weekday_match = re.search(
+        r"\b(?:thu (hai|ba|tu|nam|sau|bay)|chu nhat)\b(?:\s+(tuan sau|tuan toi|sang tuan|tuan nay))?",
+        folded,
+    )
+    if weekday_match:
+        name = weekday_match.group(1) or "nhat"
+        weekday = _WEEKDAY_NAMES_VI[name]
+        qualifier = weekday_match.group(2)
+        base = (weekday - today.weekday()) % 7
+        if qualifier in {"tuan sau", "tuan toi", "sang tuan"}:
+            delta = base + 7
+        else:
+            delta = base if base > 0 else 7
+        target = today + timedelta(days=delta)
+        if locale == "vi":
+            label = _WEEKDAY_LABELS_VI[target.weekday()]
+        else:
+            label = _WEEKDAY_LABELS_EN[target.weekday()]
+        return target, label
+
+    if re.search(r"\bcuoi tuan sau\b", folded):
+        delta = (5 - today.weekday()) % 7 + 7
+        target = today + timedelta(days=delta)
+        return target, ("Thứ 7" if locale == "vi" else "Saturday")
+
+    if re.search(r"\btuan sau\b", folded):
+        delta = (7 - today.weekday()) % 7 or 7
+        target = today + timedelta(days=delta)
+        return target, _date_label(target, locale)
+
+    month_match = re.search(r"\bthang\s+(\d{1,2})\b", folded)
+    if month_match:
+        month = int(month_match.group(1))
+        if 1 <= month <= 12:
+            year = today.year
+            if month < today.month or (month == today.month and today.day > 1):
+                year += 1
+            target = _safe_date(year, month, 1)
+            if target:
+                return target, _date_label(target, locale)
+    return None
+
+
 def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
     today = today or datetime.now(UTC).date()
     _, default_minutes, default_days = LIMITS[request.thoi_luong]
@@ -283,6 +363,18 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
             start_minute = int(clock.group(2) or 0)
             max_minutes = span
             clock_label = f"{start_hour}h–{end_h}h"
+
+    night_shift = re.search(r"\b(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm)\s*(?:den|-|toi)\s*(\d{1,2})\s*(?:h|gio|tieng)?\s*(?:dem|toi|pm|sang|am)?\b", folded)
+    if night_shift and not clock:
+        start_raw = int(night_shift.group(1))
+        end_raw = int(night_shift.group(2))
+        s_h = start_raw if start_raw >= 12 else start_raw + 12
+        e_h = end_raw if end_raw >= 12 else (end_raw if "sang" in night_shift.group(0) or "am" in night_shift.group(0) else end_raw + 12)
+        span_min = (e_h * 60 - s_h * 60) if e_h > s_h else (e_h * 60 + 24 * 60 - s_h * 60)
+        if 45 <= span_min <= 12 * 60:
+            start_hour = s_h % 24
+            max_minutes = span_min
+            clock_label = f"{start_hour}h–{e_h % 24}h"
 
     dated = _DATE_RANGE_RE.search(folded)
     if dated:
@@ -332,24 +424,45 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
     if labeled_days and not date_label:
         days = min(MAX_TRIP_DAYS, max(days, int(labeled_days.group(1))))
 
+    if start_date is None and not date_label:
+        relative = _relative_trip_date(folded, today, request.ngon_ngu)
+        if relative:
+            start_date, date_label = relative
+
     if request.thoi_luong != "nhieu_ngay" and not date_label:
         days = 1
     return TripTiming(start_hour, start_minute, max_minutes, days, start_date, clock_label, date_label)
 
 
 def _chunk_sights_by_day(sights: list[Place], days: int) -> list[list[Place]]:
+    """Cluster sights geographically per day to eliminate ping-pong routing across distant areas."""
     if days <= 1:
         return [sights]
     if not sights:
         return [[] for _ in range(days)]
-    base, extra = divmod(len(sights), days)
-    chunks: list[list[Place]] = []
-    index = 0
-    for day in range(days):
-        size = base + (1 if day < extra else 0)
-        chunks.append(sights[index : index + size])
-        index += size
-    return chunks
+    if len(sights) <= days:
+        return [[p] for p in sights] + [[] for _ in range(days - len(sights))]
+
+    # Spatial clustering by anchor proximity
+    # Select seeds that are farthest apart
+    seeds = [sights[0]]
+    for _ in range(1, days):
+        farthest_place = max(
+            sights,
+            key=lambda p: min(haversine_km(p.lat, p.lng, s.lat, s.lng) for s in seeds),
+        )
+        seeds.append(farthest_place)
+
+    # Assign each place to nearest seed
+    day_clusters: list[list[Place]] = [[] for _ in range(days)]
+    for place in sights:
+        nearest_idx = min(
+            range(days),
+            key=lambda idx: haversine_km(place.lat, place.lng, seeds[idx].lat, seeds[idx].lng),
+        )
+        day_clusters[nearest_idx].append(place)
+
+    return day_clusters
 
 
 DINING_KINDS = frozenset({"nha_hang", "quan_an"})
@@ -1169,15 +1282,40 @@ def _semantic_tags_from_context(tags: set[str]) -> set[str]:
     return semantic
 
 
+DISLIKE_PREFIXES = (
+    "khong thich", "ko thich", "tranh", "khong muon", "ko muon",
+    "khong di", "khong an", "khong den", "so", "ghet", "di ung voi",
+)
+
+
 def _disliked_profiles(context: str) -> set[str]:
     plain = _ascii_fold(context)
     dislikes: set[str] = set()
     for profile_name, profile in INTENT_PROFILES.items():
         for term in profile["terms"]:
             term_text = term.replace("_", " ")
-            if f"khong thich {term_text}" in plain or f"tranh {term_text}" in plain:
+            if any(f"{prefix} {term_text}" in plain for prefix in DISLIKE_PREFIXES):
                 dislikes.add(profile_name)
     return dislikes
+
+
+def _is_place_disliked(place: Place, disliked_profiles: set[str], context: str = "") -> bool:
+    """Hard filter: strictly forbid disliked categories and terms."""
+    if not disliked_profiles and not context:
+        return False
+    place_tags = set(place.tags)
+    for profile_name in disliked_profiles:
+        profile = INTENT_PROFILES.get(profile_name)
+        if profile and (place.kind in profile["kinds"] or place_tags.intersection(profile["tags"])):
+            return True
+    plain = _ascii_fold(context)
+    place_name_folded = _ascii_fold(place.name)
+    # Check specific keyword dislikes
+    for phrase in ["leo nui", "nui", "trekking", "di bo nhieu", "mo hoi"]:
+        if f"khong thich {phrase}" in plain or f"tranh {phrase}" in plain:
+            if "nui" in place.tags or "trekking" in place.tags or "nui" in place_name_folded or "hill" in place_name_folded:
+                return True
+    return False
 
 
 def _field(value, source: str, evidence: str | None = None, status: str = "present") -> dict:
@@ -1197,7 +1335,15 @@ def _safe_ai_intent(context: str, locale: str) -> tuple[dict, str]:
         payload = extractor(context, locale)
     except RuntimeError:
         return {}, "rule_based_fallback"
-    return payload if isinstance(payload, dict) else {}, "ai_extracted"
+    if not isinstance(payload, dict):
+        return {}, "rule_based_fallback"
+    if ai_adapter.__class__.__name__ == "OfflineAIAdapter":
+        return payload, "rule_based_fallback"
+    try:
+        payload = AIExtractPayload.model_validate(payload).model_dump(exclude_none=True)
+    except ValidationError:
+        return {}, "rule_based_fallback"
+    return payload, "ai_extracted"
 
 
 def _ai_text_field(payload: dict, key: str) -> tuple[str | None, str | None]:
@@ -1248,7 +1394,7 @@ def _rule_dislike_fields(context: str) -> list[dict]:
         _field(profile, "rule_based_context", profile)
         for profile in sorted(_disliked_profiles(context))
     ]
-    for match in re.finditer(r"(?:không thích|không muốn|tránh)\s+([^,.。;]{2,60})", plain_context, re.IGNORECASE):
+    for match in re.finditer(r"(?:không thích|ko thích|không muốn|ko muốn|tránh|sợ|ghét|dị ứng với)\s+([^,.。;]{2,60})", plain_context, re.IGNORECASE):
         value = match.group(1).strip()
         if value:
             fields.append(_field(value[:80], "rule_based_context", match.group(0)[:160]))
@@ -1330,8 +1476,9 @@ def _request_understanding(request: PlanRequest) -> dict:
     }
 
 
-def missing_required_inputs(request: PlanRequest) -> dict:
-    understanding = _request_understanding(request)
+def missing_required_inputs(request: PlanRequest, understanding: dict | None = None) -> dict:
+    if understanding is None:
+        understanding = _request_understanding(request)
     missing = list(understanding.get("bat_buoc_thieu") or [])
     questions = {
         "diem_den": "Bạn muốn đi điểm đến/thành phố nào?",
@@ -1819,7 +1966,7 @@ def _prefer_place(left: Place, right: Place) -> Place:
 
 
 def _dedupe_places(places: list[Place]) -> list[Place]:
-    """Keep one stop per place id and per display-name alias (prefer curated)."""
+    """Keep one stop per place id, per display-name alias, and per close geographic duplicate."""
     by_id: dict[str, Place] = {}
     for place in places:
         existing = by_id.get(place.id)
@@ -1835,7 +1982,24 @@ def _dedupe_places(places: list[Place]) -> list[Place]:
             order.append(key)
             continue
         by_name[key] = _prefer_place(existing, place)
-    return [by_name[key] for key in order]
+
+    deduped: list[Place] = []
+    for key in order:
+        current = by_name[key]
+        # Merge close duplicates only when names are genuinely similar (OSM/seed twins).
+        close_duplicate = False
+        current_key = _place_name_key(current)
+        for i, existing in enumerate(deduped):
+            if haversine_km(current.lat, current.lng, existing.lat, existing.lng) >= 0.15:
+                continue
+            if SequenceMatcher(None, current_key, _place_name_key(existing)).ratio() < 0.8:
+                continue
+            deduped[i] = _prefer_place(existing, current)
+            close_duplicate = True
+            break
+        if not close_duplicate:
+            deduped.append(current)
+    return deduped
 
 
 def _is_dining_place(place: Place) -> bool:
@@ -2088,15 +2252,19 @@ def _sight_total(count: int, meals_total: int, thoi_luong: str) -> int:
     return max(2, count - meals_total - reserve)
 
 
-def _min_plan_slots(thoi_luong: str) -> int:
-    _, _, days = LIMITS[thoi_luong]
-    return 4 if days == 1 else 6
+def _min_plan_slots(thoi_luong: str, days: int | None = None) -> int:
+    _, _, known_days = LIMITS[thoi_luong]
+    if days is not None and days > known_days:
+        return 2 * days
+    return 4 if known_days == 1 else 6
 
 
-def _max_plan_slots(thoi_luong: str) -> int:
-    count, _, days = LIMITS[thoi_luong]
+def _max_plan_slots(thoi_luong: str, days: int | None = None) -> int:
+    count, _, known_days = LIMITS[thoi_luong]
     # Buffer for midday rest + evening (+ optional fill) each day.
-    return count + days * 3
+    if days is not None and days > known_days:
+        return 8 * days
+    return count + known_days * 3
 
 
 def _is_evening_place(place: Place) -> bool:
@@ -2411,6 +2579,9 @@ def _preferred_window(place: Place, meal_type: str | None) -> tuple[int, int, in
     if tip:
         return tip.preferred
     tags = set(place.tags)
+    if "bai_bien" in tags or "beach" in tags or "sunset" in tags:
+        # Realistic beach sunset window
+        return 16, 30, 18, 30
     if _is_morning_only(place):
         return open_hour, 0, close_hour, 0
     if "nightlife" in tags or "cho_dem" in tags or open_hour >= 17:
@@ -2463,6 +2634,16 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
         if request.thoi_luong == "vai_gio":
             minutes = min(minutes, 45)
         return max(MIN_VISIT_MINUTES, minutes)
+
+    # Specific realistic durations for major landmark categories
+    folded_name = _ascii_fold(place.name)
+    if any(k in folded_name for k in ["ba na hills", "vinwonders", "sun world", "fansipan"]):
+        return 240
+    if place.kind == "bao_tang" or any(k in folded_name for k in ["dai noi", "dinh doc lap", "hoang thanh"]):
+        return max(90, place.duration_min)
+    if place.kind in {"cau", "tuong_dai"} or any(k in folded_name for k in ["cau rong", "cau vang", "cot co"]):
+        return 35
+
     tip = _guidance(place)
     minutes = tip.duration_min if tip and tip.duration_min else place.duration_min
     if request.thoi_luong == "vai_gio":
@@ -3363,11 +3544,13 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     tag_weights = behavior_profile.get("tag_weights", {}) if isinstance(behavior_profile, dict) else {}
     destination_lat, destination_lng, destination_label = _destination_context(request)
     source_places = _nearby_places((destination_lat, destination_lng))
+    disliked_profiles = _disliked_profiles(request.context)
     candidates = [
         p for p in source_places
         if p.id not in excluded
         and p.cost <= request.ngan_sach
         and is_routable(p)
+        and not _is_place_disliked(p, disliked_profiles, request.context)
         and not _looks_like_non_travel_business(p)
         and not _mentions_other_destination(p, destination_label)
         and not _looks_closed(p)
@@ -3882,9 +4065,9 @@ def _fallback_slot_copy(
         tip = guidance.tip
     description = _join_sentences(
         [
-            meal_prefix + f"{place.name} ở {area} được xếp vào lịch vì phù hợp với yêu cầu “{request.context}”."
+            meal_prefix + f"{place.name} tại {area} là điểm dừng chân thú vị trong chuyến đi."
             if not meal_prefix
-            else meal_prefix + f"Quán nằm ở {area}, phù hợp với hành trình “{request.context}”.",
+            else meal_prefix + f"Quán nằm tại khu vực {area}, thuận tiện ghé thưởng thức.",
             activity,
             _slot_connector(place, meal_type),
         ],
@@ -3911,7 +4094,7 @@ def _slot_copy(
     meal_label = labels.get(meal_type, "") if meal_type and labels else ""
     description = _join_sentences(
         [
-            f"{meal_label} tại {place.name} ({place.area})." if meal_label else f"{place.name} ({place.area}) phù hợp với yêu cầu “{request.context}”.",
+            f"{meal_label} tại {place.name} ({place.area})." if meal_label else f"{place.name} ({place.area}) là điểm đến nổi bật.",
             str(why) if isinstance(why, str) else "",
             str(activity) if isinstance(activity, str) else "",
             f"Gợi ý món: {meal}." if isinstance(meal, str) and meal.strip() else "",
@@ -4118,7 +4301,7 @@ def _select_sight_places(
     }
 
 
-def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
+def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_understanding: dict | None = None) -> dict:
     if not DISTANCE_METADATA.get("loaded") or not DISTANCE_METADATA.get("updated_at"):
         raise PipelineUnavailable("Hệ thống đang khởi tạo bản đồ, vui lòng quay lại sau")
     count, default_minutes, _default_days = LIMITS[request.thoi_luong]
@@ -4126,17 +4309,18 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None) -> dict:
     number_of_days = timing.days
     max_minutes = timing.max_minutes
     if number_of_days > 2:
-        count = max(count, min(8 * number_of_days, 24))
+        count = max(count, min(8 * number_of_days, 160))
     meals_per_day = _meals_per_day(request.thoi_luong, request)
     meals_total = len(meals_per_day) * number_of_days
     sight_total = _sight_total(count, meals_total, request.thoi_luong)
-    max_slots = _max_plan_slots(request.thoi_luong)
-    min_slots = _min_plan_slots(request.thoi_luong)
+    max_slots = _max_plan_slots(request.thoi_luong, number_of_days)
+    min_slots = _min_plan_slots(request.thoi_luong, number_of_days)
     if max_minutes <= 180:
         min_slots = min(min_slots, 2)
         sight_total = min(sight_total, 3)
     destination_lat, destination_lng, destination_label = _destination_context(request)
-    input_understanding = _request_understanding(request)
+    if input_understanding is None:
+        input_understanding = _request_understanding(request)
     candidates = choose_candidates(request, excluded)
     behavior_profile = store.get_behavior_profile(request.ma_phien) if request.ma_phien else {}
     sight_chosen, llm_details_by_id, selection_solver_evidence = _select_sight_places(

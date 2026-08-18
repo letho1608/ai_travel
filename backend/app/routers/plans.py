@@ -13,6 +13,7 @@ from app.pipeline.planner import (
     COPY,
     PipelineUnavailable,
     _effective_hours,
+    _request_understanding,
     build_plan,
     missing_required_inputs,
     travel_minutes,
@@ -151,7 +152,8 @@ async def generate(payload: PlanRequest, request: Request):
         yield sse("status", {"status": "finding_places"})
         yield sse("status", {"status": "routing_plan"})
         try:
-            required = await to_thread(missing_required_inputs, payload)
+            understanding = await to_thread(_request_understanding, payload)
+            required = await to_thread(missing_required_inputs, payload, understanding)
             if required["missing_fields"]:
                 store.log(session_id, "boc_tach_yeu_cau", required["understanding"])
                 yield sse(
@@ -164,7 +166,7 @@ async def generate(payload: PlanRequest, request: Request):
                     },
                 )
                 return
-            plan = await to_thread(build_plan, payload)
+            plan = await to_thread(build_plan, payload, None, understanding)
             plan = await to_thread(enrich_plan_with_google, plan)
             _append_turn(plan, "user", payload.context)
             item = store.save(session_id, plan, payload.model_dump(mode="json"))

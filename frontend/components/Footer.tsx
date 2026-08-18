@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useLocale } from "@/components/LocaleProvider";
 
 export default function Footer() {
@@ -16,14 +17,12 @@ export default function Footer() {
           <div className="footer-col">
             <h4>{t("footerProduct")}</h4>
             <Link href="/roadtrip">{t("roadtrip")}</Link>
-            <Link href="/explore">{t("inventory")}</Link>
             <Link href="/history">{t("trips")}</Link>
             <Link href="/settings">{t("settings")}</Link>
           </div>
           <div className="footer-col">
             <h4>{t("footerCompany")}</h4>
             <Link href="/">{t("footerAbout")}</Link>
-            <Link href="/support">Support</Link>
           </div>
           <div className="footer-col">
             <h4>{t("footerLegal")}</h4>

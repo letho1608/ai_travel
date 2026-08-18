@@ -1,4 +1,5 @@
 import json
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from time import monotonic
@@ -8,11 +9,14 @@ import httpx
 from app.config import settings
 from app.services.store import store
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class CircuitBreaker:
     failures: deque[float] = field(default_factory=deque)
     opened_at: float | None = None
+    validation_failures: int = 0
 
     def allow(self) -> bool:
         if self.opened_at is None:
@@ -22,7 +26,10 @@ class CircuitBreaker:
             return True
         return False
 
-    def record_failure(self) -> None:
+    def record_failure(self, kind: str = "unknown") -> None:
+        if kind == "validation_error":
+            self.validation_failures += 1
+            return
         now = monotonic()
         self.failures.append(now)
         while self.failures and self.failures[0] < now - 300:
@@ -33,9 +40,23 @@ class CircuitBreaker:
     def record_success(self) -> None:
         self.failures.clear()
         self.opened_at = None
+        self.validation_failures = 0
 
 
 breaker = CircuitBreaker()
+
+
+def _error_kind(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status == 429:
+            return "rate_limited"
+        if status >= 500:
+            return "server_error"
+        return "http_error"
+    if isinstance(exc, httpx.TransportError):
+        return "network_error"
+    return "validation_error"
 
 
 def breaker_status() -> dict:
@@ -47,6 +68,7 @@ def breaker_status() -> dict:
         "allowing_calls": allowed,
         "state": "closed" if allowed else "open",
         "recent_failures": len(breaker.failures),
+        "validation_failures": breaker.validation_failures,
         "remaining_open_seconds": remaining_open_seconds,
     }
 
@@ -179,7 +201,7 @@ class OpenAICompatibleAIAdapter:
                 return payload
             except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
-                breaker.record_failure()
+                breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không bóc tách được yêu cầu an toàn: {last_error}") from last_error
 
     def propose_place_ids(
@@ -261,7 +283,7 @@ class OpenAICompatibleAIAdapter:
                 return normalized
             except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
-                breaker.record_failure()
+                breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không chọn được lịch trình an toàn: {last_error}") from last_error
 
     def draft_itinerary_places(
@@ -360,7 +382,7 @@ class OpenAICompatibleAIAdapter:
                 return result
             except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
-                breaker.record_failure()
+                breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không sinh được lịch trình an toàn: {last_error}") from last_error
 
     def assemble(self, draft: dict, trusted_ids: set[str], locale: str = "vi") -> dict:
@@ -438,7 +460,7 @@ class OpenAICompatibleAIAdapter:
                 return result
             except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 last_error = exc
-                breaker.record_failure()
+                breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không trả kết quả an toàn: {last_error}") from last_error
 
 
@@ -450,9 +472,20 @@ def create_ai_adapter():
         if settings.app_env != "local":
             raise RuntimeError("AI_MODE=offline is forbidden outside local mode")
         return OfflineAIAdapter()
-    if settings.ai_mode in {"deepseek", "groq"}:
+    if settings.ai_mode not in {"deepseek", "groq"}:
+        raise RuntimeError(f"AI_MODE không được hỗ trợ: {settings.ai_mode}")
+    try:
         return OpenAICompatibleAIAdapter()
-    raise RuntimeError(f"AI_MODE không được hỗ trợ: {settings.ai_mode}")
+    except RuntimeError:
+        if settings.app_env != "local":
+            raise
+        logger.warning(
+            "AI_MODE=%s thiếu API key (%s); dùng chế độ offline cục bộ. "
+            "Đặt API_KEY_GROQ hoặc API_KEY_DEEPSEEK để bật AI thật.",
+            settings.ai_mode,
+            "API_KEY_GROQ" if settings.ai_mode == "groq" else "API_KEY_DEEPSEEK",
+        )
+        return OfflineAIAdapter()
 
 
 ai_adapter = create_ai_adapter()
