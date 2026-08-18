@@ -81,10 +81,13 @@ export default function Login() {
     return ma_phien;
   }, []);
 
-  const finishLogin = useCallback((token: string) => {
+  const finishLogin = useCallback((token: string, role?: string) => {
     if (!mountedRef.current) return;
     localStorage.setItem("auth_token", token);
-    location.href = "/history";
+    if (role) {
+      localStorage.setItem("user_role", role);
+    }
+    location.href = role === "admin" ? "/admin" : "/history";
   }, []);
 
   const submitToken = useCallback(async (credential: string) => {
@@ -104,7 +107,7 @@ export default function Login() {
       if (!response.ok||typeof data.token!=="string"||!data.token.trim()) {
         throw new Error(apiError(data, t("loginFailed")));
       }
-      finishLogin(data.token);
+      finishLogin(data.token, data.nguoi_dung?.role);
     } catch(error) {
       if (mountedRef.current) {
         setMessage(error instanceof Error && error.message ? error.message : t("loginFailed"));
@@ -180,7 +183,7 @@ export default function Login() {
       if (!response.ok || typeof data.token !== "string" || !data.token.trim()) {
         throw new Error(apiError(data, t("loginFailed")));
       }
-      finishLogin(data.token);
+      finishLogin(data.token, data.nguoi_dung?.role);
     } catch (error) {
       if (mountedRef.current) {
         setMessage(error instanceof Error && error.message ? error.message : t("loginFailed"));

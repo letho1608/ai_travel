@@ -1,5 +1,6 @@
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Literal
 
@@ -100,24 +101,24 @@ FOCUS_DESTINATIONS: tuple[IntentDestination, ...] = (
 )
 
 DESTINATION_ALIASES: dict[str, tuple[str, ...]] = {
-    "Hà Nội": ("ha noi", "hanoi", "thu do"),
-    "TP.HCM": ("tp hcm", "ho chi minh", "sai gon", "saigon", "thanh pho ho chi minh"),
-    "Đà Nẵng": ("da nang", "danang"),
-    "Hội An": ("hoi an", "pho co hoi an"),
-    "Huế": ("hue", "thua thien hue", "co do hue"),
-    "Đà Lạt": ("da lat", "dalat", "lam dong"),
-    "Nha Trang": ("nha trang", "khanh hoa"),
-    "Ninh Bình": ("ninh binh", "trang an", "bai dinh", "tam coc"),
-    "Hạ Long": ("ha long", "halong", "quang ninh", "vinh ha long"),
-    "Sa Pa": ("sa pa", "sapa", "lao cai", "fansipan"),
-    "Phú Quốc": ("phu quoc", "dao phu quoc", "kien giang"),
-    "Cần Thơ": ("can tho", "tay do", "ninh kieu"),
-    "Vũng Tàu": ("vung tau", "ba ria vung tau"),
-    "Quy Nhơn": ("quy nhon", "binh dinh", "eo gio", "ky co"),
-    "Phan Thiết": ("phan thiet", "mui ne", "binh thuan"),
-    "Quảng Bình": ("quang binh", "dong hoi", "phong nha"),
-    "Hà Giang": ("ha giang", "dong van", "ma pi leng"),
-    "Hải Phòng": ("hai phong", "cat ba", "do son"),
+    "Hà Nội": ("ha noi", "hanoi", "thu do", "하노이", "河内", "ハノイ"),
+    "TP.HCM": ("tp hcm", "ho chi minh", "sai gon", "saigon", "thanh pho ho chi minh", "hcmc", "호치민", "사이공", "胡志明", "ホーチミン"),
+    "Đà Nẵng": ("da nang", "danang", "da nang city", "다낭", "岘港", "ダナン"),
+    "Hội An": ("hoi an", "pho co hoi an", "hoi an ancient town", "호이안", "会安", "ホイアン"),
+    "Huế": ("hue", "thua thien hue", "co do hue", "hue city", "후에", "훼", "顺化", "フエ"),
+    "Đà Lạt": ("da lat", "dalat", "lam dong", "da lat city", "달랏", "大叻", "ダラット"),
+    "Nha Trang": ("nha trang", "khanh hoa", "nha trang beach", "나트랑", "芽庄", "ニャチャン"),
+    "Ninh Bình": ("ninh binh", "trang an", "bai dinh", "tam coc", "ninh binh province", "닌빈", "宁平"),
+    "Hạ Long": ("ha long", "halong", "quang ninh", "vinh ha long", "ha long bay", "halong bay", "하롱베이", "하롱", "下龙湾"),
+    "Sa Pa": ("sa pa", "sapa", "lao cai", "fansipan", "sapa town", "사파", "沙坝"),
+    "Phú Quốc": ("phu quoc", "dao phu quoc", "kien giang", "phu quoc island", "푸꾸옥", "富国岛"),
+    "Cần Thơ": ("can tho", "tay do", "ninh kieu", "can tho city", "껀터", "芹苴"),
+    "Vũng Tàu": ("vung tau", "ba ria vung tau", "vung tau city", "붕따우", "头顿"),
+    "Quy Nhơn": ("quy nhon", "binh dinh", "eo gio", "ky co", "quy nhon city", "꾸이년", "归仁"),
+    "Phan Thiết": ("phan thiet", "mui ne", "binh thuan", "mui ne beach", "판티엣", "무이네", "潘切"),
+    "Quảng Bình": ("quang binh", "dong hoi", "phong nha", "phong nha ke bang", "꽝빈", "广平"),
+    "Hà Giang": ("ha giang", "dong van", "ma pi leng", "ha giang loop", "하기앙", "河江"),
+    "Hải Phòng": ("hai phong", "cat ba", "do son", "cat ba island", "하이퐁", "海防"),
 }
 
 THEMES: dict[str, ThemeSpec] = {
@@ -167,11 +168,19 @@ THEMES: dict[str, ThemeSpec] = {
 
 
 def _fold(value: str) -> str:
-    return " ".join(ascii_fold(value).casefold().split())
+    val = value.translate(str.maketrans({"đ": "d", "Đ": "D"}))
+    decomposed = unicodedata.normalize("NFD", val)
+    stripped = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+    return " ".join(stripped.casefold().split())
 
 
 def _contains_term(folded: str, term: str) -> bool:
-    return bool(re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", folded))
+    term_folded = _fold(term)
+    if not term_folded:
+        return False
+    if any(ord(c) > 127 for c in term_folded):
+        return term_folded in folded
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(term_folded)}(?![a-z0-9])", folded))
 
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -514,7 +523,7 @@ def _normalize_ambiguities(value: object) -> list[dict]:
     return ambiguities
 
 
-def _normalize_ai_intent(context: str, payload: dict) -> dict:
+def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dict:
     payload = AIPlanningIntentPayload.model_validate(payload).model_dump(exclude_none=True)
     purpose = _coerce_purpose(payload.get("trip_purpose"))
     destination = _resolve_destination(payload.get("destination_text"))
@@ -527,6 +536,7 @@ def _normalize_ai_intent(context: str, payload: dict) -> dict:
     people = _coerce_int(payload.get("people"))
     budget = _coerce_int(payload.get("budget"))
     ambiguities = _normalize_ambiguities(payload.get("ambiguities"))
+
     spec = THEMES.get(purpose or "")
 
     missing: list[str] = []
@@ -556,21 +566,21 @@ def _normalize_ai_intent(context: str, payload: dict) -> dict:
     question = None
     if validation_errors:
         if validation_errors[0]["code"] == "duration_too_short_for_itinerary":
-            question = "30 phút hơi ngắn để lập lịch trình. Bạn muốn tìm 1 điểm gần nhất hay tăng thời lượng lên 1-2 giờ?"
+            question = "30 phút hơi ngắn để lập lịch trình. Bạn muốn tìm 1 điểm gần nhất hay tăng thời lượng lên 1-2 giờ?" if locale == "vi" else "The duration is too short for a multi-stop itinerary. Would you like to increase it?"
         elif validation_errors[0]["code"] == "time_window_too_short":
-            question = "Khung giờ này hơi ngắn. Bạn muốn tìm 1 điểm gần nhất hay tăng thời lượng lên 1-2 giờ?"
+            question = "Khung giờ này hơi ngắn. Bạn muốn tìm 1 điểm gần nhất hay tăng thời lượng lên 1-2 giờ?" if locale == "vi" else "This time window is a bit short. Would you like to extend it to 1-2 hours?"
         elif validation_errors[0]["code"] == "time_window_too_long":
-            question = "Khung giờ này quá dài cho một ngày. Bạn muốn chia thành nhiều ngày hay chọn khung giờ ngắn hơn?"
+            question = "Khung giờ này quá dài cho một ngày. Bạn muốn chia thành nhiều ngày hay chọn khung giờ ngắn hơn?" if locale == "vi" else "This time window is too long for one day. Would you like to split into multiple days?"
         else:
-            question = "Khung giờ chưa hợp lệ. Bạn muốn đi từ mấy giờ đến mấy giờ?"
-    elif ambiguities:
+            question = "Khung giờ chưa hợp lệ. Bạn muốn đi từ mấy giờ đến mấy giờ?" if locale == "vi" else "Invalid time window. What hours do you prefer?"
+    elif ambiguities and ambiguities[0].get("question"):
         question = ambiguities[0]["question"]
     elif "destination" in missing:
-        question = "Bạn muốn đi ở đâu? Mình gợi ý vài điểm phù hợp để bạn chọn." if suggestions else "Bạn muốn đi điểm đến/thành phố nào?"
+        question = "Bạn muốn đi ở đâu? Mình gợi ý vài điểm phù hợp để bạn chọn." if suggestions else ("Bạn muốn đi điểm đến/thành phố nào?" if locale == "vi" else "Which destination or city would you like to visit?")
     elif "duration" in missing:
-        question = "Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?"
+        question = "Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?" if locale == "vi" else "How long do you plan to stay: a few hours, 1 day, or multiple days?"
     elif "people" in missing:
-        question = "Bạn đi mấy người?"
+        question = "Bạn đi mấy người?" if locale == "vi" else "How many people are traveling?"
 
     parsed_destination = None
     if destination:
@@ -612,7 +622,7 @@ def parse_intent(context: str, locale: str = "vi", extractor=None) -> dict:
         try:
             payload = extractor(context, locale)
             if isinstance(payload, dict) and payload:
-                return _normalize_ai_intent(context, payload)
+                return _normalize_ai_intent(context, payload, locale)
         except (RuntimeError, TypeError, ValueError, ValidationError):
             pass
     result = _fallback_parse_intent(context, locale)

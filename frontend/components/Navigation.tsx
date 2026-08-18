@@ -6,18 +6,25 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/components/LocaleProvider";
 
 const links: Array<[string, string]> = [
-  ["/history", "trips"],
   ["/roadtrip", "roadtrip"],
+  ["/history", "trips"],
+  ["/feedback", "feedback"],
+  ["/settings", "settings"],
 ];
 
 export default function Navigation() {
   const { t } = useLocale();
   const pathname = usePathname();
   const [hasAuth, setHasAuth] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     try {
-      setHasAuth(Boolean(localStorage.getItem("auth_token")));
+      const auth = Boolean(localStorage.getItem("auth_token"));
+      const role = localStorage.getItem("user_role");
+      const adminTok = sessionStorage.getItem("admin_token");
+      setHasAuth(auth);
+      setIsAdmin(role === "admin" || Boolean(adminTok));
     } catch {}
   }, [pathname]);
 
@@ -26,8 +33,11 @@ export default function Navigation() {
   function logout() {
     try {
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("user_role");
+      sessionStorage.removeItem("admin_token");
     } catch {}
     setHasAuth(false);
+    setIsAdmin(false);
   }
 
   return (
@@ -42,7 +52,7 @@ export default function Navigation() {
             {t(key as "trips")}
           </Link>
         ))}
-        {hasAuth && (
+        {isAdmin && (
           <span className="nav-admin">
             <Link href="/admin">Admin</Link>
           </span>

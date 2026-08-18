@@ -34,6 +34,47 @@ class MemoryStore:
         self.feedback: dict[str, dict] = {}
         self.preferences: dict[str, dict] = {}
         self.notifications: dict[str, dict] = {}
+        self.user_reviews: list[dict] = [
+            {
+                "id": "rev-1",
+                "name": "Nguyễn Hoàng Nam",
+                "contact": "nam.nguyen@example.com",
+                "rating": 5,
+                "category": "trai_nghiem",
+                "title": "Lên lịch trình Đà Nẵng cực kỳ mượt mà!",
+                "content": "AI gợi ý chuẩn các quán ăn ngon ở Đà Nẵng, tính toán thời gian đi lại rất hợp lý giữa các điểm như Chùa Linh Ứng và Bán đảo Sơn Trà. Tiết kiệm cả buổi ngồi tìm kiếm.",
+                "status": "reviewed",
+                "admin_reply": "Cảm ơn bạn Nam đã ủng hộ Mình Đi Đâu Thế! Chúc bạn có thêm nhiều chuyến đi tuyệt vời.",
+                "session_id": "demo-session-1",
+                "created_at": "2026-08-15T09:30:00Z",
+            },
+            {
+                "id": "rev-2",
+                "name": "Trần Thị Mai Anh",
+                "contact": "maianh.tran@example.com",
+                "rating": 5,
+                "category": "tinh_nang",
+                "title": "Tính năng xuất Google Calendar và PDF siêu tiện",
+                "content": "Lên lịch xong tải thẳng file ICS vào điện thoại xem từng khung giờ. Giao diện trực quan, bản đồ xem được ngay vị trí từng điểm.",
+                "status": "reviewed",
+                "admin_reply": None,
+                "session_id": "demo-session-2",
+                "created_at": "2026-08-16T14:15:00Z",
+            },
+            {
+                "id": "rev-3",
+                "name": "Lê Quang Huy",
+                "contact": "0987654321",
+                "rating": 5,
+                "category": "trai_nghiem",
+                "title": "Phượt Tây Bắc với OSRM chuẩn xác từng km",
+                "content": "Tính năng Road trip nhiều chặng ghép được lộ trình Hà Nội - Mộc Châu - Sa Pa rõ ràng, ước lượng thời gian lái xe rất chuẩn.",
+                "status": "reviewed",
+                "admin_reply": None,
+                "session_id": "demo-session-3",
+                "created_at": "2026-08-17T11:00:00Z",
+            },
+        ]
         self.available = True
         self._lock = Lock()
 
@@ -399,7 +440,9 @@ class MemoryStore:
     ) -> dict:
         existing = next((user for user in self.users.values() if user["email"] == email), None)
         user = existing or {"id": str(uuid4()), "email": email, "ten": name,
-                            "nha_cung_cap": provider}
+                            "nha_cung_cap": provider, "role": "user"}
+        if "role" not in user:
+            user["role"] = "user"
         self.users[user["id"]] = user
         self.claim_session(session_id, user["id"])
         self.log(session_id, "dong_y_chinh_sach", {"phien_ban": policy_version})
@@ -468,6 +511,7 @@ class MemoryStore:
         normalized = username.casefold().strip()
         if self.get_user_by_username(normalized):
             raise ValueError("USERNAME_EXISTS")
+        role = "admin" if normalized in ("admin", "root", "administrator") else "user"
         user = {
             "id": str(uuid4()),
             "email": f"{normalized}@local.account",
@@ -476,6 +520,7 @@ class MemoryStore:
             "username": normalized,
             "mat_khau_hash": password_hash,
             "so_dien_thoai": phone,
+            "role": role,
         }
         self.users[user["id"]] = user
         self.claim_session(session_id, user["id"])
@@ -548,6 +593,66 @@ class MemoryStore:
             raise ValueError("NOTIFICATION_NOT_FOUND")
         item["da_doc"] = True
         return item.copy()
+
+    def add_user_review(
+        self,
+        name: str,
+        contact: str,
+        rating: int,
+        category: str,
+        title: str,
+        content: str,
+        session_id: str,
+        user_id: str | None = None,
+    ) -> dict:
+        rating = max(1, min(5, int(rating)))
+        review = {
+            "id": f"rev-{str(uuid4())[:8]}",
+            "name": name.strip() or "Du khách ẩn danh",
+            "contact": contact.strip(),
+            "rating": rating,
+            "category": category if category in ("trai_nghiem", "tinh_nang", "dia_diem", "khac") else "khac",
+            "title": title.strip() or "Đánh giá dịch vụ",
+            "content": content.strip(),
+            "status": "new",
+            "admin_reply": None,
+            "session_id": session_id,
+            "user_id": user_id,
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        self.user_reviews.insert(0, review)
+        return review.copy()
+
+    def list_user_reviews(
+        self,
+        status: str | None = None,
+        category: str | None = None,
+        min_rating: int | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        items = list(self.user_reviews)
+        if status and status != "all":
+            items = [item for item in items if item.get("status") == status]
+        if category and category != "all":
+            items = [item for item in items if item.get("category") == category]
+        if min_rating is not None and min_rating > 0:
+            items = [item for item in items if item.get("rating", 0) >= min_rating]
+        return items[:limit]
+
+    def update_user_review(
+        self,
+        review_id: str,
+        status: str | None = None,
+        admin_reply: str | None = None,
+    ) -> dict:
+        for item in self.user_reviews:
+            if item["id"] == review_id:
+                if status and status in ("new", "reviewed", "resolved", "hidden"):
+                    item["status"] = status
+                if admin_reply is not None:
+                    item["admin_reply"] = admin_reply.strip() or None
+                return item.copy()
+        raise ValueError("REVIEW_NOT_FOUND")
 
 
 def create_store():

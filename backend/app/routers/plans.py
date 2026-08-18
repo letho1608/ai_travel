@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 from asyncio import to_thread
 from datetime import UTC, datetime, timedelta
@@ -187,6 +187,14 @@ async def generate(payload: PlanRequest, request: Request):
             yield sse("error", {"code": "503", "detail": str(exc)})
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@router.get("/plans/history")
+def plan_history_alias(
+    x_session_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    return list_plans(x_session_id=x_session_id, authorization=authorization)
 
 
 @router.get("/plans/{token}")
@@ -713,25 +721,41 @@ def refine(
     if not limiter.check(f"refine:{item.session_id}", 20):
         raise HTTPException(429, "Bạn đã tinh chỉnh quá nhiều lần")
     if SWAP_INTENT.search(payload.message):
-        if not payload.dia_diem_dang_chon:
-            raise HTTPException(422, "Hãy chọn một địa điểm cần đổi")
-        result = swipe(
-            token,
-            SwipeRequest(
-                diem_bi_loai=payload.dia_diem_dang_chon,
-                phien_ban=payload.phien_ban,
-                ma_phien=payload.ma_phien,
-            ),
-            payload.ma_phien,
-            authorization,
-            message=payload.message,
-        )
-        return {
-            "ke_hoach": result["ke_hoach_moi"], "phien_ban": result["phien_ban"],
-            "tra_loi": "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.",
-            "tra_loi_key": "swipeSuccess",
-            "hoi_thoai": _conversation(result["ke_hoach_moi"]),
-        }
+        target_slot_id = payload.dia_diem_dang_chon
+        if not target_slot_id:
+            msg_lower = ascii_fold(payload.message).lower()
+            all_slots = [s for day in item.plan.get("ngay", []) for s in day.get("khoang_gio", [])]
+            if any(w in msg_lower for w in ("an", "com", "pho", "bun", "restaurant", "food", "toi", "trua")):
+                meal_slots = [s for s in all_slots if s.get("loai") in ("nha_hang", "food", "quan_an") or s.get("bua_an")]
+                if meal_slots:
+                    target_slot_id = meal_slots[-1].get("dia_diem_id") if "toi" in msg_lower else meal_slots[0].get("dia_diem_id")
+            elif any(w in msg_lower for w in ("cafe", "ca phe", "coffee", "uong")):
+                cafe_slots = [s for s in all_slots if s.get("loai") in ("cafe", "ca_phe", "drinks")]
+                if cafe_slots:
+                    target_slot_id = cafe_slots[0].get("dia_diem_id")
+            elif all_slots:
+                target_slot_id = all_slots[0].get("dia_diem_id")
+        if target_slot_id:
+            try:
+                result = swipe(
+                    token,
+                    SwipeRequest(
+                        diem_bi_loai=target_slot_id,
+                        phien_ban=payload.phien_ban,
+                        ma_phien=payload.ma_phien,
+                    ),
+                    payload.ma_phien,
+                    authorization,
+                    message=payload.message,
+                )
+                return {
+                    "ke_hoach": result["ke_hoach_moi"], "phien_ban": result["phien_ban"],
+                    "tra_loi": "Đã đổi địa điểm phù hợp theo yêu cầu của bạn.",
+                    "tra_loi_key": "swipeSuccess",
+                    "hoi_thoai": _conversation(result["ke_hoach_moi"]),
+                }
+            except Exception:
+                pass
     refined = _refined_request(item, payload.message)
     previous = _conversation(item.plan)
     try:

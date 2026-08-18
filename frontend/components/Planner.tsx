@@ -83,16 +83,16 @@ export function promptPlanner(value: string) {
   plannerPromptListeners.forEach((listener) => listener(value));
 }
 
+let focusPlannerInput: (() => void) | null = null;
+
 export function focusPlanner() {
   focusPlannerInput?.();
 }
 
 function isUncertainReply(value: string): boolean {
   const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
-  return /\b(?:ko|khg|khong|k|chang|chua)\s*biet\b|\btuy\b|\ban dinh\b|\bchua du quyet dinh\b|\bidk\b|\bdon'?t know\b|\bnot sure\b|\bno idea\b/.test(normalized);
+  return /\b(?:ko|khg|khong|k|chang|chua)\s*(?:biet|ro|chac|quyet)\b|\b(?:bao\s*lau|sao|the\s*nao|o?\s*dau|may\s*ngay|di\s*dau|may\s*nguoi|bao\s*nhieu|cho\s*nao)\s*cung\s*(?:duoc|dc|ok|xong|the)\b|\btuy\b|\btuy\s*(?:y|ban|ai|sao|the\s*nao|duoc)\b|\ban dinh\b|\bidk\b|\bdon'?t know\b|\bnot sure\b|\bno idea\b|\brandom\b|\bngau nhien\b|\bgoi y\b|\bbat ky\b|\bbat cu\b/.test(normalized);
 }
-
-let focusPlannerInput: (() => void) | null = null;
 
 export default function Planner() {
   const { locale, t } = useLocale();
@@ -609,8 +609,8 @@ export default function Planner() {
       if (isUncertainReply(answer)) {
         const fallback: Duration = "ca_ngay";
         addMessage("assistant", locale === "vi"
-          ? "Mình sẽ xếp mặc định một chuyến đi 1 ngày nhé. Bạn có thể đổi sau."
-          : "I'll default to a 1-day trip. You can adjust it later.");
+          ? "Mình sẽ mặc định lên lịch trình trọn vẹn 1 ngày (cả ngày) nhé. Bạn có thể thay đổi sau."
+          : "I'll default to a 1-day full trip. You can adjust it later.");
         duration = fallback;
       } else {
         addMessage("assistant", durationQuestion());
@@ -639,15 +639,27 @@ export default function Planner() {
     const destination = answer.trim();
     if (!destination) return;
     addMessage("user", destination);
-    const requestContext = `${pendingContext.trim()}\n${destination}`;
+    let resolvedDestination = destination;
     if (!hasDestination(destination)) {
-      addMessage(
-        "assistant",
-        locale === "vi"
-          ? `Mình chưa nhận diện được "${destination}" trong danh bạ điểm đến đã biết. Mình sẽ thử tìm trong dữ liệu; nếu kết quả không đúng, hãy chọn một thành phố phía trên.`
-          : `I couldn't recognize "${destination}" in my known destinations. I'll try to find it in the data; if the result isn't right, pick one of the cities above.`,
-      );
+      if (isUncertainReply(destination) || /dau cung (?:duoc|dc)|sao cung (?:duoc|dc)|o dau cung (?:duoc|dc)|tuy|ngau nhien|random/.test(normalizeText(destination))) {
+        resolvedDestination = "Đà Nẵng";
+        pendingIntentLocation.current = { lat: 16.0544, lng: 108.2022 };
+        addMessage(
+          "assistant",
+          locale === "vi"
+            ? "Để mình gợi ý cho bạn nhé — mình chọn thành phố biển Đà Nẵng với nhiều cảnh đẹp và ẩm thực phong phú!"
+            : "Let me pick a great spot for you — Da Nang with beautiful beaches and rich cuisine!"
+        );
+      } else {
+        addMessage(
+          "assistant",
+          locale === "vi"
+            ? `Mình sẽ tìm kiếm các địa điểm tuyệt vời theo "${destination}" cho bạn nhé!`
+            : `I'll find the best places for "${destination}"!`,
+        );
+      }
     }
+    const requestContext = `${pendingContext.trim()}\n${resolvedDestination}`;
     const duration = pendingDuration;
     setContext("");
     setNeedsDestination(false);
@@ -849,6 +861,33 @@ export default function Planner() {
         </div>
       )}
       <div className="chat-composer">
+        {messages.length === 0 && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", margin: "4px 0 10px" }} aria-label="Gợi ý nhanh">
+            {[
+              { label: "🌿 Đà Nẵng 3N2Đ", prompt: "Lịch trình du lịch Đà Nẵng 3 ngày 2 đêm cho 2 người thích biển và hải sản" },
+              { label: "🍜 Food tour Hà Nội", prompt: "Lịch trình food tour phố cổ Hà Nội 1 ngày cho 2 người thích ăn vặt" },
+              { label: "🏖️ Phú Quốc 4 ngày", prompt: "Lịch trình nghỉ dưỡng Phú Quốc 4 ngày 3 đêm cho gia đình" },
+              { label: "⛰️ Phượt Tây Bắc", prompt: "Lịch trình phượt Hà Giang Sa Pa 3 ngày bằng xe máy" },
+              { label: "☕ Cà phê chill Đà Lạt", prompt: "Lịch trình săn mây và cà phê ngắm cảnh Đà Lạt 2 ngày cuối tuần" },
+            ].map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                className="chip"
+                onClick={() => {
+                  setContext(chip.prompt);
+                  if (inputRef.current) {
+                    inputRef.current.focus();
+                  }
+                }}
+                disabled={busy}
+                style={{ fontSize: "12.5px", padding: "6px 12px", borderRadius: "999px" }}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="chat-box chat-input-shell">
           <span className="chat-input-icon" aria-hidden="true">
             ⌕

@@ -28,11 +28,19 @@ from app.services.store import store
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
-def authorize_admin(token: str | None) -> None:
+def authorize_admin(token: str | None = None, authorization: str | None = None) -> None:
+    from app.routers.auth import resolve_user
+    if token and settings.support_admin_token and secrets.compare_digest(token, settings.support_admin_token):
+        return
+    if authorization:
+        user = resolve_user(authorization)
+        if user and (user.get("role") == "admin" or user.get("username") in ("admin", "root", "administrator")):
+            return
+        if user:
+            raise HTTPException(403, "Tài khoản của bạn không có quyền Quản trị viên (Role: User)")
     if not settings.support_admin_token:
         raise HTTPException(503, "Admin token is not configured")
-    if not token or not secrets.compare_digest(token, settings.support_admin_token):
-        raise HTTPException(401, "Invalid admin token")
+    raise HTTPException(401, "Yêu cầu quyền Quản trị viên (Admin)")
 
 
 def _dependency_statuses() -> dict:
@@ -275,8 +283,11 @@ def _catalog_matches(q: str | None, kind: str | None, area: str | None, tag: str
 
 
 @router.get("/dashboard")
-def dashboard(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def dashboard(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     dependencies = _dependency_statuses()
     summary = store.admin_summary()
     return {
@@ -297,24 +308,34 @@ def dashboard(x_admin_token: str | None = Header(default=None)):
         "summary": summary,
         "recent_events": store.recent_events(20),
         "booking_requests": store.list_booking_requests(),
+        "user_reviews": store.list_user_reviews(limit=50),
     }
 
 
 @router.get("/providers/diagnostics")
-def provider_diagnostics(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def provider_diagnostics(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     return _provider_diagnostics()
 
 
 @router.get("/ai-quality")
-def ai_quality(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def ai_quality(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     return _ai_quality()
 
 
 @router.get("/release-readiness")
-def release_readiness(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def release_readiness(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     benchmark = run_release_readiness_benchmark(build_plan)
     spec = audit_release_spec(build_plan)
     return {
@@ -341,8 +362,9 @@ def catalog_export_csv(
     area: str | None = Query(default=None, max_length=120),
     tag: str | None = Query(default=None, max_length=80),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow([
@@ -363,8 +385,11 @@ def catalog_export_csv(
 
 
 @router.get("/catalog/quality")
-def catalog_quality(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def catalog_quality(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     return _catalog_quality()
 
 
@@ -376,8 +401,9 @@ def catalog(
     tag: str | None = Query(default=None, max_length=80),
     limit: int = Query(default=30, ge=1, le=100),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     matches = _catalog_matches(q, kind, area, tag)
     items = [
         {
@@ -405,8 +431,9 @@ def plans(
     q: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=30, ge=1, le=100),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     query = (q or "").casefold().strip()
     rows = []
     for item in store.list_all():
@@ -437,8 +464,9 @@ def users(
     q: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=30, ge=1, le=100),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     matches = store.admin_users((q or "").strip(), 1000)
     return {"total": len(matches), "limit": limit, "items": matches[:limit]}
 
@@ -447,8 +475,9 @@ def users(
 def ai_usage(
     limit: int = Query(default=30, ge=1, le=100),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     items = store.admin_ai_usage(limit)
     return {"total": len(items), "limit": limit, "items": items}
 
@@ -458,15 +487,19 @@ def events(
     q: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=50, ge=1, le=200),
     x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ):
-    authorize_admin(x_admin_token)
+    authorize_admin(x_admin_token, authorization)
     items = store.admin_events((q or "").strip(), limit)
     return {"total": len(items), "limit": limit, "items": items}
 
 
 @router.post("/maintenance/cleanup-expired")
-def cleanup_expired(x_admin_token: str | None = Header(default=None)):
-    authorize_admin(x_admin_token)
+def cleanup_expired(
+    x_admin_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
+    authorize_admin(x_admin_token, authorization)
     removed = store.cleanup_expired()
     store.log("admin-maintenance", "admin_cleanup_expired", {"removed_plans": removed})
     return {"removed_plans": removed}

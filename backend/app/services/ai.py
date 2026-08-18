@@ -129,10 +129,11 @@ class OpenAICompatibleAIAdapter:
         if not settings.ai_api_key:
             required_key = "API_KEY_GROQ" if settings.ai_mode == "groq" else "API_KEY_DEEPSEEK"
             raise RuntimeError(f"{required_key} is required when AI_MODE={settings.ai_mode}")
+        base_url = settings.ai_base_url.rstrip("/") + "/"
         self.client = client or httpx.Client(
-            base_url=settings.ai_base_url,
+            base_url=base_url,
             headers={"Authorization": f"Bearer {settings.ai_api_key}"},
-            timeout=httpx.Timeout(10, connect=2),
+            timeout=httpx.Timeout(15, connect=3),
         )
         self.provider = settings.ai_mode
 
@@ -165,7 +166,7 @@ class OpenAICompatibleAIAdapter:
         for _attempt in range(2):
             try:
                 response = self.client.post(
-                    "/chat/completions",
+                    "chat/completions",
                     json={
                         "model": settings.ai_model,
                         "messages": [
@@ -251,7 +252,7 @@ class OpenAICompatibleAIAdapter:
         for _attempt in range(2):
             try:
                 response = self.client.post(
-                    "/chat/completions",
+                    "chat/completions",
                     json={
                         "model": settings.ai_model,
                         "messages": [
@@ -329,7 +330,7 @@ class OpenAICompatibleAIAdapter:
         for _attempt in range(2):
             try:
                 response = self.client.post(
-                    "/chat/completions",
+                    "chat/completions",
                     json={
                         "model": settings.ai_model,
                         "messages": [
@@ -424,7 +425,7 @@ class OpenAICompatibleAIAdapter:
         for _attempt in range(2):
             try:
                 response = self.client.post(
-                    "/chat/completions",
+                    "chat/completions",
                     json={
                         "model": settings.ai_model,
                         "messages": [
@@ -512,7 +513,7 @@ class OpenAICompatibleAIAdapter:
         for _attempt in range(2):
             try:
                 response = self.client.post(
-                    "/chat/completions",
+                    "chat/completions",
                     json={
                         "model": settings.ai_model,
                         "messages": [

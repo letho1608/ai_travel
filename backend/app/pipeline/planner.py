@@ -3150,6 +3150,19 @@ def _compute_slot_bounds(
     return start, end, visit
 
 
+def _effective_slot_cost(place: Place, meal_type: str | None, so_nguoi: int) -> int:
+    if place.cost > 0:
+        return place.cost * so_nguoi
+    kind = getattr(place, "kind", "")
+    if meal_type or kind in ("nha_hang", "food", "quan_an", "am_thuc"):
+        return 50_000 * so_nguoi
+    if kind in ("cafe", "ca_phe", "drinks"):
+        return 35_000 * so_nguoi
+    if kind in ("bar", "pub", "club"):
+        return 100_000 * so_nguoi
+    return 0
+
+
 def _pack_day_slots(
     route_stops: list[tuple[Place, str | None]],
     day_start: datetime,

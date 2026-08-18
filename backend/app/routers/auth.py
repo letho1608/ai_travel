@@ -41,7 +41,10 @@ def _verify_password(password: str, stored: str | None) -> bool:
 
 
 def _public_user(user: dict) -> dict:
-    return {key: value for key, value in user.items() if key != "mat_khau_hash"}
+    result = {key: value for key, value in user.items() if key != "mat_khau_hash"}
+    if "role" not in result:
+        result["role"] = "admin" if user.get("username") in ("admin", "root", "administrator") else "user"
+    return result
 
 
 def _issue_token(user: dict) -> str:

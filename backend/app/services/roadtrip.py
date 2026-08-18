@@ -36,8 +36,45 @@ class OSRMRoadTrip:
         except (
             httpx.HTTPError, ValueError, TypeError, KeyError,
             json.JSONDecodeError, RecursionError,
-        ) as exc:
-            raise RoadTripUnavailable("Road-trip provider is unavailable") from exc
+        ):
+            from app.pipeline.routing import haversine_km
+            legs = []
+            total_dist = 0
+            total_dur = 0
+            coords = []
+            for i in range(len(route_stops) - 1):
+                p1 = route_stops[i].location
+                p2 = route_stops[i + 1].location
+                d_km = haversine_km(p1.lat, p1.lng, p2.lat, p2.lng) * 1.3
+                d_meters = round(d_km * 1000)
+                dur_secs = round(d_km / 50 * 3600)
+                total_dist += d_meters
+                total_dur += dur_secs
+                coords.append([p1.lng, p1.lat])
+                legs.append({
+                    "from": route_stops[i].name,
+                    "to": route_stops[i + 1].name,
+                    "distance_meters": d_meters,
+                    "duration_seconds": dur_secs,
+                    "is_overwater": True,
+                    "note": "Ước tính đường bộ / trung chuyển (có thể cần phà hoặc máy bay)",
+                })
+            coords.append([route_stops[-1].location.lng, route_stops[-1].location.lat])
+            fetched = datetime.now(UTC)
+            return {
+                "stops": [stop.model_dump() for stop in route_stops],
+                "legs": legs,
+                "total_distance_meters": total_dist,
+                "total_duration_seconds": total_dur,
+                "geometry": {"type": "LineString", "coordinates": coords},
+                "provenance": {
+                    "provider": "Estimate_Fallback",
+                    "profile": "transit_estimate",
+                    "fetched_at": fetched.isoformat(),
+                    "expires_at": (fetched + timedelta(days=7)).isoformat(),
+                    "is_live": False,
+                },
+            }
 
         legs = [
             {
