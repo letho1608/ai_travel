@@ -10,6 +10,7 @@ from app.text_utils import ascii_fold
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 MAX_TRIP_DAYS = 30
+MAX_ASKED_DAYS = 365
 DESTINATION_RADIUS_KM = 55.0
 
 
@@ -53,7 +54,7 @@ class AIPlanningIntentPayload(BaseModel):
     schema_version: str | None = Field(default=None, max_length=40)
     destination_text: str | None = Field(default=None, max_length=120)
     trip_purpose: Literal["general_travel", "healing", "beach", "mountain", "food", "cafe"] | None = None
-    duration_value: float | None = Field(default=None, gt=0, le=30)
+    duration_value: float | None = Field(default=None, gt=0, le=365)
     duration_unit: Literal["minute", "hour", "day", "week"] | None = None
     time_window: AIPlanningTimeWindow | None = None
     people: int | None = Field(default=None, ge=1, le=30)
@@ -306,38 +307,123 @@ def place_matches_policy(place: Place, allowed: set[str], avoided: set[str]) -> 
     return True
 
 
+THEME_DESTINATION_PRIORITY: dict[str, tuple[str, ...]] = {
+    "healing": ("Đà Lạt", "Sa Pa", "Ninh Bình", "Phú Quốc", "Huế"),
+    "beach": ("Nha Trang", "Phú Quốc", "Đà Nẵng", "Vũng Tàu", "Phan Thiết"),
+    "mountain": ("Sa Pa", "Hà Giang", "Đà Lạt", "Ninh Bình", "Quảng Bình"),
+    "food": ("Hà Nội", "TP.HCM", "Hội An", "Huế"),
+    "cafe": ("Đà Lạt", "Hà Nội", "Hội An", "Đà Nẵng"),
+    "general_travel": ("Hà Nội", "Đà Nẵng", "Hội An", "TP.HCM"),
+}
+
+THEME_SUGGESTION_REASON: dict[str, str] = {
+    "healing": "nhịp chậm, thiên nhiên yên tĩnh, dễ chữa lành",
+    "beach": "bãi biển, hải sản và kỳ nghỉ ven biển",
+    "mountain": "núi, trekking và săn mây",
+    "food": "ẩm thực địa phương phong phú",
+    "cafe": "cafe view và nhịp đi chậm",
+    "general_travel": "điểm đến phổ biến, dễ lập lịch",
+}
+
+THEME_PURPOSE_LABEL_VI: dict[str, str] = {
+    "healing": "chữa lành",
+    "beach": "biển",
+    "mountain": "núi",
+    "food": "ẩm thực",
+    "cafe": "cà phê",
+    "general_travel": "du lịch",
+}
+
+_CLOCK_RANGE_RE = re.compile(
+    r"(?:(?:tu|from)\s+)?(?:luc\s+)?"
+    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(sang|chieu|am|pm)?"
+    r"\s*(?:-|–|—|~|den|toi|to|until)\s*"
+    r"(?:luc\s+)?"
+    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(sang|chieu|toi|am|pm)?",
+    re.IGNORECASE,
+)
+_DAY_COUNT_RE = re.compile(r"\b([1-9]\d{0,2})\s*(?:ngay|days?)\b", re.IGNORECASE)
+_WEEK_COUNT_RE = re.compile(r"\b([1-9]|1[0-2])\s*(?:tuan|weeks?)\b", re.IGNORECASE)
+_HOUR_SPAN_RE = re.compile(
+    r"\b(\d{1,2}(?:[.,]\d+)?)\s*(?:gio(?:\s+dong\s+ho)?|tieng|hours?|hrs?)\b",
+    re.IGNORECASE,
+)
+_HOUR_COMPACT_RE = re.compile(r"(?<![0-9.,])(\d{1,2})h\b", re.IGNORECASE)
+_FRACTION_HOUR_RE = re.compile(r"\b(0[.,]\d+)\s*h\b", re.IGNORECASE)
+_MINUTE_SPAN_RE = re.compile(r"\b(\d{1,3})\s*(?:p(?![a-z])|phut|minutes?)\b", re.IGNORECASE)
+_PEOPLE_RE = re.compile(
+    r"\b([1-9]|[12][0-9]|30)\s*(?:nguoi|nguoi lon|ban|dua|khach|pax|adults?|people|person|travelers?)\b",
+    re.IGNORECASE,
+)
+_DAY_WORDS = {
+    "hai ngay": 2, "ba ngay": 3, "bon ngay": 4, "nam ngay": 5,
+    "sau ngay": 6, "bay ngay": 7, "tam ngay": 8, "chin ngay": 9, "muoi ngay": 10,
+    "two days": 2, "three days": 3, "four days": 4, "five days": 5,
+}
+_WEEK_WORDS = {
+    "mot tuan": 7, "hai tuan": 14, "ba tuan": 21, "bon tuan": 28,
+    "one week": 7, "two weeks": 14, "three weeks": 21,
+}
+_PEOPLE_WORDS = {
+    "mot nguoi": 1, "hai nguoi": 2, "ba nguoi": 3, "bon nguoi": 4,
+    "one person": 1, "two people": 2, "couple": 2, "vo chong": 2,
+}
+
+
+def _hour_with_meridiem(hour: int, meridiem: str | None) -> int:
+    if not meridiem:
+        return hour
+    mer = meridiem.casefold()
+    if mer in {"pm", "chieu", "toi"} and hour < 12:
+        return hour + 12
+    if mer in {"am", "sang"} and hour == 12:
+        return 0
+    return hour
+
+
 def _destination_suggestions(purpose: str | None) -> list[dict]:
     spec = THEMES.get(purpose or "")
-    scored: list[tuple[int, IntentDestination, list[str]]] = []
-    for destination in FOCUS_DESTINATIONS:
-        matches: list[tuple[int, Place]] = []
+    by_name = {item.name: item for item in FOCUS_DESTINATIONS}
+    priority_names = THEME_DESTINATION_PRIORITY.get(purpose or "", THEME_DESTINATION_PRIORITY["general_travel"])
+    reason = THEME_SUGGESTION_REASON.get(purpose or "", THEME_SUGGESTION_REASON["general_travel"])
+    suggestions: list[dict] = []
+    for index, name in enumerate(priority_names):
+        destination = by_name.get(name)
+        if not destination:
+            continue
+        catalog_score = 0
         for place in PLACES:
             if _haversine_km(destination.lat, destination.lng, place.lat, place.lng) > DESTINATION_RADIUS_KM:
                 continue
-            score = _place_theme_score(place, spec)
-            if score > 0:
-                matches.append((score, place))
-        if not matches:
-            continue
-        matches.sort(key=lambda item: (-item[0], item[1].id))
-        top = matches[:8]
-        score = sum(item[0] for item in top)
-        reasons = []
-        for _score, place in top[:3]:
-            if place.kind not in reasons:
-                reasons.append(place.kind)
-        scored.append((score, destination, reasons))
-    scored.sort(key=lambda item: (-item[0], item[1].name))
-    return [
-        {
+            catalog_score += _place_theme_score(place, spec)
+        suggestions.append({
             "label": destination.name,
             "lat": destination.lat,
             "lng": destination.lng,
-            "reason": "nhiều điểm phù hợp trong catalog: " + ", ".join(reasons),
-            "score": score,
-        }
-        for score, destination, reasons in scored[:4]
-    ]
+            "reason": reason,
+            "score": 1000 - index * 10 + min(catalog_score, 50),
+        })
+    return suggestions[:4]
+
+
+def _destination_ask_question(locale: str, purpose: str | None, suggestions: list[dict]) -> str:
+    labels = ", ".join(item["label"] for item in suggestions[:4] if item.get("label"))
+    purpose_vi = THEME_PURPOSE_LABEL_VI.get(purpose or "", "du lịch")
+    if locale == "vi":
+        if labels:
+            return (
+                f"Bạn muốn đi {purpose_vi} ở đâu? Mình gợi ý {labels}. "
+                "Chọn một điểm, hoặc nói 'bạn chọn giúp' để mình thiết kế hộ."
+            )
+        return "Bạn muốn đi điểm đến/thành phố nào?"
+    if labels:
+        return (
+            f"Where would you like to go? Suggestions: {labels}. "
+            "Pick one, or say 'surprise me' and I'll choose for you."
+        )
+    return "Which destination or city would you like to visit?"
 
 
 def _duration_shape(days: int | None, minutes: int | None, window: dict | None) -> tuple[str | None, str | None, float | None, str | None, int | None]:
@@ -358,38 +444,127 @@ def _duration_shape(days: int | None, minutes: int | None, window: dict | None) 
     return "ca_ngay", "minute", effective_minutes, "day_trip", effective_minutes
 
 
-def _fallback_parse_intent(context: str, locale: str = "vi") -> dict:
+def _extract_time_window(folded: str) -> dict | None:
+    match = _CLOCK_RANGE_RE.search(folded)
+    if not match:
+        return None
+    return _normalize_time_window({
+        "start_hour": _hour_with_meridiem(int(match.group(1)), match.group(3)),
+        "start_minute": int(match.group(2) or 0),
+        "end_hour": _hour_with_meridiem(int(match.group(4)), match.group(6)),
+        "end_minute": int(match.group(5) or 0),
+    })
+
+
+def _extract_days(folded: str) -> int | None:
+    weeks = _WEEK_COUNT_RE.search(folded)
+    if weeks:
+        return min(MAX_ASKED_DAYS, int(weeks.group(1)) * 7)
+    for phrase, days in _WEEK_WORDS.items():
+        if phrase in folded:
+            return min(MAX_ASKED_DAYS, days)
+    labeled = _DAY_COUNT_RE.search(folded)
+    if labeled:
+        return min(MAX_ASKED_DAYS, max(1, int(labeled.group(1))))
+    for phrase, days in _DAY_WORDS.items():
+        if phrase in folded:
+            return days
+    return None
+
+
+def _extract_duration_minutes(folded: str, has_window: bool) -> tuple[int | None, list[dict]]:
+    if has_window:
+        return None, []
+    fraction = _FRACTION_HOUR_RE.search(folded)
+    if fraction:
+        hours = float(fraction.group(1).replace(",", "."))
+        return round(hours * 60), []
+    minute_span = _MINUTE_SPAN_RE.search(folded)
+    if minute_span:
+        return int(minute_span.group(1)), []
+    span = _HOUR_SPAN_RE.search(folded)
+    if span:
+        hours = float(span.group(1).replace(",", "."))
+        if 10 <= hours <= 23:
+            whole = int(hours)
+            return None, [{
+                "field": "duration",
+                "value": span.group(0),
+                "reason": "could be duration or start time",
+                "question": f"Bạn muốn đi trong {whole} tiếng hay bắt đầu lúc {whole}h?",
+            }]
+        if 0.75 <= hours <= 12:
+            return round(hours * 60), []
+    compact = _HOUR_COMPACT_RE.search(folded)
+    if compact:
+        hours = int(compact.group(1))
+        if 10 <= hours <= 23:
+            return None, [{
+                "field": "duration",
+                "value": compact.group(0),
+                "reason": "could be duration or start time",
+                "question": f"Bạn muốn đi trong {hours} tiếng hay bắt đầu lúc {hours}h?",
+            }]
+        if 1 <= hours <= 9:
+            return hours * 60, []
+    return None, []
+
+
+def _extract_purpose(folded: str) -> str | None:
+    for key in ("healing", "beach", "mountain", "cafe", "food", "general_travel"):
+        spec = THEMES[key]
+        if any(_contains_term(folded, term) for term in spec.terms):
+            return key
+    return None
+
+
+def _extract_people(folded: str) -> int | None:
+    match = _PEOPLE_RE.search(folded)
+    if match:
+        return int(match.group(1))
+    for phrase, count in _PEOPLE_WORDS.items():
+        if phrase in folded:
+            return count
+    return None
+
+
+def _rule_extract(context: str) -> dict:
+    folded = _fold(context)
+    window = _extract_time_window(folded)
+    days = _extract_days(folded)
+    minutes, ambiguities = _extract_duration_minutes(folded, window is not None)
+    if days:
+        minutes = None
+        ambiguities = [item for item in ambiguities if item.get("field") != "duration"]
     return {
-        "schema_version": "intent-parse-v2",
-        "extraction_source": "fallback_unavailable",
-        "status": "ask_user_missing_fields",
-        "question": "Mình chưa đọc được yêu cầu đủ chắc chắn. Bạn cho biết điểm đến, thời lượng và số người nhé?",
-        "missing_fields": ["destination", "duration", "people"],
-        "ambiguities": [],
-        "validation_errors": [{
-            "field": "intent",
-            "code": "ai_intent_unavailable",
-            "message": "AI intent normalization không khả dụng hoặc trả schema không hợp lệ; backend không tự suy đoán bằng regex.",
-        }],
-        "suggestions": [],
-        "parsed": {
-            "destination": None,
-            "trip_purpose": None,
-            "primary_intent": None,
-            "planner_mode": "needs_clarification",
-            "duration": None,
-            "duration_value": None,
-            "duration_unit": None,
-            "duration_minutes": None,
-            "duration_days": None,
-            "time_window": None,
-            "people": None,
-            "budget": None,
-            "date": None,
-            "allowed_place_themes": [],
-            "avoid_place_themes": [],
-            "confidence": "low",
-        },
+        "destination": _find_destination(folded),
+        "purpose": _extract_purpose(folded),
+        "days": days,
+        "minutes": minutes,
+        "window": window,
+        "raw_window": window,
+        "people": _extract_people(folded),
+        "ambiguities": ambiguities,
+    }
+
+
+def rule_structured_intent(context: str) -> dict:
+    rules = _rule_extract(context)
+    destination = rules["destination"]
+    duration, duration_unit, duration_value, planner_mode, duration_minutes = _duration_shape(
+        rules["days"], rules["minutes"], rules["window"]
+    )
+    return {
+        "destination": {"name": destination.name, "lat": destination.lat, "lng": destination.lng} if destination else None,
+        "trip_purpose": rules["purpose"],
+        "planner_mode": planner_mode,
+        "duration": duration,
+        "duration_value": duration_value,
+        "duration_unit": duration_unit,
+        "duration_minutes": duration_minutes,
+        "duration_days": rules["days"],
+        "time_window": rules["window"],
+        "people": rules["people"],
     }
 
 
@@ -494,9 +669,9 @@ def _normalize_duration(value: object, unit: object) -> tuple[int | None, int | 
     if number is None or not isinstance(unit, str):
         return None, None
     if unit == "week":
-        return min(MAX_TRIP_DAYS, round(number * 7)), None
+        return min(MAX_ASKED_DAYS, round(number * 7)), None
     if unit == "day":
-        return min(MAX_TRIP_DAYS, round(number)), None
+        return min(MAX_ASKED_DAYS, round(number)), None
     if unit == "hour":
         return None, round(number * 60)
     if unit == "minute":
@@ -523,22 +698,28 @@ def _normalize_ambiguities(value: object) -> list[dict]:
     return ambiguities
 
 
-def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dict:
-    payload = AIPlanningIntentPayload.model_validate(payload).model_dump(exclude_none=True)
-    purpose = _coerce_purpose(payload.get("trip_purpose"))
-    destination = _resolve_destination(payload.get("destination_text"))
-    raw_window = payload.get("time_window")
-    window = _normalize_time_window(raw_window)
-    days, minutes = _normalize_duration(payload.get("duration_value"), payload.get("duration_unit"))
-    if window:
-        minutes = None
+def _destination_mentioned(folded: str, destination: IntentDestination) -> bool:
+    if _contains_term(folded, destination.name) or _fold(destination.name) in folded:
+        return True
+    return any(_contains_term(folded, alias) for alias in DESTINATION_ALIASES.get(destination.name, ()))
+
+
+def _build_intent_result(
+    *,
+    locale: str,
+    source: str,
+    purpose: str | None,
+    destination: IntentDestination | None,
+    days: int | None,
+    minutes: int | None,
+    window: dict | None,
+    raw_window: object,
+    people: int | None,
+    budget: int | None,
+    ambiguities: list[dict],
+) -> dict:
     duration, duration_unit, duration_value, planner_mode, duration_minutes = _duration_shape(days, minutes, window)
-    people = _coerce_int(payload.get("people"))
-    budget = _coerce_int(payload.get("budget"))
-    ambiguities = _normalize_ambiguities(payload.get("ambiguities"))
-
     spec = THEMES.get(purpose or "")
-
     missing: list[str] = []
     validation_errors: list[dict] = []
     window_error = _time_window_validation_error(raw_window) if raw_window and not window else None
@@ -576,7 +757,7 @@ def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dic
     elif ambiguities and ambiguities[0].get("question"):
         question = ambiguities[0]["question"]
     elif "destination" in missing:
-        question = "Bạn muốn đi ở đâu? Mình gợi ý vài điểm phù hợp để bạn chọn." if suggestions else ("Bạn muốn đi điểm đến/thành phố nào?" if locale == "vi" else "Which destination or city would you like to visit?")
+        question = _destination_ask_question(locale, purpose, suggestions)
     elif "duration" in missing:
         question = "Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?" if locale == "vi" else "How long do you plan to stay: a few hours, 1 day, or multiple days?"
     elif "people" in missing:
@@ -587,7 +768,7 @@ def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dic
         parsed_destination = {"name": destination.name, "lat": destination.lat, "lng": destination.lng}
     return {
         "schema_version": "intent-parse-v2",
-        "extraction_source": "ai",
+        "extraction_source": source,
         "status": "ask_user_missing_fields" if missing else "ready_to_plan",
         "question": question,
         "missing_fields": missing,
@@ -611,9 +792,74 @@ def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dic
             "allowed_place_themes": list(spec.allowed_place_themes) if spec else [],
             "avoid_place_themes": list(spec.avoid_place_themes) if spec else [],
             "confidence": "high" if destination or purpose or days or window or minutes else "low",
-            "extraction_source": "ai",
+            "extraction_source": source,
         },
     }
+
+
+def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dict:
+    payload = AIPlanningIntentPayload.model_validate(payload).model_dump(exclude_none=True)
+    rules = _rule_extract(context)
+    folded = _fold(context)
+    purpose = rules.get("purpose") or _coerce_purpose(payload.get("trip_purpose"))
+    destination = rules.get("destination")
+    if not destination:
+        ai_destination = _resolve_destination(payload.get("destination_text"))
+        if ai_destination and _destination_mentioned(folded, ai_destination):
+            destination = ai_destination
+    window = rules.get("window")
+    raw_window = rules.get("raw_window") or payload.get("time_window")
+    if window is None:
+        window = _normalize_time_window(payload.get("time_window"))
+    days = rules.get("days")
+    minutes = rules.get("minutes")
+    if days is None and minutes is None and window is None:
+        days, minutes = _normalize_duration(payload.get("duration_value"), payload.get("duration_unit"))
+        if days and not _DAY_COUNT_RE.search(folded) and not any(phrase in folded for phrase in _DAY_WORDS):
+            days = None
+        if minutes and not _HOUR_SPAN_RE.search(folded) and not _HOUR_COMPACT_RE.search(folded):
+            minutes = None
+    if window:
+        minutes = None
+    people = rules.get("people")
+    if people is None:
+        ai_people = _coerce_int(payload.get("people"))
+        if ai_people and (_PEOPLE_RE.search(folded) or any(phrase in folded for phrase in _PEOPLE_WORDS)):
+            people = ai_people
+    budget = _coerce_int(payload.get("budget"))
+    ambiguities = rules.get("ambiguities") or []
+    if not ambiguities:
+        ambiguities = _normalize_ambiguities(payload.get("ambiguities"))
+    return _build_intent_result(
+        locale=locale,
+        source="ai",
+        purpose=purpose,
+        destination=destination,
+        days=days,
+        minutes=minutes,
+        window=window,
+        raw_window=raw_window,
+        people=people,
+        budget=budget,
+        ambiguities=ambiguities,
+    )
+
+
+def _result_from_rules(context: str, locale: str = "vi") -> dict:
+    rules = _rule_extract(context)
+    return _build_intent_result(
+        locale=locale,
+        source="rules",
+        purpose=rules.get("purpose"),
+        destination=rules.get("destination"),
+        days=rules.get("days"),
+        minutes=rules.get("minutes"),
+        window=rules.get("window"),
+        raw_window=rules.get("raw_window"),
+        people=rules.get("people"),
+        budget=None,
+        ambiguities=rules.get("ambiguities") or [],
+    )
 
 
 def parse_intent(context: str, locale: str = "vi", extractor=None) -> dict:
@@ -625,6 +871,4 @@ def parse_intent(context: str, locale: str = "vi", extractor=None) -> dict:
                 return _normalize_ai_intent(context, payload, locale)
         except (RuntimeError, TypeError, ValueError, ValidationError):
             pass
-    result = _fallback_parse_intent(context, locale)
-    result["parsed"]["extraction_source"] = result["extraction_source"]
-    return result
+    return _result_from_rules(context, locale)

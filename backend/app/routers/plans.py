@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 from asyncio import to_thread
@@ -11,9 +12,11 @@ from app.config import settings
 from app.data import PLACES, Place, image_for
 from app.pipeline.planner import (
     COPY,
+    LONG_TRIP_DAYS,
     PipelineUnavailable,
     _effective_hours,
     _request_understanding,
+    _trip_timing,
     build_plan,
     missing_required_inputs,
     travel_minutes,
@@ -94,6 +97,19 @@ def sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+async def _keepalive_until(task: asyncio.Task):
+    try:
+        while True:
+            done, _pending = await asyncio.wait({task}, timeout=8.0)
+            if done:
+                return
+            yield ": keepalive\n\n"
+    except BaseException:
+        if not task.done():
+            task.cancel()
+        raise
+
+
 @router.get("/notifications")
 def notifications(
     x_session_id: str | None = Header(default=None),
@@ -157,8 +173,11 @@ async def generate(payload: PlanRequest, request: Request):
 
     async def stream():
         yield sse("status", {"status": "finding_places"})
-        yield sse("status", {"status": "routing_plan"})
         try:
+            timing = await to_thread(_trip_timing, payload)
+            if timing.days >= LONG_TRIP_DAYS:
+                yield sse("status", {"status": "long_trip_wait"})
+            yield sse("status", {"status": "routing_plan"})
             understanding = await to_thread(_request_understanding, payload)
             required = await to_thread(missing_required_inputs, payload, understanding)
             if required["missing_fields"]:
@@ -173,9 +192,18 @@ async def generate(payload: PlanRequest, request: Request):
                     },
                 )
                 return
-            plan = await to_thread(build_plan, payload, None, understanding)
-            plan = await to_thread(enrich_plan_with_google, plan)
+            build_task = asyncio.create_task(to_thread(build_plan, payload, None, understanding))
+            async for chunk in _keepalive_until(build_task):
+                yield chunk
+            plan = build_task.result()
+            enrich_task = asyncio.create_task(to_thread(enrich_plan_with_google, plan))
+            async for chunk in _keepalive_until(enrich_task):
+                yield chunk
+            plan = enrich_task.result()
             _append_turn(plan, "user", payload.context)
+            greeting = plan.get("loi_chao_chang")
+            if isinstance(greeting, str) and greeting.strip():
+                _append_turn(plan, "assistant", greeting.strip())
             item = store.save(session_id, plan, payload.model_dump(mode="json"))
             if generate_nonce:
                 store.set_nonce(GENERATE_NONCE_SCOPE, generate_nonce, item.token)
@@ -186,7 +214,11 @@ async def generate(payload: PlanRequest, request: Request):
         except (PipelineUnavailable, RuntimeError) as exc:
             yield sse("error", {"code": "503", "detail": str(exc)})
 
-    return StreamingResponse(stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/plans/history")

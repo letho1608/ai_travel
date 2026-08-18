@@ -126,6 +126,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_phan_hoi_phien
   ON phan_hoi_chuyen_di(ke_hoach_id,ma_phien) WHERE nguoi_dung_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_phan_hoi_nguoi_dung
   ON phan_hoi_chuyen_di(ke_hoach_id,nguoi_dung_id) WHERE nguoi_dung_id IS NOT NULL;
+CREATE TABLE IF NOT EXISTS danh_gia_nguoi_dung (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ten text NOT NULL,
+  lien_he text NOT NULL,
+  diem smallint NOT NULL CHECK (diem BETWEEN 1 AND 5),
+  danh_muc text NOT NULL DEFAULT 'trai_nghiem',
+  tieu_de text NOT NULL DEFAULT '',
+  noi_dung text NOT NULL,
+  trang_thai text NOT NULL DEFAULT 'new',
+  phan_hoi_admin text,
+  ma_phien text,
+  nguoi_dung_id uuid REFERENCES nguoi_dung(id),
+  ngay_tao timestamptz NOT NULL DEFAULT now(),
+  CHECK (trang_thai IN ('new','reviewed','resolved','hidden'))
+);
+CREATE INDEX IF NOT EXISTS ix_danh_gia_nguoi_dung_ngay
+  ON danh_gia_nguoi_dung(ngay_tao DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ho_so_phien
   ON ho_so_so_thich(ma_phien) WHERE id_nguoi_dung IS NULL;

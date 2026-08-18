@@ -95,8 +95,21 @@ export default function FeedbackPage() {
           ma_phien: getSessionId(),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Không thể gửi đánh giá.");
+      const text = await res.text();
+      let data: { detail?: string | Array<{ msg?: string }>; review?: Review } = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error("Không gửi được đánh giá. Vui lòng thử lại sau.");
+      }
+      if (!res.ok) {
+        const detail = data.detail;
+        throw new Error(
+          typeof detail === "string"
+            ? detail
+            : "Không thể gửi đánh giá. Kiểm tra lại nội dung và thử lại.",
+        );
+      }
 
       setMessage({ text: "Cảm ơn bạn đã gửi đánh giá và đóng góp quý báu cho cộng đồng!", type: "success" });
       setTitle("");

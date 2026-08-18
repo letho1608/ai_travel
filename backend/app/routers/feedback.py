@@ -76,12 +76,19 @@ def list_feedback(
         min_rating=min_rating,
         limit=limit,
     )
+    if not status:
+        reviews = [item for item in reviews if item.get("status") != "hidden"]
+    public_reviews = [
+        {key: value for key, value in item.items() if key not in {"contact", "session_id", "user_id"}}
+        for item in reviews
+    ]
     all_reviews = store.list_user_reviews(limit=500)
-    avg_score = round(sum(r["rating"] for r in all_reviews) / len(all_reviews), 1) if all_reviews else 5.0
+    visible = [item for item in all_reviews if item.get("status") != "hidden"]
+    avg_score = round(sum(r["rating"] for r in visible) / len(visible), 1) if visible else 5.0
     return {
-        "reviews": reviews,
-        "total": len(reviews),
-        "all_total": len(all_reviews),
+        "reviews": public_reviews,
+        "total": len(public_reviews),
+        "all_total": len(visible),
         "average_rating": avg_score,
     }
 

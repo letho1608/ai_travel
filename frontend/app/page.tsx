@@ -199,9 +199,8 @@ export default function Home() {
               ✨ Trợ lý Du lịch AI Thông minh · Việt Nam
             </span>
             <h1>
-              Lên lịch trình thông minh,
-              <br />
-              khám phá trọn vẹn Việt Nam.
+              <span className="hero-line">Lên lịch trình thông minh,</span>
+              <span className="hero-line">khám phá trọn vẹn Việt Nam.</span>
             </h1>
             <p className="lead">
               Chỉ cần nhập mong muốn của bạn, AI sẽ tự động phân tích toạ độ, sắp xếp tuyến đường di chuyển tối ưu và dự toán ngân sách chi tiết từng bữa ăn.

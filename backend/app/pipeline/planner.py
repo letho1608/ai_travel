@@ -28,6 +28,8 @@ from app.pipeline.routing import (
     haversine_km,
     is_routable,
     nearest_neighbor,
+    public_transit_policy_status,
+    route_calibration_status,
     travel_minutes,
     travel_matrix,
     two_opt,
@@ -38,7 +40,7 @@ from app.pipeline.cp_sat_solver import (
     select_places_with_cp_sat,
     verify_fixed_schedule_with_cp_sat,
 )
-from app.pipeline.intent_parse import place_matches_policy, place_policy_score
+from app.pipeline.intent_parse import place_matches_policy, place_policy_score, rule_structured_intent
 from app.schemas import AIExtractPayload, PlanRequest
 from pydantic import ValidationError
 from app.pipeline.solar import sunset_for_date
@@ -56,6 +58,12 @@ LIMITS = {
     # ~8 stops/day including midday rest + evening, matching denser full days.
     "nhieu_ngay": (16, 900, 2),
 }
+LONG_TRIP_DAYS = 8
+TRAVEL_MATRIX_PLACE_CAP = 25
+
+
+def _is_long_trip(days: int) -> bool:
+    return days >= LONG_TRIP_DAYS
 
 
 def _title_prefix(locale: str) -> str:
@@ -157,6 +165,8 @@ def _finalize_plan_title(
 
 
 MAX_TRIP_DAYS = 30
+MAX_ASKED_DAYS = 365
+_ASKED_DAY_COUNT_RE = re.compile(r"\b([1-9]\d{0,2})\s*(?:ngay|days?)\b", re.IGNORECASE)
 _CLOCK_RANGE_RE = re.compile(
     r"(?:(?:tu|from)\s+)?(?:luc\s+)?"
     r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
@@ -206,6 +216,75 @@ class TripTiming(NamedTuple):
     start_date: date | None
     clock_label: str | None
     date_label: str | None
+    asked_days: int
+
+
+def _parse_asked_day_count(folded: str) -> int | None:
+    match = _ASKED_DAY_COUNT_RE.search(folded)
+    if not match:
+        return None
+    return min(MAX_ASKED_DAYS, max(1, int(match.group(1))))
+
+
+def _vnd_brief(amount: int, locale: str) -> str:
+    if amount >= 1_000_000 and amount % 1_000_000 == 0:
+        trieu = amount // 1_000_000
+        return f"{trieu} triệu" if locale == "vi" else f"{trieu} million VND"
+    if locale == "vi":
+        return f"{amount:,}đ".replace(",", ".")
+    return f"{amount:,} VND"
+
+
+def _overflow_leg_copy(
+    request: PlanRequest,
+    asked_days: int,
+    planned_days: int,
+    destination_label: str,
+) -> dict[str, str] | None:
+    if asked_days <= planned_days:
+        return None
+    dest = destination_label if destination_label and destination_label not in {"Việt Nam", "Vietnam"} else (
+        "chặng này" if request.ngon_ngu == "vi" else "this destination"
+    )
+    folded = " ".join(_ascii_fold(request.context).split())
+    healing = (
+        "chua lanh" in folded
+        or "healing" in folded
+        or str(_policy_get(request.intent_policy, "primary_intent") or "") == "healing"
+    )
+    stated_budget = bool(
+        re.search(r"\b\d+(?:[.,]\d+)?\s*(?:trieu|tr|nghin|ngan|dong|vnd|million)\b", folded)
+        or "ngan sach" in folded
+        or "budget" in folded
+    )
+    first_budget = max(50_000, round(request.ngan_sach * planned_days / asked_days)) if asked_days else request.ngan_sach
+    if request.ngon_ngu == "vi":
+        pace = "theo phong cách chữa lành bền vững" if healing else "theo nhịp bền vững, không nhồi nhét"
+        note = (
+            f'Úi, có vẻ như kế hoạch {asked_days} ngày của chúng mình hơi "khủng" so với hệ thống rồi '
+            f"(giới hạn hiện tại là {MAX_TRIP_DAYS} ngày cho mỗi chặng)! Nhưng không sao, mình vẫn xếp {pace} nhé."
+        )
+        budget_bit = (
+            f" Với ngân sách {_vnd_brief(request.ngan_sach, 'vi')} cho {asked_days} ngày "
+            f"(khoảng {_vnd_brief(first_budget, 'vi')} cho chặng đầu), lịch được chia đều để đi thoải mái."
+            if stated_budget
+            else " Lịch được chia đều để đi thoải mái chứ không nhồi hết vào vài ngày đầu."
+        )
+        summary = f"Mình đã tạo lịch {planned_days} ngày đầu tiên tại {dest} để bạn xem trước.{budget_bit}"
+    else:
+        pace = "in a slower, more sustainable rhythm" if healing else "at a sustainable pace, without cramming"
+        note = (
+            f"Whoa — a {asked_days}-day plan is a bit huge for the system right now "
+            f"(the current limit is {MAX_TRIP_DAYS} days per leg). No worries, we'll still plan {pace}."
+        )
+        budget_bit = (
+            f" With a budget of {_vnd_brief(request.ngan_sach, 'en')} for {asked_days} days "
+            f"(about {_vnd_brief(first_budget, 'en')} for this first leg), the days are paced so you can actually enjoy them."
+            if stated_budget
+            else " The days are paced evenly so the first week is not overloaded."
+        )
+        summary = f"I've built the first {planned_days} days in {dest} for you to preview.{budget_bit}"
+    return {"note": note, "summary": summary, "greeting": f"{note}\n\n{summary}"}
 
 
 def _hour_with_meridiem(hour: int, meridiem: str | None) -> int:
@@ -353,6 +432,13 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
     structured_duration_minutes = int(_policy_get(policy, "duration_minutes") or 0) if policy else 0
     structured_duration_days = int(_policy_get(policy, "duration_days") or 0) if policy else 0
     structured_window = _structured_time_window(policy)
+    text_intent = rule_structured_intent(request.context)
+    if not structured_duration_days and text_intent.get("duration_days"):
+        structured_duration_days = int(text_intent["duration_days"])
+    if not structured_duration_minutes and text_intent.get("duration_minutes"):
+        structured_duration_minutes = int(text_intent["duration_minutes"])
+    if not structured_window and isinstance(text_intent.get("time_window"), dict):
+        structured_window = text_intent["time_window"]
 
     if structured_duration_minutes:
         max_minutes = max(45, min(structured_duration_minutes, 16 * 60))
@@ -360,6 +446,11 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
         clock_label = f"{hours:g} giờ" if request.ngon_ngu == "vi" else f"{hours:g} hours"
     if structured_duration_days:
         days = min(MAX_TRIP_DAYS, max(1, structured_duration_days))
+        # Multi-day requests keep a clock window only when this same sentence also has hours.
+        if days >= 2 and structured_window and not text_intent.get("time_window"):
+            structured_window = None
+            if structured_duration_minutes and structured_duration_minutes <= 8 * 60:
+                structured_duration_minutes = 0
     if structured_window:
         span = int(structured_window.get("minutes") or 0)
         start_h = int(structured_window.get("start_hour") or 0)
@@ -456,22 +547,27 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
                     start_date = request.ngay_di or left
                     date_label = f"{span_days} ngày"
 
-    labeled_days = None if structured_duration_days else re.search(r"\b([2-9]|[1-2][0-9]|30)\s*(?:ngay|days?)\b", folded)
+    labeled_days = None if date_label else _parse_asked_day_count(folded)
     if labeled_days and not date_label:
-        days = min(MAX_TRIP_DAYS, max(days, int(labeled_days.group(1))))
+        days = min(MAX_TRIP_DAYS, labeled_days)
 
     if start_date is None and not date_label:
         relative = _relative_trip_date(folded, today, request.ngon_ngu)
         if relative:
             start_date, date_label = relative
 
-    if request.thoi_luong != "nhieu_ngay" and not date_label and not structured_duration_days:
+    if days >= 2:
+        pass
+    elif request.thoi_luong != "nhieu_ngay" and not date_label and not structured_duration_days:
         days = 1
-    return TripTiming(start_hour, start_minute, max_minutes, days, start_date, clock_label, date_label)
+    asked_days = max(days, labeled_days or 0, structured_duration_days or 0)
+    if asked_days > MAX_TRIP_DAYS:
+        days = MAX_TRIP_DAYS
+    return TripTiming(start_hour, start_minute, max_minutes, days, start_date, clock_label, date_label, asked_days)
 
 
 def _chunk_sights_by_day(sights: list[Place], days: int) -> list[list[Place]]:
-    """Cluster sights geographically per day to eliminate ping-pong routing across distant areas."""
+    """Cluster sights geographically per day, then even out so long trips are not front-loaded."""
     if days <= 1:
         return [sights]
     if not sights:
@@ -479,8 +575,6 @@ def _chunk_sights_by_day(sights: list[Place], days: int) -> list[list[Place]]:
     if len(sights) <= days:
         return [[p] for p in sights] + [[] for _ in range(days - len(sights))]
 
-    # Spatial clustering by anchor proximity
-    # Select seeds that are farthest apart
     seeds = [sights[0]]
     for _ in range(1, days):
         farthest_place = max(
@@ -489,7 +583,6 @@ def _chunk_sights_by_day(sights: list[Place], days: int) -> list[list[Place]]:
         )
         seeds.append(farthest_place)
 
-    # Assign each place to nearest seed
     day_clusters: list[list[Place]] = [[] for _ in range(days)]
     for place in sights:
         nearest_idx = min(
@@ -498,6 +591,31 @@ def _chunk_sights_by_day(sights: list[Place], days: int) -> list[list[Place]]:
         )
         day_clusters[nearest_idx].append(place)
 
+    while any(not cluster for cluster in day_clusters):
+        empty = next(index for index, cluster in enumerate(day_clusters) if not cluster)
+        richest = max(range(days), key=lambda index: len(day_clusters[index]))
+        if len(day_clusters[richest]) <= 1:
+            break
+        day_clusters[empty].append(day_clusters[richest].pop())
+
+    cap = max(1, (len(sights) + days - 1) // days)
+    for _ in range(len(sights)):
+        heavy_idx = max(range(days), key=lambda index: len(day_clusters[index]))
+        if len(day_clusters[heavy_idx]) <= cap:
+            break
+        light_idx = min(range(days), key=lambda index: (len(day_clusters[index]), index))
+        if light_idx == heavy_idx or len(day_clusters[light_idx]) >= cap:
+            break
+        heavy = day_clusters[heavy_idx]
+        light = day_clusters[light_idx]
+        if light:
+            dest_lat = sum(place.lat for place in light) / len(light)
+            dest_lng = sum(place.lng for place in light) / len(light)
+            mover = min(heavy, key=lambda place: haversine_km(place.lat, place.lng, dest_lat, dest_lng))
+        else:
+            mover = heavy[-1]
+        heavy.remove(mover)
+        light.append(mover)
     return day_clusters
 
 
@@ -2056,6 +2174,14 @@ def _meals_per_day(thoi_luong: str, request: PlanRequest | None = None) -> tuple
     end = start + timing.max_minutes
     if timing.max_minutes <= 180:
         return ()
+    if timing.days >= 8:
+        meals = ("trua",)
+        kept = []
+        start = timing.start_hour * 60 + timing.start_minute
+        end = start + timing.max_minutes
+        if start < 14 * 60 and end > 11 * 60:
+            kept.append("trua")
+        return tuple(kept)
     kept: list[str] = []
     if "trua" in meals and start < 14 * 60 and end > 11 * 60:
         kept.append("trua")
@@ -2340,17 +2466,37 @@ def _sight_total(count: int, meals_total: int, thoi_luong: str) -> int:
 
 def _min_plan_slots(thoi_luong: str, days: int | None = None) -> int:
     _, _, known_days = LIMITS[thoi_luong]
-    if days is not None and days > known_days:
-        return 2 * days
-    return 4 if known_days == 1 else 6
+    actual_days = days if days is not None else known_days
+    if thoi_luong == "vai_gio":
+        return 1
+    if actual_days <= 1:
+        return 4
+    if actual_days == 2:
+        return 6
+    return actual_days
 
 
 def _max_plan_slots(thoi_luong: str, days: int | None = None) -> int:
     count, _, known_days = LIMITS[thoi_luong]
-    # Buffer for midday rest + evening (+ optional fill) each day.
-    if days is not None and days > known_days:
-        return 8 * days
+    actual_days = days if days is not None else known_days
+    if actual_days > known_days or actual_days > 1:
+        return max(count + known_days * 3, 8 * actual_days)
     return count + known_days * 3
+
+
+def _max_day_slots(thoi_luong: str, days: int, max_minutes: int) -> int:
+    """Keep each day full but paced; long trips must not dump the catalog into day 1."""
+    if max_minutes <= 90:
+        return 3
+    if max_minutes <= 240 or thoi_luong == "vai_gio":
+        return 5
+    if days <= 1:
+        return 8
+    if days <= 4:
+        return 7
+    if days <= 7:
+        return 6
+    return 6
 
 
 def _is_evening_place(place: Place) -> bool:
@@ -2486,8 +2632,8 @@ def _build_day_route(
 ) -> list[tuple[Place, str | None]]:
     if request.thoi_luong != "vai_gio":
         route = _interleave_meals(day_sights, day_meals)
-        anchor = _anchor_for_places(day_sights, _lodging_anchor(request))
         timing = _trip_timing(request)
+        anchor = _anchor_for_places(day_sights, _lodging_anchor(request))
         window_end = timing.start_hour * 60 + timing.start_minute + timing.max_minutes
         lunch_at = next((i for i, (_, meal) in enumerate(route) if meal == "trua"), None)
         if request.thoi_luong in {"ca_ngay", "nhieu_ngay"} and remaining_budget > 0 and lunch_at is not None and window_end > 13 * 60:
@@ -2498,7 +2644,8 @@ def _build_day_route(
                 used_names.update(_place_name_keys(rest))
                 remaining_budget -= rest.cost
             # Keep one more afternoon attraction when the day still looks thin.
-            if len(day_sights) + len(day_meals) <= 5:
+            thin_day = len(day_sights) + len(day_meals) <= (3 if _is_long_trip(timing.days) else 5)
+            if thin_day:
                 extra = _choose_extra_sight(request, used, anchor, seed + 1, remaining_budget, used_names)
                 if extra:
                     insert_at = lunch_at + (2 if rest else 1)
@@ -2520,10 +2667,12 @@ def _build_day_route(
                     used.add(evening.id)
                     used_names.update(_place_name_keys(evening))
         return route
-    sights = day_sights[:2]
+    timing = _trip_timing(request)
+    sight_cap = 2 if timing.max_minutes <= 90 else 3 if timing.max_minutes <= 150 else min(4, max(2, timing.max_minutes // 45))
+    sights = day_sights[:sight_cap]
     anchor = _anchor_for_places(sights, _lodging_anchor(request))
     refresh = None
-    if _wants_coffee(request) or (request.thoi_luong == "vai_gio" and _trip_timing(request).max_minutes > 180):
+    if _wants_coffee(request) or (request.thoi_luong == "vai_gio" and timing.max_minutes >= 150):
         refresh = _choose_refreshment(request, used, anchor, seed, remaining_budget, used_names)
         if refresh:
             used.add(refresh.id)
@@ -2531,13 +2680,10 @@ def _build_day_route(
     if not day_meals:
         return [(place, None) for place in sights]
     lunch_type, lunch_place = day_meals[0]
-    route: list[tuple[Place, str | None]] = []
-    if sights:
-        route.append((sights[0], None))
+    route: list[tuple[Place, str | None]] = [(place, None) for place in sights]
     if refresh:
-        route.append((refresh, None))
-    if len(sights) > 1:
-        route.append((sights[1], None))
+        insert_at = 1 if route else 0
+        route.insert(insert_at, (refresh, None))
     route.append((lunch_place, lunch_type))
     return route
 
@@ -2715,27 +2861,34 @@ def _outdoor_afternoon_window(base: datetime) -> tuple[datetime, datetime]:
 
 
 def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest) -> int:
+    short_window = request.thoi_luong == "vai_gio" or _trip_timing(request).max_minutes <= 180
     if meal_type:
         minutes = min(MEAL_DURATION[meal_type], place.duration_min, 90)
-        if request.thoi_luong == "vai_gio":
+        if short_window:
             minutes = min(minutes, 45)
         return max(MIN_VISIT_MINUTES, minutes)
 
     # Specific realistic durations for major landmark categories
     folded_name = _ascii_fold(place.name)
     if any(k in folded_name for k in ["ba na hills", "vinwonders", "sun world", "fansipan"]):
-        return 240
-    if place.kind == "bao_tang" or any(k in folded_name for k in ["dai noi", "dinh doc lap", "hoang thanh"]):
-        return max(90, place.duration_min)
-    if place.kind in {"cau", "tuong_dai"} or any(k in folded_name for k in ["cau rong", "cau vang", "cot co"]):
-        return 35
-
-    tip = _guidance(place)
-    minutes = tip.duration_min if tip and tip.duration_min else place.duration_min
-    if request.thoi_luong == "vai_gio":
-        minutes = min(minutes, 35)
+        minutes = 240
+    elif place.kind == "bao_tang" or any(k in folded_name for k in ["dai noi", "dinh doc lap", "hoang thanh"]):
+        minutes = max(90, place.duration_min)
+    elif place.kind in {"cau", "tuong_dai"} or any(k in folded_name for k in ["cau rong", "cau vang", "cot co"]):
+        minutes = 35
+    else:
+        tip = _guidance(place)
+        minutes = tip.duration_min if tip and tip.duration_min else place.duration_min
+    if short_window and minutes < 180:
+        window_minutes = _trip_timing(request).max_minutes
+        if window_minutes <= 90:
+            minutes = min(minutes, 35)
+        elif window_minutes <= 150:
+            minutes = min(max(minutes, 40), 50)
+        else:
+            minutes = min(max(minutes, 45), 70)
         if place.kind == "cafe":
-            minutes = min(minutes, 30)
+            minutes = min(minutes, 45 if window_minutes > 90 else 30)
     return max(MIN_VISIT_MINUTES, minutes)
 
 
@@ -2874,12 +3027,31 @@ def _attach_evidence(plan: dict, request: PlanRequest, places: tuple[Place, ...]
     all_places = [by_id[slot["dia_diem_id"]] for day in plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") in by_id]
     plan["bang_chung_quyet_dinh"] = decision_log
     plan["chinh_sach_do_cu_du_lieu"] = DATA_STALENESS_POLICY
-    plan["bang_thoi_gian_di_chuyen"] = {
-        "trang_thai": TRAVEL_ESTIMATE_POLICY["status"],
-        "cong_thuc": TRAVEL_ESTIMATE_POLICY["formula"],
-        "ghi_chu": TRAVEL_ESTIMATE_POLICY["note"],
-        "ma_tran": travel_matrix(all_places),
-    }
+    if len(all_places) > TRAVEL_MATRIX_PLACE_CAP:
+        plan["bang_thoi_gian_di_chuyen"] = {
+            "trang_thai": TRAVEL_ESTIMATE_POLICY["status"],
+            "cong_thuc": TRAVEL_ESTIMATE_POLICY["formula"],
+            "ghi_chu": TRAVEL_ESTIMATE_POLICY["note"],
+            "ma_tran": {
+                "_metadata": {
+                    "live_provider_status": "skipped_long_trip",
+                    "provider": TRAVEL_ESTIMATE_POLICY["live_provider"]["provider"],
+                    "error": None,
+                    "policy": TRAVEL_ESTIMATE_POLICY["live_provider"],
+                    "public_transit_policy": public_transit_policy_status(),
+                    "route_calibration": route_calibration_status(),
+                    "place_count": len(all_places),
+                    "note": "Omitted full pairwise matrix for long itineraries.",
+                }
+            },
+        }
+    else:
+        plan["bang_thoi_gian_di_chuyen"] = {
+            "trang_thai": TRAVEL_ESTIMATE_POLICY["status"],
+            "cong_thuc": TRAVEL_ESTIMATE_POLICY["formula"],
+            "ghi_chu": TRAVEL_ESTIMATE_POLICY["note"],
+            "ma_tran": travel_matrix(all_places),
+        }
 
 
 def _quality_report(plan: dict, request: PlanRequest, trusted_ids: set[str], places: tuple[Place, ...]) -> dict:
@@ -2901,45 +3073,46 @@ def _quality_report(plan: dict, request: PlanRequest, trusted_ids: set[str], pla
     feasibility_errors = validate_plan(plan, trusted_ids, request)
     cp_sat = verify_fixed_schedule_with_cp_sat(plan, by_id, travel_minutes)
     day_optimizer_reports = []
-    for day in plan.get("ngay", []):
-        day_slots = [slot for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") in by_id]
-        day_places = [by_id[slot["dia_diem_id"]] for slot in day_slots]
-        if not day_places:
-            continue
-        starts = [_parse_slot_clock(slot["bat_dau"]) for slot in day_slots]
-        ends = [_parse_slot_clock(slot["ket_thuc"]) for slot in day_slots]
-        durations = {slot["dia_diem_id"]: _slot_duration_minutes(slot) for slot in day_slots}
-        scores = {
-            slot["dia_diem_id"]: int(
-                ((slot.get("bang_chung") or {}).get("xep_hang") or {}).get("diem_tong", 0) * 100
-            )
-            for slot in day_slots
-        }
-        result = optimize_day_schedule_with_cp_sat(
-            day_places,
-            min(starts) if starts else 8 * 60,
-            max(ends) if ends else 22 * 60,
-            durations,
-            scores,
-            travel_minutes,
-            min_places=len(day_places),
-            max_places=len(day_places),
-            budget_per_person=request.ngan_sach,
-            max_candidates=50,
-        )
-        day_optimizer_reports.append(
-            {
-                "ngay": day.get("thu_tu"),
-                "co_san": result.available,
-                "hop_le": result.feasible,
-                "trang_thai": result.status,
-                "so_ung_vien_xet": result.candidate_count,
-                "selected_ids": list(result.selected_ids),
-                "starts": {key: f"{value // 60:02d}:{value % 60:02d}" for key, value in result.starts.items()},
-                "objective_score": result.objective_score,
-                "chan_bo": list(result.blockers),
+    if not _is_long_trip(len(plan.get("ngay") or [])):
+        for day in plan.get("ngay", []):
+            day_slots = [slot for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") in by_id]
+            day_places = [by_id[slot["dia_diem_id"]] for slot in day_slots]
+            if not day_places:
+                continue
+            starts = [_parse_slot_clock(slot["bat_dau"]) for slot in day_slots]
+            ends = [_parse_slot_clock(slot["ket_thuc"]) for slot in day_slots]
+            durations = {slot["dia_diem_id"]: _slot_duration_minutes(slot) for slot in day_slots}
+            scores = {
+                slot["dia_diem_id"]: int(
+                    ((slot.get("bang_chung") or {}).get("xep_hang") or {}).get("diem_tong", 0) * 100
+                )
+                for slot in day_slots
             }
-        )
+            result = optimize_day_schedule_with_cp_sat(
+                day_places,
+                min(starts) if starts else 8 * 60,
+                max(ends) if ends else 22 * 60,
+                durations,
+                scores,
+                travel_minutes,
+                min_places=len(day_places),
+                max_places=len(day_places),
+                budget_per_person=request.ngan_sach,
+                max_candidates=50,
+            )
+            day_optimizer_reports.append(
+                {
+                    "ngay": day.get("thu_tu"),
+                    "co_san": result.available,
+                    "hop_le": result.feasible,
+                    "trang_thai": result.status,
+                    "so_ung_vien_xet": result.candidate_count,
+                    "selected_ids": list(result.selected_ids),
+                    "starts": {key: f"{value // 60:02d}:{value % 60:02d}" for key, value in result.starts.items()},
+                    "objective_score": result.objective_score,
+                    "chan_bo": list(result.blockers),
+                }
+            )
     release_blockers = []
     if feasibility_errors:
         release_blockers.extend(feasibility_errors)
@@ -3196,7 +3369,9 @@ def _pack_day_slots(
         best_score = -1e9
         best_bounds: tuple[datetime, datetime, int] | None = None
         # Prefer quality constraints first; if nothing fits, relax outdoor windows.
-        for relax in (False, True):
+        # Short/afternoon windows rarely overlap morning preferred hours, so relax immediately.
+        relax_order = (True,) if max_minutes <= 180 or day_start.hour >= 14 else (False, True)
+        for relax in relax_order:
             best_index = -1
             best_score = -1e9
             best_bounds = None
@@ -3358,6 +3533,113 @@ def _parse_slot_clock(value: str) -> int:
     return hour * 60 + minute
 
 
+def _extend_last_slot_to_window_end(slots: list[dict], day_end: datetime, max_extend: int = 80) -> list[dict]:
+    if not slots:
+        return slots
+    last = slots[-1]
+    end_minutes = _parse_slot_clock(last["ket_thuc"])
+    day_end_minutes = day_end.hour * 60 + day_end.minute
+    leftover = day_end_minutes - end_minutes
+    if leftover < 20:
+        return slots
+    by_id = {place.id: place for place in PLACES}
+    place = by_id.get(last["dia_diem_id"])
+    if not place:
+        return slots
+    _, close_hour = _effective_hours(place)
+    new_end = min(end_minutes + min(leftover, max_extend), close_hour * 60, day_end_minutes)
+    if new_end >= end_minutes + 10:
+        last["ket_thuc"] = f"{new_end // 60:02d}:{new_end % 60:02d}"
+    return slots
+
+
+def _fill_trailing_window(
+    slots: list[dict],
+    day_start: datetime,
+    max_minutes: int,
+    request: PlanRequest,
+    copy: tuple[str, ...],
+    llm_details_by_id: dict[str, dict],
+    labels: dict[str, str],
+    scheduled_ids: set[str],
+    scheduled_names: set[str],
+    used_ids: set[str],
+    remaining_budget: int,
+    seed: int,
+    max_slots: int,
+    weather: dict | None = None,
+    solar_context: dict | None = None,
+    behavior_profile: dict | None = None,
+) -> tuple[list[dict], int]:
+    if not slots or len(slots) >= max_slots or max_minutes > 240:
+        return slots, 0
+    day_end = day_start + timedelta(minutes=max_minutes)
+    by_id = {place.id: place for place in PLACES}
+    extra_cost = 0
+    while len(slots) < max_slots:
+        last = slots[-1]
+        leftover = (day_end.hour * 60 + day_end.minute) - _parse_slot_clock(last["ket_thuc"])
+        if leftover < 40:
+            break
+        prev_place = by_id.get(last["dia_diem_id"])
+        if not prev_place:
+            break
+        cursor_minutes = _parse_slot_clock(last["ket_thuc"])
+        cursor = day_start.replace(hour=cursor_minutes // 60, minute=cursor_minutes % 60)
+        options = _extra_sight_candidates(
+            request,
+            used_ids | scheduled_ids,
+            (prev_place.lat, prev_place.lng),
+            seed + len(slots),
+            remaining_budget,
+            scheduled_names,
+        )[:80]
+        added = False
+        for option in options:
+            travel = travel_minutes(prev_place, option)
+            arrive = cursor + timedelta(minutes=travel)
+            bounds = _compute_slot_bounds(
+                option, None, arrive, day_start, day_end, request, relax=True, weather=weather
+            )
+            if not bounds:
+                continue
+            start, end, _visit = bounds
+            if end > day_end:
+                continue
+            mo_ta, ghi_chu = _slot_copy(
+                option, request, copy, llm_details_by_id.get(option.id), None, labels
+            )
+            image_url, image_credit = image_for(option)
+            slots.append({
+                "bat_dau": start.strftime("%H:%M"),
+                "ket_thuc": end.strftime("%H:%M"),
+                "dia_diem_id": option.id,
+                "ten_dia_diem": option.name,
+                "loai": option.kind,
+                "mo_ta": mo_ta,
+                "chi_phi": option.cost * request.so_nguoi,
+                "toa_do": {"lat": option.lat, "lng": option.lng},
+                "nguon": option.source,
+                "nguon_url": source_for(option)[0],
+                "anh": image_url,
+                "anh_nguon": image_credit,
+                "ghi_chu": ghi_chu,
+                "bang_chung": _slot_evidence(
+                    option, request, start, None, weather, solar_context, behavior_profile
+                ),
+            })
+            scheduled_ids.add(option.id)
+            used_ids.add(option.id)
+            scheduled_names.update(_place_name_keys(option))
+            remaining_budget -= option.cost
+            extra_cost += option.cost * request.so_nguoi
+            added = True
+            break
+        if not added:
+            break
+    return _extend_last_slot_to_window_end(slots, day_end), extra_cost
+
+
 def _backfill_day_gaps(
     slots: list[dict],
     day_start: datetime,
@@ -3473,7 +3755,25 @@ def _backfill_day_gaps(
         extra_cost += candidate.cost * request.so_nguoi
         index += 2
     slots = _tighten_day_gaps(slots, day_end)
-    return slots, extra_cost
+    slots, trail_cost = _fill_trailing_window(
+        slots,
+        day_start,
+        max_minutes,
+        request,
+        copy,
+        llm_details_by_id,
+        labels,
+        scheduled_ids,
+        scheduled_names,
+        used_ids,
+        remaining_budget,
+        seed,
+        max_slots,
+        weather,
+        solar_context,
+        behavior_profile,
+    )
+    return slots, extra_cost + trail_cost
 
 
 def _schedule_stop(
@@ -3734,10 +4034,11 @@ def validate_plan(
     slots = [slot for day in plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
     thoi_luong = (request.thoi_luong if request else plan.get("thoi_luong")) or "ca_ngay"
     timing = _trip_timing(request) if request else None
-    min_slots = _min_plan_slots(thoi_luong) if thoi_luong in LIMITS else 4
-    max_slots = _max_plan_slots(thoi_luong) if thoi_luong in LIMITS else 10
+    plan_days = len(plan.get("ngay") or []) or (timing.days if timing else None)
+    min_slots = _min_plan_slots(thoi_luong, plan_days) if thoi_luong in LIMITS else 4
+    max_slots = _max_plan_slots(thoi_luong, plan_days) if thoi_luong in LIMITS else 10
     if timing and timing.max_minutes <= 180:
-        min_slots = min(min_slots, 2)
+        min_slots = min(min_slots, 1)
     if (not allow_below_minimum and len(slots) < min_slots) or len(slots) > max_slots:
         errors.append(f"Kế hoạch phải có {min_slots}–{max_slots} địa điểm")
     if any(slot.get("dia_diem_id") not in trusted_ids for slot in slots):
@@ -4384,9 +4685,8 @@ def _select_sight_places(
             if policy_evidence:
                 evidence["intent_policy"] = policy_evidence
             return _dedupe_places(chosen)[:sight_count], llm_details_by_id, evidence
-    chosen = (
-        _select_ai_places(sight_pool, sight_count, request)
-        or _select_within_budget(sight_pool, sight_count, request.ngan_sach)
+    chosen = _select_ai_places(sight_pool, sight_count, request) or _select_within_budget(
+        sight_pool, sight_count, request.ngan_sach
     )
     chosen = [
         place
@@ -4395,11 +4695,15 @@ def _select_sight_places(
     ]
     evidence: dict[str, object] = {
         "phuong_phap": "fallback_ranked_budget",
-        "cp_sat": {
-            "co_san": cp_selection.available,
-            "trang_thai": cp_selection.status,
-            "chan_bo": list(cp_selection.blockers),
-        },
+        "cp_sat": (
+            {
+                "co_san": cp_selection.available,
+                "trang_thai": cp_selection.status,
+                "chan_bo": list(cp_selection.blockers),
+            }
+            if cp_selection
+            else {"co_san": False, "trang_thai": "skipped_long_trip", "chan_bo": []}
+        ),
         "cp_sat_day_joint": (
             {
                 "co_san": cp_day.available,
@@ -4421,18 +4725,26 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
         raise PipelineUnavailable("Hệ thống đang khởi tạo bản đồ, vui lòng quay lại sau")
     count, default_minutes, _default_days = LIMITS[request.thoi_luong]
     timing = _trip_timing(request)
-    number_of_days = timing.days
+    asked_days = max(timing.asked_days, timing.days)
+    requested_days = asked_days
+    number_of_days = min(max(1, timing.days), MAX_TRIP_DAYS)
     max_minutes = timing.max_minutes
+    if number_of_days >= 2 and max_minutes <= 240 and not (timing.clock_label and "h–" in (timing.clock_label or "")):
+        max_minutes = default_minutes
     if number_of_days > 2:
-        count = max(count, min(8 * number_of_days, 160))
+        per_day = 4
+        count = max(count, min(per_day * number_of_days, 160))
     meals_per_day = _meals_per_day(request.thoi_luong, request)
     meals_total = len(meals_per_day) * number_of_days
-    sight_total = _sight_total(count, meals_total, request.thoi_luong)
+    sight_total = max(_sight_total(count, meals_total, request.thoi_luong), number_of_days)
     max_slots = _max_plan_slots(request.thoi_luong, number_of_days)
     min_slots = _min_plan_slots(request.thoi_luong, number_of_days)
-    if max_minutes <= 180:
-        min_slots = min(min_slots, 2)
-        sight_total = min(sight_total, 3)
+    if max_minutes <= 240:
+        sight_total = max(sight_total, min(4, max(2, max_minutes // 45)))
+        if max_minutes <= 90:
+            min_slots = min(min_slots, 1)
+        else:
+            min_slots = max(min(min_slots, 2), 2)
     destination_lat, destination_lng, destination_label = _destination_context(request)
     if input_understanding is None:
         input_understanding = _request_understanding(request)
@@ -4520,6 +4832,10 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
             trip_date + timedelta(days=day_index - 1),
             datetime.min.time(),
         ).replace(hour=timing.start_hour, minute=timing.start_minute)
+        day_slot_budget = min(
+            max_slots,
+            len(scheduled_ids) + _max_day_slots(request.thoi_luong, number_of_days, max_minutes),
+        )
         slots, day_cost = _pack_day_slots(
             route_stops,
             day_start,
@@ -4533,8 +4849,9 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
             weather,
             solar_context,
             behavior_profile,
-            max_slots=max_slots,
+            max_slots=day_slot_budget,
         )
+        fill_cost = 0
         slots, fill_cost = _backfill_day_gaps(
             slots,
             day_start,
@@ -4548,15 +4865,48 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
             used_ids,
             remaining_budget,
             seed + day_index,
-            max_slots,
+            day_slot_budget,
             weather,
             solar_context,
             behavior_profile,
         )
         total_cost += day_cost + fill_cost
         remaining_budget -= fill_cost // max(request.so_nguoi, 1)
-        min_day_slots = 2 if max_minutes <= 180 else (4 if number_of_days == 1 else 3)
+        min_day_slots = 1 if number_of_days >= 3 or max_minutes <= 90 else (
+            2 if max_minutes <= 240 else (4 if number_of_days == 1 else 2)
+        )
         if len(slots) < min_day_slots:
+            extra = _choose_extra_sight(
+                request,
+                used_ids,
+                _lodging_anchor(request),
+                seed + day_index + 17,
+                max(remaining_budget, 0),
+                used_names | scheduled_names,
+            )
+            if extra:
+                extra_slots, extra_cost = _pack_day_slots(
+                    [(extra, None)],
+                    day_start,
+                    max_minutes,
+                    request,
+                    copy,
+                    llm_details_by_id,
+                    labels,
+                    scheduled_ids,
+                    scheduled_names,
+                    weather,
+                    solar_context,
+                    behavior_profile,
+                    max_slots=day_slot_budget,
+                )
+                slots.extend(extra_slots)
+                total_cost += extra_cost
+                used_ids.add(extra.id)
+                used_names.update(_place_name_keys(extra))
+        if len(slots) < 1:
+            raise PipelineUnavailable("Không đủ thời gian để xếp đủ địa điểm trong ngày")
+        if number_of_days == 1 and len(slots) < min_day_slots:
             raise PipelineUnavailable("Không đủ thời gian để xếp đủ địa điểm trong ngày")
         days.append({"thu_tu": day_index, "nhan_de": copy[5].format(day=day_index), "khoang_gio": slots})
 
@@ -4566,9 +4916,10 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
 
     scheduled_ids = {slot["dia_diem_id"] for day in days for slot in day["khoang_gio"]}
     trusted_ids = scheduled_ids | {place.id for place in candidates} | {place.id for place in PLACES}
+    overflow = _overflow_leg_copy(request, asked_days, number_of_days, destination_label)
     draft = {
         "tieu_de": _plan_title(destination_label, request, number_of_days),
-        "tom_tat": copy[6].format(people=request.so_nguoi),
+        "tom_tat": overflow["summary"] if overflow else copy[6].format(people=request.so_nguoi),
         "thoi_luong": request.thoi_luong,
         "ngay_di": trip_date.isoformat(),
         "tong_chi_phi": total_cost,
@@ -4617,6 +4968,11 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
         "luu_y": [
             copy[7],
             copy[8],
+            *(
+                [overflow["note"]]
+                if overflow
+                else []
+            ),
             "Thoi gian di chuyen uu tien ma tran OSRM/PostgreSQL da build; cap thieu du lieu se duoc danh dau fallback.",
             "Neu co noi luu tru, lich trinh dung toa do do lam diem neo xuat phat/ket thuc thay vi chi dung tam thanh pho.",
         ],
@@ -4631,6 +4987,11 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
         ][:6]
     evidence_places = tuple([*PLACES, *candidates, *sight_chosen, *meal_places])
     _attach_evidence(plan, request, evidence_places)
+    if overflow:
+        plan["tom_tat"] = overflow["summary"][:500]
+        rest = [note for note in plan.get("luu_y", []) if note != overflow["note"]]
+        plan["luu_y"] = [overflow["note"][:300], *rest][:6]
+        plan["loi_chao_chang"] = overflow["greeting"]
     plan["danh_gia_chat_luong"] = _quality_report(plan, request, trusted_ids, evidence_places)
     errors = validate_plan(plan, trusted_ids, request)
     if errors:

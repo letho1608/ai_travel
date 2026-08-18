@@ -287,6 +287,57 @@ def test_trip_timing_prefers_structured_intent_policy_over_context_regex():
     assert planner._trip_timing(long_trip, today=today).days == 20
 
 
+def test_trip_timing_reads_day_counts_and_afternoon_windows_from_text():
+    today = date(2026, 8, 18)
+    three = request().model_copy(update={"context": "du lịch Hà Nội 3 ngày 2 người", "thoi_luong": "nhieu_ngay"})
+    assert planner._trip_timing(three, today=today).days == 3
+
+    thirty = request().model_copy(update={
+        "context": "du lịch sai gòn 30 ngày 4 người",
+        "thoi_luong": "nhieu_ngay",
+        "location": {"lat": 10.7769, "lng": 106.7009},
+    })
+    assert planner._trip_timing(thirty, today=today).days == 30
+
+    wrong_form = request().model_copy(update={"context": "du lịch Hà Nội 3 ngày", "thoi_luong": "ca_ngay"})
+    assert planner._trip_timing(wrong_form, today=today).days == 3
+
+    window = request().model_copy(update={"context": "du lịch Hà Nội từ 15h-18h 2 người", "thoi_luong": "vai_gio"})
+    timing = planner._trip_timing(window, today=today)
+    assert timing.start_hour == 15
+    assert timing.max_minutes == 180
+
+
+def test_hundred_day_request_is_capped_with_friendly_overflow_copy():
+    today = date(2026, 8, 18)
+    payload = request().model_copy(
+        update={
+            "context": "du lịch Hà Nội 100 ngày 2 người ngân sách 50 triệu chữa lành",
+            "thoi_luong": "nhieu_ngay",
+            "ngan_sach": 50_000_000,
+        }
+    )
+    timing = planner._trip_timing(payload, today=today)
+    assert timing.asked_days == 100
+    assert timing.days == 30
+    copy = planner._overflow_leg_copy(payload, timing.asked_days, timing.days, "Hà Nội")
+    assert copy
+    assert "100 ngày" in copy["note"]
+    assert "30 ngày" in copy["note"]
+    assert "khủng" in copy["note"]
+    assert "chữa lành" in copy["note"]
+    assert "Hà Nội" in copy["summary"]
+    assert "50 triệu" in copy["summary"]
+    assert "15 triệu" in copy["summary"]
+
+
+def test_slot_limits_scale_with_requested_days():
+    assert planner._min_plan_slots("nhieu_ngay", 3) == 3
+    assert planner._min_plan_slots("nhieu_ngay", 30) == 30
+    assert planner._max_plan_slots("nhieu_ngay", 4) >= 32
+    assert planner._max_plan_slots("nhieu_ngay", 4) > 22
+
+
 def test_safe_ai_intent_accepts_valid_ai_payload(monkeypatch):
     class ValidAI:
         def extract_request_intent(self, context, locale):
@@ -1575,6 +1626,119 @@ def test_all_duration_modes_are_supported():
             day_counts = [len(day["khoang_gio"]) for day in plan["ngay"]]
             assert all(count >= 4 for count in day_counts)
             assert sum(day_counts) >= 10
+
+
+def test_afternoon_window_creates_short_hanoi_plan():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội từ 15h-18h 2 người",
+                "thoi_luong": "vai_gio",
+                "nonce": "nonce-afternoon-window-0001",
+            }
+        )
+    )
+    assert len(plan["ngay"]) == 1
+    slots = plan["ngay"][0]["khoang_gio"]
+    assert 2 <= len(slots) <= 5
+    assert slots[0]["bat_dau"] >= "15:00"
+    assert slots[-1]["ket_thuc"] <= "18:00"
+    assert slots[-1]["ket_thuc"] >= "17:20"
+
+
+def test_three_day_hanoi_request_keeps_three_days():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội 3 ngày 2 người",
+                "thoi_luong": "nhieu_ngay",
+                "nonce": "nonce-hanoi-3-days-0001",
+            }
+        )
+    )
+    assert len(plan["ngay"]) == 3
+
+
+def test_multi_day_hanoi_ignores_stale_short_time_window():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội 3 ngày 2 người",
+                "thoi_luong": "nhieu_ngay",
+                "nonce": "nonce-hanoi-3-days-stale-window-0001",
+                "intent_policy": {
+                    "schema_version": "intent-parse-v2",
+                    "duration": "nhieu_ngay",
+                    "duration_days": 3,
+                    "duration_minutes": 180,
+                    "time_window": {
+                        "start_hour": 15,
+                        "start_minute": 0,
+                        "end_hour": 18,
+                        "end_minute": 0,
+                        "minutes": 180,
+                        "label": "15h–18h",
+                    },
+                },
+            }
+        )
+    )
+    assert len(plan["ngay"]) == 3
+    assert plan["ngay"][0]["khoang_gio"][0]["bat_dau"] < "15:00"
+
+
+def test_four_day_hanoi_request_keeps_four_days():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội 4 ngày 2 người",
+                "thoi_luong": "nhieu_ngay",
+                "nonce": "nonce-hanoi-4-days-0001",
+            }
+        )
+    )
+    assert len(plan["ngay"]) == 4
+
+
+def test_thirty_day_hanoi_request_keeps_thirty_days():
+    plan = build_plan(
+        request().model_copy(
+            update={
+                "context": "du lịch Hà Nội 30 ngày 2 người",
+                "thoi_luong": "nhieu_ngay",
+                "so_nguoi": 2,
+                "nonce": "nonce-hanoi-30-days-0001",
+            }
+        )
+    )
+    assert len(plan["ngay"]) == 30
+    assert all(day["khoang_gio"] for day in plan["ngay"])
+    day_counts = [len(day["khoang_gio"]) for day in plan["ngay"]]
+    assert max(day_counts) <= 7
+    assert day_counts[0] <= 7
+
+
+def test_chunk_sights_spreads_long_trips_instead_of_front_loading():
+    sights = [
+        Place(
+            f"sight-{index}",
+            f"Điểm {index}",
+            "dia_danh",
+            "Hà Nội",
+            21.02 + (index % 6) * 0.008,
+            105.84 + (index // 6) * 0.008,
+            0,
+            60,
+            ("view",),
+        )
+        for index in range(40)
+    ]
+    chunks = planner._chunk_sights_by_day(sights, 20)
+    assert len(chunks) == 20
+    sizes = [len(chunk) for chunk in chunks]
+    assert sum(sizes) == 40
+    assert min(sizes) >= 1
+    assert max(sizes) <= 3
 
 
 def test_plan_never_exceeds_per_person_budget():

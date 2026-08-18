@@ -39,10 +39,10 @@ class IntentPolicy(BaseModel):
     primary_intent: str | None = Field(default=None, max_length=40)
     planner_mode: str | None = Field(default=None, max_length=40)
     duration: Duration | None = None
-    duration_value: float | None = Field(default=None, gt=0, le=30)
+    duration_value: float | None = Field(default=None, gt=0, le=365)
     duration_unit: Literal["minute", "hour", "day", "week"] | None = None
     duration_minutes: int | None = Field(default=None, ge=45, le=960)
-    duration_days: int | None = Field(default=None, ge=1, le=30)
+    duration_days: int | None = Field(default=None, ge=1, le=365)
     time_window: IntentTimeWindow | None = None
     allowed_place_themes: list[str] = Field(default_factory=list, max_length=12)
     avoid_place_themes: list[str] = Field(default_factory=list, max_length=12)

@@ -788,3 +788,149 @@ class PostgresStore:
         if not row:
             raise ValueError("NOTIFICATION_NOT_FOUND")
         return {key: str(value) if isinstance(value, UUID) else value for key, value in row.items()}
+
+    def _ensure_user_reviews_table(self, connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS danh_gia_nguoi_dung (
+              id uuid PRIMARY KEY,
+              ten text NOT NULL,
+              lien_he text NOT NULL,
+              diem smallint NOT NULL CHECK (diem BETWEEN 1 AND 5),
+              danh_muc text NOT NULL DEFAULT 'trai_nghiem',
+              tieu_de text NOT NULL DEFAULT '',
+              noi_dung text NOT NULL,
+              trang_thai text NOT NULL DEFAULT 'new',
+              phan_hoi_admin text,
+              ma_phien text,
+              nguoi_dung_id uuid REFERENCES nguoi_dung(id),
+              ngay_tao timestamptz NOT NULL DEFAULT now(),
+              CHECK (trang_thai IN ('new','reviewed','resolved','hidden'))
+            )
+            """
+        )
+
+    @staticmethod
+    def _as_uuid(value: str | None):
+        if not value:
+            return None
+        try:
+            return UUID(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _review_from_row(row: dict) -> dict:
+        created = row.get("ngay_tao")
+        if hasattr(created, "isoformat"):
+            created = created.isoformat()
+        return {
+            "id": str(row["id"]),
+            "name": row["ten"],
+            "contact": row["lien_he"],
+            "rating": int(row["diem"]),
+            "category": row["danh_muc"],
+            "title": row["tieu_de"],
+            "content": row["noi_dung"],
+            "status": row["trang_thai"],
+            "admin_reply": row["phan_hoi_admin"],
+            "session_id": row["ma_phien"],
+            "user_id": str(row["nguoi_dung_id"]) if row.get("nguoi_dung_id") else None,
+            "created_at": created,
+        }
+
+    def add_user_review(
+        self,
+        name: str,
+        contact: str,
+        rating: int,
+        category: str,
+        title: str,
+        content: str,
+        session_id: str,
+        user_id: str | None = None,
+    ) -> dict:
+        rating = max(1, min(5, int(rating)))
+        category = category if category in ("trai_nghiem", "tinh_nang", "dia_diem", "khac") else "khac"
+        with self._connect() as connection:
+            self._ensure_user_reviews_table(connection)
+            row = connection.execute(
+                "INSERT INTO danh_gia_nguoi_dung"
+                "(id,ten,lien_he,diem,danh_muc,tieu_de,noi_dung,ma_phien,nguoi_dung_id) "
+                "VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+                (
+                    uuid4(),
+                    name.strip() or "Du khách ẩn danh",
+                    contact.strip(),
+                    rating,
+                    category,
+                    title.strip() or "Đánh giá dịch vụ",
+                    content.strip(),
+                    session_id,
+                    self._as_uuid(user_id),
+                ),
+            ).fetchone()
+        return self._review_from_row(row)
+
+    def list_user_reviews(
+        self,
+        status: str | None = None,
+        category: str | None = None,
+        min_rating: int | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
+        clauses: list[str] = []
+        params: list = []
+        if status and status != "all":
+            clauses.append("trang_thai=%s")
+            params.append(status)
+        if category and category != "all":
+            clauses.append("danh_muc=%s")
+            params.append(category)
+        if min_rating is not None and min_rating > 0:
+            clauses.append("diem>=%s")
+            params.append(int(min_rating))
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self._connect() as connection:
+            self._ensure_user_reviews_table(connection)
+            rows = connection.execute(
+                f"SELECT * FROM danh_gia_nguoi_dung {where} ORDER BY ngay_tao DESC LIMIT %s",
+                (*params, limit),
+            ).fetchall()
+        return [self._review_from_row(row) for row in rows]
+
+    def update_user_review(
+        self,
+        review_id: str,
+        status: str | None = None,
+        admin_reply: str | None = None,
+    ) -> dict:
+        review_uuid = self._as_uuid(review_id)
+        if not review_uuid:
+            raise ValueError("REVIEW_NOT_FOUND")
+        assignments: list[str] = []
+        params: list = []
+        if status and status in ("new", "reviewed", "resolved", "hidden"):
+            assignments.append("trang_thai=%s")
+            params.append(status)
+        if admin_reply is not None:
+            assignments.append("phan_hoi_admin=%s")
+            params.append(admin_reply.strip() or None)
+        if not assignments:
+            with self._connect() as connection:
+                self._ensure_user_reviews_table(connection)
+                row = connection.execute(
+                    "SELECT * FROM danh_gia_nguoi_dung WHERE id=%s",
+                    (review_uuid,),
+                ).fetchone()
+        else:
+            with self._connect() as connection:
+                self._ensure_user_reviews_table(connection)
+                row = connection.execute(
+                    f"UPDATE danh_gia_nguoi_dung SET {', '.join(assignments)} "
+                    "WHERE id=%s RETURNING *",
+                    (*params, review_uuid),
+                ).fetchone()
+        if not row:
+            raise ValueError("REVIEW_NOT_FOUND")
+        return self._review_from_row(row)

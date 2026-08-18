@@ -117,11 +117,15 @@ def test_parse_intent_suggests_destinations_for_intent_only_requests():
     assert "quiet" in healing["parsed"]["allowed_place_themes"]
     assert len(healing["suggestions"]) >= 2
     assert all(item["score"] > 0 for item in healing["suggestions"])
+    assert healing["suggestions"][0]["label"] == "Đà Lạt"
+    assert "Đà Lạt" in healing["question"]
+    assert "bạn chọn giúp" in healing["question"]
 
     beach = parse_intent("Tôi muốn đi biển", extractor=ai({"trip_purpose": "beach"}))
     assert beach["parsed"]["primary_intent"] == "beach"
     assert "beach" in beach["parsed"]["allowed_place_themes"]
     assert len(beach["suggestions"]) >= 2
+    assert "Nha Trang" in beach["question"]
 
     mountain = parse_intent("Muốn đi leo núi", extractor=ai({"trip_purpose": "mountain"}))
     assert mountain["parsed"]["primary_intent"] == "mountain"
@@ -139,8 +143,69 @@ def test_parse_intent_general_travel_asks_destination_without_hardcoded_intent()
 
 def test_parse_intent_rejects_invalid_ai_schema_and_falls_back():
     result = parse_intent("du lịch Hà Nội 3 ngày 2 người", extractor=ai({"duration_unit": "century"}))
-    assert result["extraction_source"] == "fallback_unavailable"
-    assert result["status"] == "ask_user_missing_fields"
-    assert result["parsed"]["destination"] is None
-    assert result["parsed"]["duration_days"] is None
-    assert result["validation_errors"][0]["code"] == "ai_intent_unavailable"
+    assert result["extraction_source"] == "rules"
+    assert result["parsed"]["destination"]["name"] == "Hà Nội"
+    assert result["parsed"]["duration_days"] == 3
+    assert result["parsed"]["people"] == 2
+
+
+def test_parse_intent_rules_recognize_hanoi_without_asking_destination():
+    result = parse_intent("du lịch Hà Nội", extractor=ai({"trip_purpose": "general_travel"}))
+    assert result["parsed"]["destination"]["name"] == "Hà Nội"
+    assert "destination" not in result["missing_fields"]
+    assert "duration" in result["missing_fields"]
+
+
+def test_parse_intent_rules_parse_time_windows_without_ai():
+    def boom(_context: str, _locale: str = "vi"):
+        raise RuntimeError("offline")
+
+    compact = parse_intent("du lịch Hà Nội từ 15h-18h 2 người", extractor=boom)
+    assert compact["parsed"]["destination"]["name"] == "Hà Nội"
+    assert compact["parsed"]["duration"] == "vai_gio"
+    assert compact["parsed"]["time_window"]["minutes"] == 180
+    assert "duration" not in compact["missing_fields"]
+
+    spoken = parse_intent("du lịch Hà Nội 15 giờ đến 18 giờ 2 người", extractor=boom)
+    assert spoken["parsed"]["time_window"]["minutes"] == 180
+    assert spoken["status"] == "ready_to_plan"
+
+    dashed = parse_intent("du lịch Hà Nội 15h đến 18h 2 người", extractor=boom)
+    assert dashed["parsed"]["time_window"]["label"] == "15h–18h"
+
+
+def test_parse_intent_rules_parse_multi_day_trips_without_ai():
+    def boom(_context: str, _locale: str = "vi"):
+        raise RuntimeError("offline")
+
+    three = parse_intent("du lịch Hà Nội 3 ngày 2 người", extractor=boom)
+    assert three["parsed"]["duration_days"] == 3
+    assert three["parsed"]["planner_mode"] == "multi_day_trip"
+
+    thirty = parse_intent("du lịch sai gòn 30 ngày 4 người", extractor=boom)
+    assert thirty["parsed"]["destination"]["name"] == "TP.HCM"
+    assert thirty["parsed"]["duration_days"] == 30
+    assert thirty["parsed"]["planner_mode"] == "long_trip"
+
+    hundred = parse_intent("du lịch Hà Nội 100 ngày 2 người ngân sách 50 triệu", extractor=boom)
+    assert hundred["parsed"]["duration_days"] == 100
+    assert hundred["parsed"]["duration"] == "nhieu_ngay"
+    assert hundred["parsed"]["planner_mode"] == "long_trip"
+
+
+def test_parse_intent_does_not_invent_destination_for_theme_only_requests():
+    beach = parse_intent(
+        "Tôi muốn đi biển",
+        extractor=ai({"destination_text": "Đà Nẵng", "trip_purpose": "beach", "duration_value": 2, "duration_unit": "day", "people": 2}),
+    )
+    assert beach["parsed"]["destination"] is None
+    assert "destination" in beach["missing_fields"]
+    assert beach["suggestions"][0]["label"] in {"Nha Trang", "Phú Quốc", "Đà Nẵng", "Vũng Tàu", "Phan Thiết"}
+
+    mountain = parse_intent("Muốn đi leo núi", extractor=ai({"destination_text": "Đà Nẵng", "trip_purpose": "mountain"}))
+    assert mountain["parsed"]["destination"] is None
+    assert mountain["suggestions"][0]["label"] in {"Sa Pa", "Hà Giang", "Đà Lạt", "Ninh Bình", "Quảng Bình"}
+
+    healing = parse_intent("Tôi muốn đi chữa lành", extractor=ai({"destination_text": "Đà Nẵng", "trip_purpose": "healing"}))
+    assert healing["parsed"]["destination"] is None
+    assert healing["suggestions"][0]["label"] in {"Đà Lạt", "Sa Pa", "Ninh Bình", "Phú Quốc", "Huế"}

@@ -17,10 +17,8 @@ export default function Footer() {
           <div className="footer-col">
             <h4>{t("footerProduct")}</h4>
             <Link href="/">{t("heroEyebrow" as any) || "Lên lịch trình"}</Link>
-            <Link href="/roadtrip">{t("roadtrip")}</Link>
             <Link href="/history">{t("trips")}</Link>
             <Link href="/feedback">{t("feedback")}</Link>
-            <Link href="/settings">{t("settings")}</Link>
           </div>
           <div className="footer-col">
             <h4>{t("footerCompany")}</h4>

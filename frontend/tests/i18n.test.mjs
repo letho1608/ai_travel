@@ -68,6 +68,9 @@ test("site logo uses the provided travel assistant image",()=>{
 test("login navigation action matches the account pill treatment",()=>{
   assert.match(navigationSource,/className="nav-cta"[\s\S]*className="nav-account-icon"[\s\S]*t\("login"\)/);
   assert.match(globalsSource,/\.nav\{[^}]*z-index:900/);
+  assert.match(globalsSource,/\.nav\{[^}]*background:var\(--paper\);[^}]*border-bottom:1px solid var\(--line\)/);
+  assert.match(globalsSource,/\.nav\{[^}]*justify-content:space-between;[^}]*width:100%/);
+  assert.match(globalsSource,/\.nav-links\{[^}]*margin-left:auto/);
   assert.match(globalsSource,/\.nav-links a\.nav-cta\{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;[\s\S]*background:#086b27;[\s\S]*border-radius:var\(--radius-full\)/);
   assert.match(globalsSource,/\.nav-account-icon\{width:17px;height:17px;[\s\S]*stroke:currentColor/);
   assert.match(globalsSource,/@media\(prefers-color-scheme:dark\)\{\.nav-links a\.nav-cta\{border-color:var\(--brand\)\}\.nav-links a\.nav-cta:hover\{border-color:var\(--brand-hover\)\}\}/);
@@ -394,8 +397,9 @@ test("interpolation replaces template tokens once without rewriting values",()=>
 });
 
 test("planner keeps its timeout, safe status and request contracts",()=>{
-  assert.match(plannerSource,/setTimeout\(\(\) => controller\.abort\(\), 180000\)/);
+  assert.match(plannerSource,/setTimeout\(\(\) => controller\.abort\(\), 300000\)/);
   assert.match(nextConfigSource,/async rewrites\(\)/);
+  assert.match(nextConfigSource,/proxyTimeout:\s*300000/);
   assert.match(nextConfigSource,/destination: `\$\{apiOrigin\}\/api\/:path\*`/);
   assert.match(nextConfigSource,/Array\.from\(\{ length: 11 \}/);
   assert.match(nextConfigSource,/http:\/\/localhost:\$\{8000 \+ index\}/);
@@ -418,10 +422,14 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/const \[pendingDuration, setPendingDuration\]/);
   assert.match(plannerSource,/function hasDestination\(value: string\)/);
   assert.match(plannerSource,/function answerDestination\(answer: string\)/);
+  assert.match(plannerSource,/function pickSuggestedDestination\(/);
+  assert.match(plannerSource,/function applyPickedDestination\(/);
+  assert.match(plannerSource,/THEME_DESTINATION_FALLBACKS/);
+  assert.match(plannerSource,/Gợi ý cho tôi/);
   assert.match(plannerSource,/setNeedsDestination\(true\)/);
   assert.match(plannerSource,/needsDestination &&/);
   assert.match(plannerSource,/role="group" aria-label=\{t\("destinationPrompt"\)\}/);
-  assert.match(plannerSource,/if \(!hasDestination\(requestContext\)\) \{/);
+  assert.match(plannerSource,/if \(!knownDestination && !hasDestination\(requestContext\)\) \{/);
   assert.match(plannerSource,/if \(!hasDestination\(answer\)\) \{/);
   assert.match(plannerSource,/const DEFAULT_LOCATION/);
   assert.match(plannerSource,/const DESTINATION_LOCATIONS/);
@@ -469,10 +477,30 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/setErrorKey\("generateFailed"\)/);
   assert.match(plannerSource,/setErrorDetail/);
   assert.match(plannerSource,/thoi_luong: duration/);
+  assert.match(plannerSource,/Vì bạn yêu cầu lên kế hoạch nhiều ngày nên hệ thống sẽ mất vài phút để tạo lịch trình/);
+  assert.match(plannerSource,/tối đa 30 ngày mỗi chặng/);
+  assert.match(plannerSource,/waitNotice \?\? t\(statusKey\)/);
+  assert.match(plannerSource,/if \(overflowNotice\) addMessage\("assistant", overflowNotice\)/);
+  assert.doesNotMatch(plannerSource,/addMessage\("assistant", longTripWait\)/);
   const backendStatuses=[...backendPlanSource.matchAll(/sse\("status", \{"status": "([a-z_]+)"\}\)/g)].map(match=>match[1]);
-  assert.deepEqual(backendStatuses,["finding_places","routing_plan"]);
+  assert.deepEqual(backendStatuses,["finding_places","long_trip_wait","routing_plan"]);
   for(const status of backendStatuses)assert.match(plannerSource,new RegExp(`value\\s*===\\s*"${status}"`),`missing localized mapping for ${status}`);
   assert.doesNotMatch(plannerSource,/setError\([^)]*\.message/);
+});
+
+test("planner keeps Đà Lạt after a healing suggestion and treats 3 as 3 days",()=>{
+  assert.match(plannerSource,/function normalizeText\(value: string\)/);
+  assert.match(plannerSource,/\.replace\(\/\[đĐ\]\/g, "d"\)/);
+  assert.match(plannerSource,/hasDestination\(pendingContext\) \|\| pendingIntentLocation\.current != null/);
+  assert.match(plannerSource,/function durationContextLine\(/);
+  assert.match(plannerSource,/`\$\{days\} ngày`/);
+  assert.match(plannerSource,/setPendingContext\(requestContext\);\s*setPendingDuration\(duration\);/);
+  const fold=(value)=>value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[đĐ]/g,"d").toLowerCase();
+  const daLat=/\b(da lat|dalat|lam dong)\b/;
+  const daNang=/\b(da nang|danang)\b/;
+  assert.equal(daLat.test(fold("Đà Lạt")),true);
+  assert.equal(daNang.test(fold("Đà Nẵng")),true);
+  assert.equal(daLat.test(fold("tôi muốn đi chữa lành\nĐà Lạt\n3")),true);
 });
 
 test("SSE parser accepts CRLF and guards malformed or duplicate events",()=>{

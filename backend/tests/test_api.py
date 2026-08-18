@@ -817,6 +817,28 @@ def test_preferences_persist_by_session_and_validate_currency():
     ).status_code == 422
 
 
+def test_community_feedback_can_be_submitted_and_listed():
+    listed = client.get("/api/feedback")
+    assert listed.status_code == 200
+    body = {
+        "name": "Hoàng Nam",
+        "contact": "nam@example.com",
+        "rating": 5,
+        "category": "trai_nghiem",
+        "title": "Web rất hữu ích",
+        "content": "Web rất hữu ích",
+        "ma_phien": "feedback-session",
+    }
+    created = client.post("/api/feedback", json=body)
+    assert created.status_code == 201
+    review = created.json()["review"]
+    assert review["content"] == "Web rất hữu ích"
+    assert review["rating"] == 5
+    listed = client.get("/api/feedback").json()
+    assert any(item["id"] == review["id"] for item in listed["reviews"])
+    assert all("contact" not in item for item in listed["reviews"])
+
+
 def test_invalid_bearer_never_falls_back_to_anonymous_preferences():
     headers = {"Authorization": "Bearer expired-or-invalid-token",
                "X-Session-Id": "preferences-session"}
