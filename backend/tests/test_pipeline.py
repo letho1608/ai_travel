@@ -245,6 +245,38 @@ def test_finalize_plan_title_prefers_llm_sentence_from_user_request():
     assert dumped == planner._plan_title("Hà Nội", req, 1)
 
 
+def test_plan_title_keeps_month_and_days_from_user_request():
+    req = request().model_copy(
+        update={
+            "context": "đi phú quốc tháng 11 5 ngày 2 người",
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+        }
+    )
+    timing = planner._trip_timing(req, today=date(2026, 8, 19))
+    assert timing.days == 5
+    assert timing.date_label == "tháng 11"
+    title = planner._plan_title("Phú Quốc", req, 5)
+    assert title == "Lịch trình du lịch Phú Quốc tháng 11, 5 ngày cho 2 người"
+    rejected = planner._finalize_plan_title(
+        "Lịch trình du lịch chữa lành Phú Quốc 1/11 cho 2 người",
+        "Phú Quốc",
+        req,
+        5,
+    )
+    assert rejected == title
+    kept = planner._finalize_plan_title(
+        "Lịch trình du lịch biển Phú Quốc tháng 11 trong 5 ngày cho hai người",
+        "Phú Quốc",
+        req,
+        5,
+    )
+    assert "Phú Quốc" in kept
+    assert "tháng 11" in kept
+    assert "5 ngày" in kept
+    assert "1/11" not in kept
+
+
 def test_trip_timing_understands_hours_clock_and_date_ranges():
     today = date(2026, 8, 17)
 
@@ -321,7 +353,8 @@ def test_trip_timing_understands_relative_dates():
     october = request().model_copy(update={"context": "Hà Nội tháng 10", "thoi_luong": "ca_ngay"})
     timing = planner._trip_timing(october, today=today)
     assert timing.start_date == date(2026, 10, 1)
-    assert timing.date_label == "1/10"
+    assert timing.date_label == "tháng 10"
+    assert planner._plan_title("Hà Nội", october, 1) == "Lịch trình du lịch Hà Nội tháng 10 cho 2 người"
 
     bare_weekend = request().model_copy(update={"context": "cuối tuần chill và ăn ngon", "thoi_luong": "ca_ngay"})
     timing = planner._trip_timing(bare_weekend, today=today)

@@ -144,6 +144,9 @@ def test_qwen_chat_payload_disables_thinking():
     assert _strip_chat_reasoning("Here's a thinking process: GROUNDED_INTENT user_goal is places") == ""
     assert "行程" not in _strip_cjk("dự kiến行程 kéo dài bao lâu", "vi")
     assert "lịch trình" in _strip_cjk("dự kiến行程 kéo dài bao lâu", "vi")
+    stripped = _strip_cjk("Đà Lạt là nơi tuyệt vời để bạn ,  。", "vi")
+    assert "。" not in stripped
+    assert " , " not in stripped
 
 
 def test_offline_adapter_estimates_visit_durations_from_catalog():

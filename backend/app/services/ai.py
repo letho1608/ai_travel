@@ -19,7 +19,8 @@ _REASONING_LEAK_RE = re.compile(
     r"never invent specific place|2-5 short sentences|reply in vietnamese",
     re.IGNORECASE,
 )
-_CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]+")
+_CJK_RE = re.compile(r"[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]+")
+_EMPTY_SLOT_RE = re.compile(r"\s+,(\s+|$)")
 _CJK_TERM_MAP = (
     ("行程", "lịch trình"),
     ("旅游", "du lịch"),
@@ -62,6 +63,7 @@ def _strip_cjk(content: str, locale: str = "vi") -> str:
     for source, target in _CJK_TERM_MAP:
         text = text.replace(source, f" {target} ")
     text = _CJK_RE.sub(" ", text)
+    text = _EMPTY_SLOT_RE.sub(r"\1", text)
     return " ".join(text.split())
 
 
@@ -441,19 +443,29 @@ class OpenAICompatibleAIAdapter:
             system = (
                 f"You are a Vietnam travel friend chatting in {language}. "
                 "Answer the latest user message first, like a friend. "
-                "If they ask for comfort or share a feeling, comfort them. Do not ask how many days. "
+                "If they ask for comfort or share a feeling, comfort them. Do not ask how many days or people. "
+                "If CATALOG.ask_topic is healing: comfort first, then name up to 4 catalog places "
+                "each with a short vibe in parentheses. Do not ask days or people. "
+                "If CATALOG.ask_topic is beach or mountain and they have not picked a city: name up to 4 places "
+                "with a short vibe each, then ask which they prefer. Do not say xếp lịch. "
+                "Do not repeat the previous assistant message. "
                 "If they reject a place, acknowledge the rejection and ask where else — never confirm the rejected place. "
                 "Follow topic changes. If they switch from city sights to beach, food, season, or mountains, "
                 "answer that new question — do not repeat your previous message. "
                 "Do not run a slot form, and never ask days and people in the same message. "
                 "If they just named a destination they want to visit: write 2 short sentences introducing the vibe "
                 "(why it is special), then ask only next_field. Do not write a day-by-day itinerary. "
+                "If CATALOG.user_goal is places: they asked what to see/do. Name 2-4 places from "
+                "CATALOG.allowed_place_names. Do not ask days or people. "
+                "If CATALOG.ask_topic is tips: answer weather, clothes, and road cautions. "
+                "Do not list CATALOG.allowed_place_names. "
                 "If CATALOG.missing_fields is not empty: do not write a day-by-day itinerary, "
                 "morning/afternoon schedule, restaurants, distances, or transport plan. "
                 "If they share a feeling (stress, tired, healing), empathize; place names from CATALOG are optional. "
                 "Never invent people, days, destination, or an itinerary. "
                 "CATALOG lists the only specific place names you may mention. "
                 "Use a name only when it helps this answer; never dump the whole list. "
+                "Never leave blank slots or dangling commas. "
                 "High-level advice is OK: vibe, season, neighborhoods, how to get there. "
                 f"When language is {language}, write only that language. "
                 "Never mix Chinese, Japanese, or Korean characters. "
@@ -775,17 +787,40 @@ class OpenAICompatibleAIAdapter:
             "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
             "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
         }[locale]
+        understood = draft.get("dau_vao_da_hieu") if isinstance(draft.get("dau_vao_da_hieu"), dict) else {}
+        dest = understood.get("diem_den") if isinstance(understood.get("diem_den"), dict) else {}
+        dest_value = dest.get("gia_tri") if isinstance(dest.get("gia_tri"), dict) else {}
+        dest_name = dest_value.get("ten") if isinstance(dest_value, dict) else None
+        people_field = understood.get("so_nguoi") if isinstance(understood.get("so_nguoi"), dict) else {}
+        days_field = understood.get("so_ngay") if isinstance(understood.get("so_ngay"), dict) else {}
+        seed_title = str(draft.get("tieu_de") or "")
+        title_facts = {
+            "destination": dest_name,
+            "days": len(draft.get("ngay") or []) or days_field.get("gia_tri"),
+            "people": people_field.get("gia_tri"),
+            "seed_title": seed_title,
+            "month_only": bool(
+                re.search(r"\btháng\s+\d{1,2}\b", seed_title, re.I)
+                or re.search(
+                    r"\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b",
+                    seed_title,
+                    re.I,
+                )
+            ),
+        }
         prompt = {
             "yeu_cau": (
                 f"Write all editable itinerary copy naturally in {language}. "
                 "Use only the supplied ids. Preserve place names, proper nouns, source names, "
                 "source URLs, coordinates, times, costs and all quantitative facts exactly. "
-                "For tieu_de, write one catchy itinerary title in that language. "
+                "For tieu_de, write one catchy itinerary title in that language from title_facts. "
                 "Vietnamese titles MUST start with 'Lịch trình du lịch'. "
+                "Keep destination, days, people, and month/date from title_facts. "
+                "If title_facts.month_only is true, write the month (tháng 11) — never a calendar day like 1/11. "
                 "Weave in the traveler's original request from context_goc "
                 "(coffee, food, walking, weekend, mood) plus the real destination. "
                 "Do not write a label like 'Hà Nội · 2 giờ · 2 người'. "
-                "Keep it to 8-18 words, no quotes, no trailing period. "
+                "Keep it to 8-22 words, no quotes, no trailing period. "
                 "For each place description, write 3-5 vivid and practical sentences: set the scene, "
                 "explain why it fits this trip, say exactly what to do there, mention nearby food/cafe "
                 "or photo angles when useful, and include a local-feeling tip. Avoid generic phrases "
@@ -796,7 +831,8 @@ class OpenAICompatibleAIAdapter:
                 "mo_ta_theo_id": {"id": "string"}, "luu_y": ["string"],
             },
             "id_tin_cay": sorted(trusted_ids),
-            "context_goc": (draft.get("dau_vao_da_hieu") or {}).get("context_goc") or draft.get("tieu_de") or "",
+            "context_goc": understood.get("context_goc") or draft.get("tieu_de") or "",
+            "title_facts": title_facts,
             "ke_hoach": draft,
         }
         last_error: Exception | None = None

@@ -92,11 +92,37 @@ def test_chat_turn_answers_stress_with_healing_places(monkeypatch):
     assert "destination" in result["intent"]["missing_fields"]
     assert result["ready_to_plan"] is False
     folded = result["reply"].casefold()
-    assert "đà lạt" in folded or "sa pa" in folded or "ninh bình" in folded or "chữa lành" in folded
+    assert "đà lạt" in folded
+    assert "sa pa" in folded
+    assert "ninh bình" in folded
+    assert "phú quốc" in folded
+    assert "thông" in folded or "sương" in folded or "núi mây" in folded
     assert "chưa hiểu rõ" not in folded
     assert "số ngày" not in folded
     assert "số người" not in folded
     assert "vài giờ" not in folded
+
+
+def test_chat_turn_repeated_tired_does_not_ask_people(monkeypatch):
+    _silence(monkeypatch)
+    result = run_chat_turn(
+        [
+            {"role": "user", "content": "tôi mệt quá"},
+            {
+                "role": "assistant",
+                "content": (
+                    "Nghe bạn đang mệt. Đi chữa lành thì Đà Lạt, Ninh Bình thường yên. "
+                    "Bạn muốn se lạnh, núi, hay biển?"
+                ),
+            },
+            {"role": "user", "content": "mệt"},
+        ],
+        "vi",
+    )
+    folded = result["reply"].casefold()
+    assert "mấy người" not in folded
+    assert "hỏi lại cho rõ" not in folded
+    assert "mệt" in folded or "nhẹ" in folded or "đà lạt" in folded or "ninh bình" in folded
 
 
 def test_chat_turn_uses_llm_for_stress(monkeypatch):
@@ -192,6 +218,92 @@ def test_chat_turn_answers_hanoi_places_instead_of_asking_days(monkeypatch):
     assert result["intent"]["user_goal"] == "places"
     assert "Hồ Gươm" in result["reply"]
     assert result["reply"] != "Ok, mình hiểu bạn muốn đi Hà Nội. Bạn đi khoảng mấy ngày?"
+
+
+def test_chat_turn_answers_dalat_places_without_question_mark(monkeypatch):
+    _silence(monkeypatch)
+    result = run_chat_turn([{"role": "user", "content": "Đà lạt có chỗ nào chơi"}], "vi")
+    assert result["intent"]["parsed"]["destination"]["name"] == "Đà Lạt"
+    assert result["intent"]["user_goal"] == "places"
+    folded = result["reply"].casefold()
+    assert any(
+        name in result["reply"]
+        for name in ("Hồ Xuân Hương", "Đỉnh Langbiang", "Thung lũng Tình Yêu", "Chùa Linh Phước")
+    )
+    assert "mấy ngày" not in folded
+    assert "bao lâu" not in folded
+    assert "。" not in result["reply"]
+
+
+def test_chat_turn_drops_duration_question_when_user_asks_places(monkeypatch):
+    class LiveAI:
+        def extract_planning_intent(self, _context, _locale="vi"):
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            last = (intent.get("last_user_message") or "").casefold()
+            if "đà lạt" in last or "da lat" in last:
+                return "Đà Lạt là nơi tuyệt vời để bạn ,  。 Bạn dự định đi trong bao lâu?"
+            return (
+                "Hà Nội có một không gian rất riêng, vừa cổ kính vừa hiện đại, "
+                "thích hợp để bạn đi bộ chậm rãi và tìm lại sự bình yên. "
+                "Bạn định dành bao nhiêu ngày cho chuyến đi này?"
+            )
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
+    monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
+    hanoi = run_chat_turn([{"role": "user", "content": "hà nội có những chỗ nào chơi?"}], "vi")
+    assert "Hồ Gươm" in hanoi["reply"]
+    assert "bao nhiêu ngày" not in hanoi["reply"].casefold()
+    assert "mấy ngày" not in hanoi["reply"].casefold()
+
+    dalat = run_chat_turn([{"role": "user", "content": "Đà lạt có chỗ nào chơi"}], "vi")
+    assert "。" not in dalat["reply"]
+    assert any(
+        name in dalat["reply"]
+        for name in ("Hồ Xuân Hương", "Đỉnh Langbiang", "Thung lũng Tình Yêu", "Chùa Linh Phước")
+    )
+    assert "bao lâu" not in dalat["reply"].casefold()
+
+
+def test_chat_turn_answers_dalat_cautions_instead_of_place_list(monkeypatch):
+    _silence(monkeypatch)
+    result = run_chat_turn(
+        [
+            {"role": "user", "content": "tôi không biết"},
+            {"role": "assistant", "content": "Mình chọn Đà Lạt giúp bạn. Bạn muốn đi khoảng mấy ngày?"},
+            {"role": "user", "content": "đi đà lạt thì chú ý những gì?"},
+        ],
+        "vi",
+    )
+    assert result["intent"]["parsed"]["destination"]["name"] == "Đà Lạt"
+    assert result["intent"]["ask_topic"] == "tips"
+    assert result["intent"]["user_goal"] == "answer"
+    folded = result["reply"].casefold()
+    assert "hồ xuân hương" not in folded
+    assert "langbiang" not in folded
+    assert "đi bộ trong phố" not in folded
+    assert "mưa" in folded or "lạnh" in folded or "tháng" in folded
+
+
+def test_chat_turn_drops_place_list_when_user_asks_cautions(monkeypatch):
+    class LiveAI:
+        def extract_planning_intent(self, _context, _locale="vi"):
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            return (
+                "Ở Đà Lạt nhiều chỗ hay — ví dụ Hồ Xuân Hương, Đỉnh Langbiang, Chùa Linh Phước, Nhà thờ Con Gà. "
+                "Bạn đang muốn đi bộ trong phố, thiên nhiên, hay ăn uống?"
+            )
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
+    monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
+    result = run_chat_turn([{"role": "user", "content": "đi đà lạt thì chú ý những gì?"}], "vi")
+    folded = result["reply"].casefold()
+    assert "đi bộ trong phố" not in folded
+    assert "hồ xuân hương" not in folded
+    assert "mưa" in folded or "lạnh" in folded or "tháng" in folded
 
 
 def test_chat_turn_does_not_repeat_duration_when_user_repeats_the_question(monkeypatch):

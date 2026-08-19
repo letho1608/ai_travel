@@ -441,6 +441,16 @@ _DURATION_ONLY_MARKERS = (
     "ban muon di khoang may ngay",
     "how many days",
 )
+_PLACE_SLOT_FOLLOWUP_HINTS = (
+    "may ngay",
+    "bao nhieu ngay",
+    "bao lau",
+    "how many days",
+    "how long",
+    "du dinh di",
+    "di trong bao",
+)
+_GARBLE_RE = re.compile(r"[\u3000-\u303f\uff00-\uffef]|\s,(\s|$)|,\s+[,.]")
 
 
 def _looks_like_question(text: str) -> bool:
@@ -597,7 +607,7 @@ def _wants_chat_answer(text: str) -> bool:
     if _looks_like_question(text):
         return True
     topic = _classify_topic(text)
-    return topic in {"season", "food", "beach", "mountain", "places", "healing"}
+    return topic in {"season", "food", "beach", "mountain", "places", "healing", "tips"}
 
 
 _PLAN_HINTS = (
@@ -653,6 +663,8 @@ def _classify_topic(text: str) -> str:
         return "mountain"
     if _asks_about_food(text):
         return "food"
+    if _asks_about_tips(text):
+        return "tips"
     if _asks_about_places(text):
         return "places"
     return "general"
@@ -682,13 +694,16 @@ def _fits_theme(name: str, topic: str) -> bool:
     return True
 
 
-def _suggestion_labels(intent: dict) -> str:
+def _suggestion_labels(intent: dict, limit: int | None = None) -> str:
     names = [
         str(item.get("label") or item.get("name") or "").strip()
         for item in (intent.get("suggestions") or [])
         if isinstance(item, dict)
     ]
-    return ", ".join(name for name in names if name)
+    names = [name for name in names if name]
+    if limit:
+        names = names[:limit]
+    return ", ".join(names)
 
 
 def _pivot_away_from_destination(intent: dict, topic: str, from_name: str) -> dict:
@@ -732,13 +747,40 @@ def _looks_uncertain(text: str) -> bool:
     return any(phrase in folded for phrase in _UNCERTAIN_PHRASES)
 
 
+_TIPS_HINTS = (
+    "chu y",
+    "luu y",
+    "can mang",
+    "nen mang",
+    "mang gi",
+    "mac gi",
+    "nen mac",
+    "chuan bi gi",
+    "kieng ki",
+    "what to bring",
+    "what to pack",
+    "things to know",
+    "watch out",
+    "pay attention",
+)
+
+
+def _asks_about_tips(text: str) -> bool:
+    folded = _fold_phrase(text)
+    return bool(folded) and any(hint in folded for hint in _TIPS_HINTS)
+
+
 def _asks_about_places(text: str) -> bool:
     folded = _fold_phrase(text)
     if not folded:
         return False
+    if _asks_about_tips(text):
+        return False
     if any(phrase in folded for phrase in _PLACE_ASK_PHRASES):
         return True
-    return "?" in (text or "") and any(token in folded for token in ("choi", " gi", "dau", "where", "what"))
+    return "?" in (text or "") and any(
+        token in folded for token in ("choi", "cho nao", "dia diem", "where", "what to", "attractions")
+    )
 
 
 def _highlight_places(destination: dict | None, limit: int = 5, mode: str = "sights") -> list[str]:
@@ -861,6 +903,15 @@ def _is_duration_only_script(text: str, destination_name: str = "", known_names:
     return len(folded.split()) <= 18
 
 
+def _asks_place_question_slot_followup(text: str) -> bool:
+    folded = _fold_phrase(text)
+    return bool(folded) and any(hint in folded for hint in _PLACE_SLOT_FOLLOWUP_HINTS)
+
+
+def _looks_garbled_reply(text: str) -> bool:
+    return bool(_GARBLE_RE.search(text or ""))
+
+
 def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str = "vi") -> str:
     text = _strip_cjk(" ".join(str(reply or "").split()).strip(), locale)
     if not text:
@@ -873,6 +924,8 @@ def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str 
     folded = _fold_phrase(text)
     if not _strip_chat_reasoning(text):
         return ""
+    if intent.get("user_goal") == "places" and _looks_garbled_reply(text):
+        return ""
     if previous and (_fold_phrase(text) == _fold_phrase(previous) or (
         len(previous) > 24 and _fold_phrase(previous)[:48] in _fold_phrase(text)
     )):
@@ -882,6 +935,14 @@ def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str 
     if destination and topic not in {"beach", "mountain"} and _repeats_city_script(text):
         return ""
     if intent.get("user_goal") in {"answer", "places"} and _is_duration_only_script(text, destination, highlights + foods):
+        return ""
+    if intent.get("user_goal") == "places" and topic == "places" and _asks_place_question_slot_followup(text):
+        return ""
+    if topic == "tips" and (
+        "nhieu cho hay" in folded or "di bo trong pho" in folded or "walk in the city" in folded
+    ):
+        return ""
+    if intent.get("ask_topic") == "healing" and _asks_place_question_slot_followup(text):
         return ""
     if _looks_like_itinerary(text):
         return ""
@@ -895,41 +956,86 @@ def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str 
     return text
 
 
+_DESTINATION_BLURBS_VI = {
+    "Đà Lạt": "se lạnh, thông và sương",
+    "Sa Pa": "núi mây, ruộng bậc thang",
+    "Ninh Bình": "sông núi, đi thuyền yên",
+    "Phú Quốc": "đảo, biển và hoàng hôn",
+    "Nha Trang": "biển trong, tắm dễ",
+    "Đà Nẵng": "biển và núi gần nhau",
+    "Vũng Tàu": "gần Sài Gòn, đi trong ngày",
+    "Hà Giang": "đèo đá, săn mây",
+    "Huế": "chậm, sông Hương",
+    "Quảng Bình": "động và thiên nhiên",
+    "Phan Thiết": "biển, đồi cát",
+    "Hội An": "phố cổ, đèn lồng",
+    "Hà Nội": "phố cổ, hồ",
+    "TP.HCM": "ăn uống, đi đêm",
+}
+_DESTINATION_BLURBS_EN = {
+    "Đà Lạt": "cool pine air",
+    "Sa Pa": "clouds and terraces",
+    "Ninh Bình": "rivers and limestone",
+    "Phú Quốc": "island sunsets",
+    "Nha Trang": "clear swimming water",
+    "Đà Nẵng": "beach next to mountains",
+    "Vũng Tàu": "close to Saigon",
+    "Hà Giang": "highland passes",
+}
+
+
+def _theme_place_blurbs(intent: dict, locale: str, topic: str, near: str | None = None) -> str:
+    suggestions = intent.get("suggestions") or _theme_suggestions(
+        topic if topic != "healing" else "healing",
+        near,
+    )
+    names = [
+        str(item.get("label") or item.get("name") or "").strip()
+        for item in suggestions
+        if isinstance(item, dict)
+    ]
+    names = [name for name in names if name][:4]
+    blurbs = _DESTINATION_BLURBS_VI if locale == "vi" else _DESTINATION_BLURBS_EN
+    parts = []
+    for name in names:
+        note = blurbs.get(name)
+        parts.append(f"{name} ({note})" if note else name)
+    return ", ".join(parts)
+
+
 def _theme_fallback(intent: dict, locale: str) -> str | None:
     topic = intent.get("ask_topic")
     if topic not in {"beach", "mountain", "healing"}:
         return None
     destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
     from_city = intent.get("theme_from")
-    names = _suggestion_labels(intent)
-    if not names:
-        names = _suggestion_labels({"suggestions": _theme_suggestions(topic if topic != "healing" else "healing", from_city or destination)})
+    names = _theme_place_blurbs(intent, locale, topic, from_city or destination)
     if locale == "vi":
         if topic == "healing":
             if destination:
                 return (
                     f"Mệt thì mình ở đây nghe bạn, không cần lên lịch ngay. "
-                    f"Nếu muốn đi cho nhẹ đầu thì {names or 'Đà Lạt, Sa Pa, Ninh Bình'} cũng hợp hơn phố. "
+                    f"Nếu muốn đi cho nhẹ đầu thì {names or 'Đà Lạt (se lạnh, thông và sương), Ninh Bình (sông núi yên)'} cũng hợp hơn phố. "
                     "Bạn muốn mình an ủi tiếp hay gợi ý chỗ khác?"
                 )
             return (
-                f"Nghe bạn đang căng thẳng. Đi chữa lành thì mình hay nghĩ {names}. "
-                "Bạn muốn mình gợi ý chỗ nào cho nhẹ đầu?"
+                f"Nghe bạn đang mệt. Đi chữa lành mình hay nghĩ {names}. "
+                "Bạn nghiêng chỗ nào cho nhẹ đầu?"
             )
         if topic == "beach":
             if destination and _fits_theme(str(destination), "beach"):
                 return f"{destination} hợp đi biển. Bạn muốn đi khoảng mấy ngày để mình xếp lịch tắm biển cụ thể hơn?"
             if from_city:
                 return (
-                    f"{from_city} không sát biển. Gần nhất thường là Vũng Tàu; "
+                    f"{from_city} không sát biển. Gần nhất thường là Vũng Tàu (đi trong ngày); "
                     f"muốn nghỉ biển hơn thì {names}. Bạn muốn đi biển ở đâu?"
                 )
-            return f"Đi biển thì mình gợi ý {names}. Bạn muốn mình xếp lịch biển ở đâu?"
+            return f"Muốn đi biển thì mình gợi ý {names}. Bạn muốn tắm biển ở đâu?"
         if destination and _fits_theme(str(destination), "mountain"):
             return f"{destination} hợp leo núi và săn mây. Bạn muốn đi khoảng mấy ngày?"
         if from_city:
             return f"Leo núi thì {from_city} không phải lựa chọn hợp. Mình gợi ý {names}. Bạn muốn đi núi ở đâu?"
-        return f"Leo núi ở Việt Nam thú vị nhất ở {names}. Bạn muốn đi đâu?"
+        return f"Leo núi mình hay nghĩ {names}. Bạn muốn đi núi ở đâu?"
     if topic == "healing":
         if destination:
             return (
@@ -1007,10 +1113,16 @@ def _fallback_reply(intent: dict, locale: str) -> str:
     if locale == "vi":
         if intent.get("user_goal") in {"places", "answer"} and destination:
             topic = intent.get("ask_topic") or "general"
-            if topic in {"season", "food", "places", "beach", "mountain"}:
+            if topic in {"season", "food", "places", "beach", "mountain", "tips"}:
                 if topic == "season":
                     note = _season_note(str(destination), locale)
                     return f"{note} Nếu muốn mình xếp lịch theo mùa đó, nói luôn đi mấy ngày nhé."
+                if topic == "tips":
+                    note = _season_note(str(destination), locale)
+                    return (
+                        f"{note} "
+                        "Nên mang đồ theo thời tiết chỗ đó, đi chậm trên đường đèo/phố đông, và đừng nhồi quá nhiều điểm một ngày."
+                    )
                 foods = [name for name in (intent.get("highlight_foods") or []) if isinstance(name, str)]
                 food_list = ", ".join(foods[:3])
                 if topic == "food" and food_list:
@@ -1044,16 +1156,29 @@ def _fallback_reply(intent: dict, locale: str) -> str:
                 for item in (intent.get("suggestions") or [])[:3]
                 if isinstance(item, dict) and (item.get("label") or item.get("name"))
             )
+            purpose = str((intent.get("parsed") or {}).get("primary_intent") or (intent.get("parsed") or {}).get("trip_purpose") or "")
+            if names and purpose in {"healing", "beach", "mountain"}:
+                if purpose == "healing":
+                    return f"{names} đều hợp nghỉ cho nhẹ đầu — bạn nghiêng chỗ nào?"
+                if purpose == "beach":
+                    return f"Vậy mình gợi ý biển ở {names}. Bạn muốn đi đâu?"
+                return f"Leo núi thì {names} đáng thử. Bạn nghiêng chỗ nào?"
             if names:
                 return f"Bạn muốn đi đâu lần này? Nếu chưa nghĩ ra, mình có thể chọn giúp — ví dụ {names}."
             return "Bạn muốn đi đâu lần này?"
         return intent.get("question") or "Bạn muốn đi đâu?"
     if intent.get("user_goal") in {"places", "answer"} and destination:
         topic = intent.get("ask_topic") or "general"
-        if topic in {"season", "food", "places", "beach", "mountain"}:
+        if topic in {"season", "food", "places", "beach", "mountain", "tips"}:
             if topic == "season":
                 note = _season_note(str(destination), locale)
                 return f"{note} If you want an itinerary for that season, tell me how many days."
+            if topic == "tips":
+                note = _season_note(str(destination), locale)
+                return (
+                    f"{note} "
+                    "Pack for the local weather, take mountain/city roads slowly, and don't cram too many stops into one day."
+                )
             foods = [name for name in (intent.get("highlight_foods") or []) if isinstance(name, str)]
             food_list = ", ".join(foods[:3])
             extra = f" For food, try {food_list}." if food_list and topic == "food" else ""
@@ -1073,6 +1198,32 @@ def _fallback_reply(intent: dict, locale: str) -> str:
     if destination and "people" in missing:
         return f"{destination} is locked in. How many people?"
     return intent.get("question") or "Where do you want to go?"
+
+
+def _repeat_recovery_reply(intent: dict, locale: str) -> str:
+    topic = intent.get("ask_topic") or ""
+    last_user = str(intent.get("last_user_message") or "")
+    if topic == "healing" or _asks_about_healing(last_user):
+        names = _theme_place_blurbs(intent, locale, "healing") or "Đà Lạt (se lạnh, thông và sương), Ninh Bình (sông núi yên)"
+        if locale == "vi":
+            return (
+                f"Mình nghe bạn mệt thật, không cần quyết ngay. "
+                f"Nếu muốn đi cho nhẹ đầu thì {names} cũng được. Bạn nghiêng chỗ nào?"
+            )
+        return "I'm still here with you. No need to pick a trip yet — beach, mountain, or somewhere cooler?"
+    destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
+    missing = intent.get("missing_fields") or []
+    if locale == "vi":
+        if "people" in missing:
+            return f"Mình hỏi lại cho rõ: đi {destination or 'chuyến này'} thì bạn đi mấy người?"
+        if "duration" in missing:
+            return f"Bạn muốn đi {destination or 'chuyến này'} khoảng mấy ngày, hay một khung giờ như 15h–18h?"
+        return "Bạn nói rõ hơn một chút được không? Mình đang nghe để xếp lịch."
+    if "people" in missing:
+        return f"Just to confirm — how many people for {destination or 'the trip'}?"
+    if "duration" in missing:
+        return f"How long for {destination or 'the trip'}: a few hours, a time window like 3–6pm, or a few days?"
+    return "Could you say a bit more so I can plan?"
 
 
 def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
@@ -1110,7 +1261,7 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
         dest_in_last
         and not _looks_like_question(last_user)
         and not _rejects_destination(last_user, dest_name)
-        and topic not in {"season", "food", "places", "healing"}
+        and topic not in {"season", "food", "places", "healing", "tips"}
     )
     if _wants_chat_answer(last_user) and not planning_statement:
         intent["user_goal"] = "places" if topic == "places" else "answer"
@@ -1132,6 +1283,8 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
                 intent["season_note"] = _season_note(dest_name, locale)
             elif topic == "food":
                 intent["highlight_foods"] = _highlight_places(destination, limit=3, mode="food")
+            elif topic == "tips":
+                intent["season_note"] = _season_note(dest_name, locale)
             elif topic == "places":
                 intent["highlight_places"] = _highlight_places(destination)
 
@@ -1156,22 +1309,7 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
         reply = _fallback_reply(intent, locale)
         previous = _last_assistant_text(messages)
         if previous and _fold_phrase(reply) == _fold_phrase(previous):
-            destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
-            missing = intent.get("missing_fields") or []
-            if locale == "vi":
-                if "people" in missing:
-                    reply = f"Mình hỏi lại cho rõ: đi {destination or 'chuyến này'} thì bạn đi mấy người?"
-                elif "duration" in missing:
-                    reply = f"Bạn muốn đi {destination or 'chuyến này'} khoảng mấy ngày, hay một khung giờ như 15h–18h?"
-                else:
-                    reply = "Bạn nói rõ hơn một chút được không? Mình đang nghe để xếp lịch."
-            else:
-                if "people" in missing:
-                    reply = f"Just to confirm — how many people for {destination or 'the trip'}?"
-                elif "duration" in missing:
-                    reply = f"How long for {destination or 'the trip'}: a few hours, a time window like 3–6pm, or a few days?"
-                else:
-                    reply = "Could you say a bit more so I can plan?"
+            reply = _repeat_recovery_reply(intent, locale)
     return {
         "reply": reply[:800],
         "intent": intent,

@@ -72,10 +72,33 @@ def _title_prefix(locale: str) -> str:
     return "Lịch trình du lịch" if locale == "vi" else "Travel itinerary:"
 
 
-def _title_span(request: PlanRequest, number_of_days: int) -> str:
-    timing = _trip_timing(request)
-    if timing.date_label or timing.clock_label:
-        return timing.date_label or timing.clock_label or ""
+_MONTH_LABELS_EN = (
+    "",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
+
+def _is_month_only_label(label: str | None) -> bool:
+    folded = " ".join(_ascii_fold(label or "").casefold().split())
+    if re.fullmatch(r"thang \d{1,2}", folded):
+        return True
+    return folded in {name.casefold() for name in _MONTH_LABELS_EN if name}
+
+
+def _duration_span(request: PlanRequest, number_of_days: int) -> str:
+    if number_of_days >= 2:
+        return f"{number_of_days} ngày" if request.ngon_ngu == "vi" else f"{number_of_days} days"
     if request.ngon_ngu == "vi":
         if request.thoi_luong == "vai_gio":
             return "vài giờ"
@@ -83,14 +106,24 @@ def _title_span(request: PlanRequest, number_of_days: int) -> str:
             return "nửa ngày"
         if request.thoi_luong == "ca_ngay":
             return "1 ngày"
-        return f"{number_of_days} ngày"
+        return "1 ngày"
     if request.thoi_luong == "vai_gio":
         return "a few hours"
     if request.thoi_luong == "nua_ngay":
         return "half day"
-    if request.thoi_luong == "ca_ngay":
-        return "1 day" if number_of_days == 1 else f"{number_of_days} days"
-    return f"{number_of_days} days"
+    return "1 day"
+
+
+def _title_span(request: PlanRequest, number_of_days: int) -> str:
+    timing = _trip_timing(request)
+    duration = _duration_span(request, number_of_days)
+    if _is_month_only_label(timing.date_label):
+        if number_of_days >= 2 or timing.asked_days >= 2:
+            return f"{timing.date_label}, {duration}"
+        return timing.date_label or duration
+    if timing.date_label or timing.clock_label:
+        return timing.date_label or timing.clock_label or ""
+    return duration
 
 
 def _title_motif(request: PlanRequest, destination_label: str | None = None) -> str:
@@ -167,6 +200,22 @@ def _finalize_plan_title(
         cleaned = f"{cleaned} ở {destination_label}" if request.ngon_ngu == "vi" else f"{cleaned} in {destination_label}"
         if len(cleaned) > 90:
             return fallback
+    timing = _trip_timing(request)
+    folded = _ascii_fold(cleaned).casefold()
+    if _is_month_only_label(timing.date_label) and re.search(r"\b\d{1,2}/\d{1,2}\b", cleaned) and "–" not in cleaned:
+        return fallback
+    if number_of_days >= 2:
+        has_days = (
+            re.search(rf"\b{number_of_days}\s*ngay\b", folded)
+            or re.search(rf"\b{number_of_days}\s*days?\b", folded)
+        )
+        if not has_days:
+            return fallback
+    people = request.so_nguoi
+    if people and not re.search(rf"\b{people}\b", cleaned) and not (
+        people == 2 and ("hai nguoi" in folded or "two people" in folded)
+    ):
+        return fallback
     return cleaned
 
 
@@ -405,7 +454,8 @@ def _relative_trip_date(folded: str, today: date, locale: str) -> tuple[date, st
                 year += 1
             target = _safe_date(year, month, 1)
             if target:
-                return target, _date_label(target, locale)
+                label = f"tháng {month}" if locale == "vi" else _MONTH_LABELS_EN[month]
+                return target, label
     return None
 
 
