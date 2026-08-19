@@ -120,6 +120,7 @@ def _provider_diagnostics() -> dict:
             "ready": ai_ready,
             "mode": settings.ai_mode,
             "model": settings.ai_model,
+            "chat_model": settings.ai_chat_model,
             "base_url": settings.ai_base_url,
             "api_key_configured": bool(settings.ai_api_key),
             "api_key_length": len(settings.ai_api_key or ""),

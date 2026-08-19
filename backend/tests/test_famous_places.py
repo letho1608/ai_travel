@@ -3,10 +3,12 @@
 from app.data import (
     FAMOUS_METADATA,
     FAMOUS_PLACES,
+    PLACES,
     Place,
     famous_priority,
     finalize_catalogue,
     is_famous_place,
+    place_match_key,
     place_name_key,
 )
 from app.pipeline.planner import _is_iconic_place, _tourism_quality_score
@@ -93,3 +95,49 @@ def test_finalize_catalogue_does_not_duplicate_famous_osm_ids():
     ])
     ids = [place.id for place in merged if place_name_key(place.name) == place_name_key(famous.name)]
     assert ids.count(famous.id) == 1
+
+
+def test_catalogue_collapses_titop_spelling_twins():
+    assert place_match_key("Đảo Ti Tốp") == place_match_key("Đảo Titop")
+    assert place_match_key("Titov Island") == place_match_key("Đảo Ti Tốp")
+    assert place_match_key("Bãi biển Cát Cỏ 1") == place_match_key("Bãi biển Cát Cỏ 3")
+    merged = finalize_catalogue(
+        [
+            Place(
+                "curated-dao-ti-top",
+                "Đảo Ti Tốp",
+                "dia_danh",
+                "Hạ Long",
+                20.8589,
+                107.0803,
+                0,
+                90,
+                ("ha_long_icon",),
+                7,
+                17,
+                "curated",
+                None,
+            ),
+            Place(
+                "curated-dao-titop",
+                "Đảo Titop",
+                "dia_danh",
+                "Hạ Long",
+                20.9108,
+                107.0732,
+                0,
+                120,
+                ("ha_long_icon",),
+                7,
+                17,
+                "curated",
+                None,
+            ),
+        ]
+    )
+    titop = [place for place in merged if place_match_key(place.name) == "titop"]
+    assert len(titop) == 1
+    assert titop[0].id == "curated-dao-ti-top"
+    live = [place for place in PLACES if place_match_key(place.name) == "titop"]
+    assert len(live) == 1
+    assert "curated-dao-titop" not in {place.id for place in live}

@@ -157,8 +157,9 @@ def test_chat_refine_applies_people_and_budget_changes():
     assert response.status_code == 200
     body = response.json()
     assert body["phien_ban"] == 2
-    assert body["tra_loi_key"] == "assistantWelcome"
     assert body["tra_loi"]
+    assert "vai_gio" not in body["tra_loi"]
+    assert "1000000" not in body["tra_loi"]
     assert body["tham_so"]["so_nguoi"] == 3
     assert body["tham_so"]["ngan_sach"] == 500000
     stored = store.get(result["token"])
@@ -219,10 +220,19 @@ def test_chat_refine_cafe_intent_adds_relaxed_stops():
     assert "add more cafe" in context
 
 
-def test_chat_refine_swap_intent_without_selected_place_rejected():
+def test_chat_refine_swap_intent_without_selected_place_swaps_first_stop():
     _, result = _generated_plan()
+    first = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
     response = _refine(result["token"], "đổi điểm này sang điểm yên tĩnh hơn")
-    assert response.status_code == 422
+    assert response.status_code == 200
+    body = response.json()
+    swapped = {
+        slot["dia_diem_id"]
+        for day in body["ke_hoach"]["ngay"]
+        for slot in day["khoang_gio"]
+    }
+    assert first not in swapped
+    assert "ràng buộc" not in (body["tra_loi"] or "").casefold()
 
 
 def test_chat_refine_swap_intent_swaps_selected_place():
@@ -280,3 +290,136 @@ def test_chat_refine_rejects_message_too_short():
     _, result = _generated_plan()
     response = _refine(result["token"], "a")
     assert response.status_code == 422
+
+
+def test_chat_refine_changes_destination_to_ha_long():
+    _, result = _generated_plan()
+    response = _refine(result["token"], "Tôi muốn đi hạ long")
+    assert response.status_code == 200
+    body = response.json()
+    title = body["ke_hoach"]["tieu_de"].casefold()
+    assert "hạ long" in title or "ha long" in title
+    assert "vai_gio" not in (body["tra_loi"] or "")
+    assert "ràng buộc" not in (body["tra_loi"] or "")
+
+
+def test_chat_refine_food_request_does_not_dump_form_fields():
+    _, result = _generated_plan()
+    response = _refine(result["token"], "tôi muốn ăn uống")
+    assert response.status_code == 200
+    body = response.json()
+    reply = body["tra_loi"] or ""
+    assert "vai_gio" not in reply
+    assert "1000000" not in reply
+    context = store.get(result["token"]).request["context"]
+    assert "ăn uống" in context
+
+
+def test_chat_refine_new_itinerary_does_not_use_swipe_template():
+    _, result = _generated_plan()
+    response = _refine(result["token"], "đổi cho tôi lịch trình khác")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["phien_ban"] == 2
+    assert "Đã đổi địa điểm được chọn" not in (body["tra_loi"] or "")
+    assert "ràng buộc" not in (body["tra_loi"] or "")
+
+
+def test_chat_refine_question_keeps_destination():
+    _, result = _generated_plan()
+    response = _refine(result["token"], "chỗ này có gì hay?")
+    assert response.status_code == 200
+    body = response.json()
+    assert "hà nội" in body["ke_hoach"]["tieu_de"].casefold() or "ha noi" in body["ke_hoach"]["tieu_de"].casefold()
+    assert body["hoi_thoai"][-1]["vai_tro"] == "assistant"
+    assert "vai_gio" not in (body["tra_loi"] or "")
+
+
+def test_chat_refine_swaps_lunch_break_not_first_sight():
+    _, result = _generated_plan()
+    slots = [slot for day in result["plan"]["ngay"] for slot in day["khoang_gio"]]
+    lunch = next((slot for slot in slots if slot.get("bua_an") in {"nghi", "trua"}), None)
+    if lunch is None:
+        lunch = next(
+            (
+                slot for slot in slots
+                if slot.get("loai") in {"nha_hang", "quan_an", "cafe"}
+                and "11:00" <= slot["bat_dau"][:5] <= "14:30"
+            ),
+            None,
+        )
+    assert lunch is not None
+    first = slots[0]["dia_diem_id"]
+    response = _refine(
+        result["token"],
+        "tôi muốn đổi điểm nghỉ trưa",
+        dia_diem_dang_chon=first,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    new_ids = {
+        slot["dia_diem_id"]
+        for day in body["ke_hoach"]["ngay"]
+        for slot in day["khoang_gio"]
+    }
+    assert lunch["dia_diem_id"] not in new_ids
+    if first != lunch["dia_diem_id"]:
+        assert first in new_ids
+    assert "giải thích" not in (body["tra_loi"] or "")
+
+
+def test_chat_refine_food_theme_rebuilds_ha_long_multi_day():
+    _, result = _generated_plan(
+        {
+            "context": "du lịch hạ long 2 ngày 2 người",
+            "location": {"lat": 20.9712, "lng": 107.0448},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "ngan_sach": 2_500_000,
+            "ma_phien": "chatbot-halong-food",
+            "nonce": "chatbot-halong-food-0001",
+            "intent_policy": {
+                "schema_version": "intent-parse-v2",
+                "planner_mode": "multi_day_trip",
+                "duration": "nhieu_ngay",
+                "duration_days": 2,
+                "duration_unit": "day",
+                "primary_intent": "general_travel",
+            },
+        }
+    )
+    response = _refine(result["token"], "đổi sang ăn uống", ma_phien="chatbot-halong-food")
+    assert response.status_code == 200
+    body = response.json()
+    dining = [
+        slot
+        for day in body["ke_hoach"]["ngay"]
+        for slot in day["khoang_gio"]
+        if slot.get("loai") in {"nha_hang", "quan_an", "cho", "cafe"}
+    ]
+    assert len(dining) >= 4
+    assert "ăn uống" in (body["tra_loi"] or "")
+    context = store.get(result["token"]).request["context"]
+    assert "ăn uống" in context
+
+
+def test_chat_refine_food_theme_puts_dining_on_the_plan():
+    _, result = _generated_plan()
+    response = _refine(result["token"], "đổi sang ăn uống")
+    assert response.status_code == 200
+    body = response.json()
+    dining = [
+        slot
+        for day in body["ke_hoach"]["ngay"]
+        for slot in day["khoang_gio"]
+        if slot.get("loai") in {"nha_hang", "quan_an", "cho"}
+    ]
+    assert len(dining) >= 2
+    reply = body["tra_loi"] or ""
+    assert "ăn uống" in reply
+    dining_names = [slot["ten_dia_diem"] for slot in dining if slot.get("ten_dia_diem")]
+    assert dining_names
+    featured = " ".join(dining_names[:3]).casefold()
+    # Fallback reply should name a food stop, not only leftover gardens.
+    if "ghé" in reply:
+        assert any(name.casefold() in reply.casefold() for name in dining_names)

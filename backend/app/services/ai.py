@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from time import monotonic
@@ -10,6 +11,58 @@ from app.config import settings
 from app.services.store import store
 
 logger = logging.getLogger(__name__)
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_THINK_TAG_RE = re.compile(r"</?think>", re.IGNORECASE)
+_REASONING_LEAK_RE = re.compile(
+    r"here'?s a thinking process|grounded_intent|user_goal is|highlight_places|"
+    r"never invent specific place|2-5 short sentences|reply in vietnamese",
+    re.IGNORECASE,
+)
+_CJK_RE = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]+")
+_CJK_TERM_MAP = (
+    ("行程", "lịch trình"),
+    ("旅游", "du lịch"),
+    ("景点", "điểm đến"),
+    ("推荐", "gợi ý"),
+    ("计划", "kế hoạch"),
+    ("天数", "số ngày"),
+    ("人数", "số người"),
+)
+
+
+def _chat_reply_payload(model: str, messages: list[dict]) -> dict:
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 320,
+    }
+    if "qwen" in model.lower():
+        payload["reasoning_effort"] = "none"
+        payload["reasoning_format"] = "hidden"
+        payload["top_p"] = 0.8
+        payload["presence_penalty"] = 1.5
+    return payload
+
+
+def _strip_chat_reasoning(content: str) -> str:
+    text = _THINK_BLOCK_RE.sub(" ", content or "")
+    text = _THINK_TAG_RE.sub(" ", text)
+    text = " ".join(text.replace("```", "").split())
+    if _REASONING_LEAK_RE.search(text):
+        return ""
+    return text
+
+
+def _strip_cjk(content: str, locale: str = "vi") -> str:
+    if locale in {"zh", "ja", "ko"}:
+        return content
+    text = content or ""
+    for source, target in _CJK_TERM_MAP:
+        text = text.replace(source, f" {target} ")
+    text = _CJK_RE.sub(" ", text)
+    return " ".join(text.split())
 
 
 @dataclass
@@ -121,6 +174,21 @@ class OfflineAIAdapter:
 
     def assemble(self, draft: dict, trusted_ids: set[str], locale: str = "vi") -> dict:
         return json.loads(json.dumps(draft, ensure_ascii=False))
+
+    def compose_chat_reply(self, messages: list[dict], intent: dict, locale: str = "vi") -> str:
+        return ""
+
+    def estimate_visit_durations(self, places: list[dict], locale: str = "vi") -> dict[str, int]:
+        result: dict[str, int] = {}
+        for item in places:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                continue
+            try:
+                minutes = int(item.get("catalog_minutes") or 60)
+            except (TypeError, ValueError):
+                minutes = 60
+            result[item["id"]] = max(25, min(480, minutes))
+        return result
 
 class OpenAICompatibleAIAdapter:
     """Validated JSON adapter; AI may edit copy but never inventory or constraints."""
@@ -294,6 +362,149 @@ class OpenAICompatibleAIAdapter:
                 breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không chuẩn hóa được yêu cầu an toàn: {last_error}") from last_error
 
+    def compose_chat_reply(self, messages: list[dict], intent: dict, locale: str = "vi") -> str:
+        if not breaker.allow():
+            raise RuntimeError("Cầu dao AI đang mở")
+        language = {
+            "vi": "Vietnamese", "en": "English", "ar": "Arabic", "bg": "Bulgarian",
+            "de": "German", "es": "Spanish", "fr": "French", "he": "Hebrew",
+            "hi": "Hindi", "it": "Italian", "ja": "Japanese", "nl": "Dutch",
+            "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
+            "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
+        }[locale]
+        parsed = intent.get("parsed") if isinstance(intent.get("parsed"), dict) else {}
+        destination = parsed.get("destination") if isinstance(parsed.get("destination"), dict) else None
+        missing = intent.get("missing_fields") or []
+        last_user = str(intent.get("last_user_message") or "").strip()
+        catalog = {
+            "destination": (destination or {}).get("name"),
+            "duration": parsed.get("duration"),
+            "people": parsed.get("people"),
+            "purpose": parsed.get("primary_intent"),
+            "missing_fields": missing,
+            "next_field": missing[0] if missing else None,
+            "user_goal": intent.get("user_goal") or "plan",
+            "ask_topic": intent.get("ask_topic") or "general",
+            "season_note": intent.get("season_note"),
+            "theme_from": intent.get("theme_from"),
+            "allowed_place_names": [
+                name
+                for name in (
+                    *(intent.get("highlight_places") or []),
+                    *(intent.get("highlight_foods") or []),
+                    *(
+                        item.get("label")
+                        for item in (intent.get("suggestions") or [])
+                        if isinstance(item, dict)
+                    ),
+                )
+                if isinstance(name, str) and name.strip()
+            ][:8],
+            "status": intent.get("status"),
+        }
+        history = [
+            {"role": item.get("role"), "content": str(item.get("content") or "")[:500]}
+            for item in messages[-12:]
+            if item.get("role") in {"user", "assistant"} and str(item.get("content") or "").strip()
+        ]
+        if intent.get("user_goal") == "edit_plan":
+            catalog.update({
+                "plan_title": intent.get("plan_title"),
+                "edit_action": intent.get("edit_action") or "talk",
+                "swap_from": intent.get("swap_from"),
+                "swap_to": intent.get("swap_to"),
+                "missing_fields": [],
+                "next_field": None,
+                "status": "editing_plan",
+            })
+        facts = json.dumps(catalog, ensure_ascii=False)
+        if intent.get("user_goal") == "edit_plan":
+            system = (
+                f"You are a Vietnam travel friend chatting in {language}. "
+                "An itinerary already exists. Help the user edit or understand it. "
+                "Answer the latest user message first, like a friend, in 2 short sentences. "
+                "Do not ask destination, days, or people — those are already known. "
+                "Never mention vai_gio, ngan_sach, ràng buộc, or dump budget VND amounts. "
+                "CATALOG.allowed_place_names are the only stop names you may mention. "
+                "If CATALOG.edit_action is swap: say you changed the stop and name CATALOG.swap_to. "
+                "If CATALOG.edit_action is rebuild: say you updated the itinerary to match their request; "
+                "name 1-2 stops from CATALOG.allowed_place_names. "
+                "If CATALOG.edit_action is talk: answer the question about the current plan. "
+                "Never invent new stop names. No markdown, no JSON, no thinking, no CATALOG echo. "
+                f"When language is {language}, write only that language. "
+                "Never mix Chinese, Japanese, or Korean characters. "
+                "Write lịch trình, not 行程.\n"
+                f"Latest user message: {last_user or '(see history)'}\n"
+                f"CATALOG: {facts}"
+            )
+        else:
+            system = (
+                f"You are a Vietnam travel friend chatting in {language}. "
+                "Answer the latest user message first, like a friend. "
+                "If they ask for comfort or share a feeling, comfort them. Do not ask how many days. "
+                "If they reject a place, acknowledge the rejection and ask where else — never confirm the rejected place. "
+                "Follow topic changes. If they switch from city sights to beach, food, season, or mountains, "
+                "answer that new question — do not repeat your previous message. "
+                "Do not run a slot form, and never ask days and people in the same message. "
+                "If they just named a destination they want to visit: write 2 short sentences introducing the vibe "
+                "(why it is special), then ask only next_field. Do not write a day-by-day itinerary. "
+                "If CATALOG.missing_fields is not empty: do not write a day-by-day itinerary, "
+                "morning/afternoon schedule, restaurants, distances, or transport plan. "
+                "If they share a feeling (stress, tired, healing), empathize; place names from CATALOG are optional. "
+                "Never invent people, days, destination, or an itinerary. "
+                "CATALOG lists the only specific place names you may mention. "
+                "Use a name only when it helps this answer; never dump the whole list. "
+                "High-level advice is OK: vibe, season, neighborhoods, how to get there. "
+                f"When language is {language}, write only that language. "
+                "Never mix Chinese, Japanese, or Korean characters. "
+                "Write lịch trình, not 行程. "
+                "Write original wording. No markdown, no JSON, no thinking, no CATALOG echo.\n"
+                f"Latest user message: {last_user or '(see history)'}\n"
+                f"CATALOG: {facts}"
+            )
+        payload_messages = [{"role": "system", "content": system}, *history]
+        chat_model = settings.ai_chat_model or settings.ai_model
+        payload = _chat_reply_payload(chat_model, payload_messages)
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                response = self.client.post("chat/completions", json=payload)
+                response.raise_for_status()
+                body = response.json()
+                choice = body["choices"][0]
+                message = choice.get("message") or {}
+                content = message.get("content")
+                if not isinstance(content, str) or not content.strip():
+                    raise ValueError("AI returned empty chat reply")
+                content = _strip_cjk(_strip_chat_reasoning(content), locale)
+                if not content:
+                    raise ValueError("AI returned empty chat reply")
+                usage = body.get("usage", {})
+                input_tokens = int(usage.get("prompt_tokens", 0))
+                output_tokens = int(usage.get("completion_tokens", 0))
+                amount = (
+                    input_tokens * settings.ai_input_usd_per_million
+                    + output_tokens * settings.ai_output_usd_per_million
+                ) / 1_000_000
+                store.record_ai_usage(
+                    getattr(self, "provider", settings.ai_mode), chat_model,
+                    input_tokens, output_tokens, amount,
+                    settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
+                )
+                breaker.record_success()
+                return content[:800]
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                breaker.record_failure(_error_kind(exc))
+                if exc.response.status_code == 400 and "reasoning_effort" in payload:
+                    payload.pop("reasoning_effort", None)
+                    payload.pop("reasoning_format", None)
+                    continue
+            except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                last_error = exc
+                breaker.record_failure(_error_kind(exc))
+        raise RuntimeError(f"AI không soạn được câu trả lời: {last_error}") from last_error
+
     def propose_place_ids(
         self,
         context: str,
@@ -317,9 +528,11 @@ class OpenAICompatibleAIAdapter:
             "yeu_cau": (
                 f"Select exactly {count} place ids for a useful, non-generic {city} itinerary. "
                 f"Optimize for the user's request and explainable flow. Use {language} reasoning internally, "
-                f"but return JSON only. Prefer iconic, well-known tourist attractions of {city} when candidates "
-                "are marked iconic. Avoid obscure shops, unnamed parks, and generic POIs. Balance landmarks, "
-                "food/cafe, and rest stops. Never invent ids; choose only from candidates."
+                f"but return JSON only. Prefer iconic, well-known tourist attractions that first-time visitors "
+                f"to {city} actually go to when those candidates exist. Avoid obscure shops, unnamed parks, "
+                "street corners, and generic OSM POIs. Balance landmarks, food/cafe, and rest stops. "
+                "Never invent ids; choose only from candidates. If a candidate is a spelling twin of another "
+                "(for example Titop / Ti Tốp), keep only one."
             ),
             "ngu_canh_nguoi_dung": context,
             "diem_den": city,
@@ -474,6 +687,83 @@ class OpenAICompatibleAIAdapter:
                 last_error = exc
                 breaker.record_failure(_error_kind(exc))
         raise RuntimeError(f"AI không sinh được lịch trình an toàn: {last_error}") from last_error
+
+    def estimate_visit_durations(self, places: list[dict], locale: str = "vi") -> dict[str, int]:
+        if not breaker.allow() or not places:
+            return {}
+        language = {
+            "vi": "Vietnamese", "en": "English", "ar": "Arabic", "bg": "Bulgarian",
+            "de": "German", "es": "Spanish", "fr": "French", "he": "Hebrew",
+            "hi": "Hindi", "it": "Italian", "ja": "Japanese", "nl": "Dutch",
+            "pl": "Polish", "pt": "Portuguese", "ru": "Russian", "tr": "Turkish",
+            "zh": "Simplified Chinese", "ko": "Korean", "th": "Thai",
+        }[locale]
+        trusted = {
+            str(item["id"])
+            for item in places
+            if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip()
+        }
+        prompt = {
+            "yeu_cau": (
+                f"Estimate realistic on-site visit minutes for each Vietnam attraction in {language} context. "
+                "Cable cars 40-60. City cafes/photo bridges 30-60. Museums 60-120. "
+                "Mountain pilgrimage, nature reserve, peak, trekking, or large temple-on-mountain: 180-360 "
+                "(half day to a full day). Do not invent ids. Return JSON only."
+            ),
+            "places": places,
+            "json_mau": {"durations": [{"id": "catalog-id", "minutes": 180}]},
+        }
+        try:
+            response = self.client.post(
+                "chat/completions",
+                json={
+                    "model": settings.ai_model,
+                    "messages": [
+                        {"role": "system", "content": "Only return a valid JSON object."},
+                        {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.0,
+                    "max_tokens": 700,
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+            content = body["choices"][0]["message"].get("content")
+            if not content:
+                return {}
+            payload = json.loads(content)
+            rows = payload.get("durations") if isinstance(payload, dict) else None
+            if not isinstance(rows, list):
+                return {}
+            result: dict[str, int] = {}
+            for item in rows:
+                if not isinstance(item, dict):
+                    continue
+                place_id = item.get("id")
+                if place_id not in trusted:
+                    continue
+                try:
+                    minutes = int(item.get("minutes"))
+                except (TypeError, ValueError):
+                    continue
+                if 25 <= minutes <= 480:
+                    result[place_id] = minutes
+            usage = body.get("usage", {})
+            input_tokens = int(usage.get("prompt_tokens", 0))
+            output_tokens = int(usage.get("completion_tokens", 0))
+            amount = (
+                input_tokens * settings.ai_input_usd_per_million
+                + output_tokens * settings.ai_output_usd_per_million
+            ) / 1_000_000
+            store.record_ai_usage(
+                getattr(self, "provider", settings.ai_mode), settings.ai_model,
+                input_tokens, output_tokens, amount,
+                settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
+            )
+            return result
+        except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
 
     def assemble(self, draft: dict, trusted_ids: set[str], locale: str = "vi") -> dict:
         if not breaker.allow():

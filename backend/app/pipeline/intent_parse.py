@@ -2,6 +2,8 @@ import math
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import date
+from functools import lru_cache
 from typing import Literal
 
 from app.data import PLACES, Place
@@ -110,7 +112,7 @@ DESTINATION_ALIASES: dict[str, tuple[str, ...]] = {
     "Đà Lạt": ("da lat", "dalat", "lam dong", "da lat city", "달랏", "大叻", "ダラット"),
     "Nha Trang": ("nha trang", "khanh hoa", "nha trang beach", "나트랑", "芽庄", "ニャチャン"),
     "Ninh Bình": ("ninh binh", "trang an", "bai dinh", "tam coc", "ninh binh province", "닌빈", "宁平"),
-    "Hạ Long": ("ha long", "halong", "quang ninh", "vinh ha long", "ha long bay", "halong bay", "하롱베이", "하롱", "下龙湾"),
+    "Hạ Long": ("ha long", "halong", "vinh ha long", "ha long bay", "halong bay", "하롱베이", "하롱", "下龙湾"),
     "Sa Pa": ("sa pa", "sapa", "lao cai", "fansipan", "sapa town", "사파", "沙坝"),
     "Phú Quốc": ("phu quoc", "dao phu quoc", "kien giang", "phu quoc island", "푸꾸옥", "富国岛"),
     "Cần Thơ": ("can tho", "tay do", "ninh kieu", "can tho city", "껀터", "芹苴"),
@@ -122,6 +124,56 @@ DESTINATION_ALIASES: dict[str, tuple[str, ...]] = {
     "Hải Phòng": ("hai phong", "cat ba", "do son", "cat ba island", "하이퐁", "海防"),
 }
 
+# Named sights that are trip destinations even when they are not focus cities.
+LANDMARK_DESTINATIONS: tuple[IntentDestination, ...] = (
+    IntentDestination("Yên Tử", 21.1506, 106.7189),
+    IntentDestination("Chùa Hương", 20.6194, 105.7456),
+)
+LANDMARK_ALIASES: dict[str, tuple[str, ...]] = {
+    "Yên Tử": ("yen tu", "chua yen tu", "nui yen tu", "thien vien yen tu", "chua dong yen tu", "danh thang yen tu"),
+    "Chùa Hương": ("chua huong", "huong tich", "chua huong tich", "huong son"),
+}
+POI_NAME_PREFIXES = (
+    "quan the di tich danh thang ",
+    "quan the danh thang ",
+    "di tich danh thang ",
+    "khu du lich ",
+    "thien vien ",
+    "chua dong ",
+    "pho co ",
+    "chua ",
+    "nui ",
+    "den ",
+    "dong ",
+    "thac ",
+    "bai ",
+    "vinh ",
+    "dao ",
+    "bien ",
+    "tp ",
+    "thanh pho ",
+)
+POI_STOPWORDS = frozenset({
+    "quan", "the", "di", "tich", "danh", "thang", "khu", "du", "lich",
+    "chua", "nui", "den", "thien", "vien", "dong", "thanh", "pho", "tp",
+    "vinh", "dao", "bien", "bai", "cho", "ho", "song", "cau", "lang",
+    "complex", "pagoda", "temple", "mountain", "park",
+})
+GENERIC_POI_ALIASES = {
+    "du lich", "tham quan", "di choi", "check in", "checkin",
+    "chua", "nui", "den", "dong", "thac", "bai", "bien", "dao", "pho",
+}
+WEAK_USER_TOKENS = frozenset({
+    "toi", "tui", "minh", "ban", "muon", "len", "plan", "ke", "hoach",
+    "di", "cho", "do", "met", "khong", "biet", "dau", "nay", "tuan",
+    "cuoi", "nhe", "lam", "duoc", "thich", "voi", "va", "mot", "cai",
+    "kia", "the", "nao", "bao", "lau", "ngay", "gio", "nguoi",
+})
+SIGHT_POI_KINDS = frozenset({
+    "dia_danh", "bao_tang", "cong_vien", "cho", "di_tich", "bai_bien",
+    "hang_dong", "nui", "den_chua", "giai_tri",
+})
+
 THEMES: dict[str, ThemeSpec] = {
     "general_travel": ThemeSpec(
         terms=("du lich", "di choi", "tham quan", "travel", "trip"),
@@ -131,35 +183,40 @@ THEMES: dict[str, ThemeSpec] = {
         kinds=("dia_danh", "bao_tang", "di_tich", "cong_vien", "cho", "bai_bien", "nui"),
     ),
     "healing": ThemeSpec(
-        terms=("chua lanh", "healing", "nghi duong", "di tron", "chill", "thu gian", "yen tinh", "di nhe"),
+        terms=(
+            "chua lanh", "healing", "nghi duong", "di tron", "chill", "thu gian", "yen tinh", "di nhe",
+            "met moi", "can nghi", "giam stress", "xa stress", "ap luc", "burnout", "detox",
+            "nghi ngoi", "nhe dau", "yen binh", "reset", "do met", "cho do met",
+            "stress", "cang thang", "stressed", "moi met", "met qua", "nang dau",
+        ),
         allowed_place_themes=("quiet", "nature", "lake", "forest", "cafe_chill", "viewpoint", "slow_walk"),
         avoid_place_themes=("crowded_landmark", "heavy_history", "dense_schedule", "strenuous_activity"),
         tags=("chill", "yen_tinh", "thu_gian", "view_dep", "ngoai_troi", "ho", "song", "beach", "bien"),
         kinds=("cong_vien", "dia_danh", "bai_bien", "nui", "cafe"),
     ),
     "beach": ThemeSpec(
-        terms=("bien", "bai bien", "dao", "hai san", "hoang hon bien", "ngam hoang hon", "san ho", "beach", "island"),
+        terms=("bien", "bai bien", "dao", "hai san", "hoang hon bien", "ngam hoang hon", "san ho", "beach", "island", "tam bien", "di bien", "nghi bien", "ven bien"),
         allowed_place_themes=("beach", "island", "seafood", "sunset", "coastal_view", "resort"),
         avoid_place_themes=("urban_museum", "inland_landmark"),
         tags=("beach", "bien", "dao", "island", "ngoai_troi", "view_dep", "hai_san"),
         kinds=("bai_bien", "dia_danh", "nha_hang", "quan_an"),
     ),
     "mountain": ThemeSpec(
-        terms=("leo nui", "trekking", "trail", "san may", "dinh nui", "dinh", "deo", "fansipan", "langbiang"),
+        terms=("leo nui", "trekking", "trail", "san may", "dinh nui", "dinh", "deo", "fansipan", "langbiang", "di nui", "phuot nui", "phuot"),
         allowed_place_themes=("mountain", "trekking", "trail", "peak", "pass", "viewpoint", "nature"),
         avoid_place_themes=("museum", "urban_landmark", "shopping"),
         tags=("nui", "peak", "trekking", "trail", "viewpoint", "ngoai_troi", "view_dep"),
         kinds=("nui", "hang_dong", "dia_danh"),
     ),
     "food": ThemeSpec(
-        terms=("an ngon", "am thuc", "food", "hai san", "nha hang", "quan an", "an vat"),
+        terms=("an ngon", "an uong", "am thuc", "food", "hai san", "nha hang", "quan an", "an vat", "food tour", "foodtour", "no bung", "an gi"),
         allowed_place_themes=("food", "local_food", "market", "seafood"),
         avoid_place_themes=(),
         tags=("am_thuc", "local", "hai_san", "an_vat", "dac_san"),
         kinds=("nha_hang", "quan_an", "cho"),
     ),
     "cafe": ThemeSpec(
-        terms=("cafe", "coffee", "ca phe", "caphe"),
+        terms=("cafe", "coffee", "ca phe", "caphe", "uong cafe", "checkin cafe", "check in cafe"),
         allowed_place_themes=("cafe", "cafe_chill", "viewpoint", "slow_walk"),
         avoid_place_themes=("dense_schedule",),
         tags=("cafe", "coffee", "chill", "view_dep"),
@@ -193,12 +250,228 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def _find_destination(folded: str) -> IntentDestination | None:
-    by_name = {item.name: item for item in FOCUS_DESTINATIONS}
-    for name, aliases in DESTINATION_ALIASES.items():
-        if any(_contains_term(folded, alias) for alias in aliases):
-            return by_name[name]
+def _place_search_aliases(name: str) -> set[str]:
+    folded = _fold(name)
+    aliases: set[str] = set()
+    if folded and folded not in GENERIC_POI_ALIASES:
+        aliases.add(folded)
+    stripped = folded
+    for prefix in POI_NAME_PREFIXES:
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):].strip()
+            if stripped:
+                aliases.add(stripped)
+    tokens = folded.split()
+    content = [token for token in tokens if token not in POI_STOPWORDS]
+    if len(content) >= 2:
+        aliases.add(" ".join(content[-2:]))
+        aliases.add(" ".join(content))
+    elif len(content) == 1 and len(content[0]) >= 6:
+        aliases.add(content[0])
+    return {alias for alias in aliases if alias and not _alias_too_weak(alias)}
+
+
+def _alias_too_weak(alias: str) -> bool:
+    if alias in GENERIC_POI_ALIASES or alias in POI_STOPWORDS:
+        return True
+    tokens = alias.split()
+    if not tokens:
+        return True
+    if all(token in POI_STOPWORDS or token in GENERIC_POI_ALIASES or len(token) <= 2 for token in tokens):
+        return True
+    if len(tokens) <= 2 and tokens[0] in POI_STOPWORDS and max(len(token) for token in tokens[1:]) <= 3:
+        return True
+    return len(alias) < 4 and " " not in alias
+
+
+def _gram_too_weak(gram: str) -> bool:
+    tokens = gram.split()
+    if not tokens:
+        return True
+    return all(token in WEAK_USER_TOKENS or token in POI_STOPWORDS or len(token) <= 2 for token in tokens)
+
+
+@lru_cache(maxsize=1)
+def _city_alias_keys() -> frozenset[str]:
+    keys = {_fold(item.name) for item in FOCUS_DESTINATIONS}
+    for aliases in DESTINATION_ALIASES.values():
+        keys.update(_fold(alias) for alias in aliases)
+    return frozenset(keys)
+
+
+@lru_cache(maxsize=1)
+def _catalog_alias_map() -> dict[str, IntentDestination]:
+    ranked: dict[str, tuple[int, IntentDestination]] = {}
+    city_keys = _city_alias_keys()
+    for place in PLACES:
+        if place.kind in {"cafe", "khach_san", "nha_nghi", "homestay"}:
+            continue
+        score = 0
+        if place.kind in SIGHT_POI_KINDS:
+            score += 6
+        if place.kind in {"nha_hang", "quan_an"}:
+            score -= 7
+        if place.source == "curated":
+            score += 2
+        if score < 0:
+            continue
+        destination = IntentDestination(place.name, place.lat, place.lng)
+        for alias in _place_search_aliases(place.name):
+            if alias in city_keys:
+                continue
+            current = ranked.get(alias)
+            if current is None or score > current[0]:
+                ranked[alias] = (score, destination)
+    return {alias: destination for alias, (_score, destination) in ranked.items()}
+
+
+def _find_landmark(folded: str) -> IntentDestination | None:
+    mentions = _landmark_mention_spans(folded)
+    if not mentions:
+        return None
+    last_positive: IntentDestination | None = None
+    for start, _end, item in mentions:
+        if _mention_is_negated(folded, start):
+            if last_positive and last_positive.name == item.name:
+                last_positive = None
+            continue
+        last_positive = item
+    return last_positive
+
+
+def _find_catalog_destination(folded: str) -> IntentDestination | None:
+    mapping = _catalog_alias_map()
+    tokens = folded.split()
+    best: tuple[int, IntentDestination] | None = None
+    for length in range(min(4, len(tokens)), 0, -1):
+        for index in range(len(tokens) - length + 1):
+            gram = " ".join(tokens[index:index + length])
+            if _gram_too_weak(gram):
+                continue
+            destination = mapping.get(gram)
+            if destination is None:
+                continue
+            candidate = (len(gram), destination)
+            if best is None or candidate[0] > best[0]:
+                best = candidate
+        if best:
+            return best[1]
     return None
+
+
+def _term_spans(folded: str, term: str) -> list[tuple[int, int]]:
+    term_folded = _fold(term)
+    if not term_folded:
+        return []
+    if any(ord(ch) > 127 for ch in term_folded):
+        spans: list[tuple[int, int]] = []
+        start = 0
+        while True:
+            idx = folded.find(term_folded, start)
+            if idx < 0:
+                return spans
+            spans.append((idx, idx + len(term_folded)))
+            start = idx + 1
+    return [
+        (match.start(), match.end())
+        for match in re.finditer(rf"(?<![a-z0-9]){re.escape(term_folded)}(?![a-z0-9])", folded)
+    ]
+
+
+def _mention_is_negated(folded: str, start: int) -> bool:
+    prefix = folded[max(0, start - 32):start]
+    return bool(re.search(
+        r"(?:khong|ko|chang)\s+(?:muon\s+)?(?:di|den|ve|thich)?\s*$",
+        prefix,
+    ))
+
+
+def _collapse_destination_spans(
+    hits: list[tuple[int, int, IntentDestination]],
+) -> list[tuple[int, int, IntentDestination]]:
+    hits.sort(key=lambda row: (row[0], -(row[1] - row[0])))
+    collapsed: list[tuple[int, int, IntentDestination]] = []
+    last_end = -1
+    for start, end, item in hits:
+        if start < last_end:
+            continue
+        collapsed.append((start, end, item))
+        last_end = end
+    return collapsed
+
+
+def _city_mention_spans(folded: str) -> list[tuple[int, int, IntentDestination]]:
+    hits: list[tuple[int, int, IntentDestination]] = []
+    for item in FOCUS_DESTINATIONS:
+        terms = (item.name, *DESTINATION_ALIASES.get(item.name, ()))
+        for term in terms:
+            for start, end in _term_spans(folded, term):
+                hits.append((start, end, item))
+    return _collapse_destination_spans(hits)
+
+
+def _landmark_mention_spans(folded: str) -> list[tuple[int, int, IntentDestination]]:
+    hits: list[tuple[int, int, IntentDestination]] = []
+    by_name = {item.name: item for item in LANDMARK_DESTINATIONS}
+    for name, aliases in LANDMARK_ALIASES.items():
+        item = by_name[name]
+        terms = (name, *aliases)
+        for term in terms:
+            for start, end in _term_spans(folded, term):
+                hits.append((start, end, item))
+    return _collapse_destination_spans(hits)
+
+
+def _hits_in_order(spans: list[tuple[int, int, IntentDestination]]) -> list[IntentDestination]:
+    ordered: list[IntentDestination] = []
+    for _start, _end, item in spans:
+        if ordered and ordered[-1].name == item.name:
+            continue
+        ordered.append(item)
+    return ordered
+
+
+def _city_hits_in_order(folded: str) -> list[IntentDestination]:
+    return _hits_in_order(_city_mention_spans(folded))
+
+
+def _destination_hits_in_order(folded: str) -> list[IntentDestination]:
+    mentions = _collapse_destination_spans(
+        _city_mention_spans(folded) + _landmark_mention_spans(folded)
+    )
+    return _hits_in_order(mentions)
+
+
+def _find_destination(folded: str) -> IntentDestination | None:
+    mentions = _city_mention_spans(folded) + _landmark_mention_spans(folded)
+    mentions.sort(key=lambda row: (row[0], -(row[1] - row[0])))
+    if mentions:
+        cut = None
+        for start, _end in _term_spans(folded, "thoi"):
+            cut = start
+        last_positive: IntentDestination | None = None
+        for start, _end, item in mentions:
+            if cut is not None and start < cut:
+                continue
+            if _mention_is_negated(folded, start):
+                if last_positive and last_positive.name == item.name:
+                    last_positive = None
+                continue
+            last_positive = item
+        if last_positive:
+            return last_positive
+    landmark = _find_landmark(folded)
+    if landmark:
+        return landmark
+    by_name = {item.name: item for item in FOCUS_DESTINATIONS}
+    if _contains_term(folded, "mien trung") and any(
+        _contains_term(folded, term) for term in ("bien", "tam bien", "bai bien", "dao")
+    ):
+        return by_name["Nha Trang"]
+    for terms, name in REGION_DESTINATIONS:
+        if any(_contains_term(folded, term) for term in terms):
+            return by_name[name]
+    return _find_catalog_destination(folded)
 
 
 def _place_theme_score(place: Place, spec: ThemeSpec | None) -> int:
@@ -229,16 +502,16 @@ PLACE_THEME_KINDS: dict[str, set[str]] = {
     "beach": {"bai_bien"},
     "island": {"bai_bien", "dia_danh"},
     "seafood": {"nha_hang", "quan_an"},
-    "mountain": {"nui", "hang_dong"},
-    "trekking": {"nui", "hang_dong"},
+    "mountain": {"nui", "hang_dong", "den_chua"},
+    "trekking": {"nui", "hang_dong", "den_chua"},
     "trail": {"nui"},
     "peak": {"nui"},
     "pass": {"nui", "dia_danh"},
-    "nature": {"cong_vien", "bai_bien", "nui", "hang_dong"},
+    "nature": {"cong_vien", "bai_bien", "nui", "hang_dong", "den_chua"},
     "lake": {"cong_vien", "dia_danh"},
     "forest": {"cong_vien", "nui"},
     "viewpoint": {"dia_danh", "nui", "bai_bien", "cong_vien"},
-    "quiet": {"cong_vien", "bai_bien", "nui", "cafe"},
+    "quiet": {"cong_vien", "bai_bien", "nui", "cafe", "den_chua"},
     "slow_walk": {"cong_vien", "dia_danh", "cafe"},
     "crowded_landmark": set(),
     "heavy_history": {"bao_tang", "di_tich"},
@@ -336,15 +609,27 @@ THEME_PURPOSE_LABEL_VI: dict[str, str] = {
 
 _CLOCK_RANGE_RE = re.compile(
     r"(?:(?:tu|from)\s+)?(?:luc\s+)?"
-    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(?<![0-9/.])(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
     r"(sang|chieu|am|pm)?"
     r"\s*(?:-|–|—|~|den|toi|to|until)\s*"
     r"(?:luc\s+)?"
-    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(?<![0-9/.])(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
     r"(sang|chieu|toi|am|pm)?",
     re.IGNORECASE,
 )
+_DATE_RANGE_RE = re.compile(
+    r"(?:(?:tu|from)\s+)?(?:ngay\s+)?"
+    r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/?\s*"
+    r"(?:-|–|—|den|toi|to|until)\s*"
+    r"(?:ngay\s+)?"
+    r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?",
+    re.IGNORECASE,
+)
 _DAY_COUNT_RE = re.compile(r"\b([1-9]\d{0,2})\s*(?:ngay|days?)\b", re.IGNORECASE)
+_BARE_DAY_COUNT_RE = re.compile(
+    r"\b([1-9]|[12][0-9]|30)\b(?!\s*(?:nguoi|nguoi lon|ban|dua|khach|pax|adults?|people|person|travelers?|ngay|days?|gio|tieng|hours?|trieu|dong|vnd|ngan))",
+    re.IGNORECASE,
+)
 _WEEK_COUNT_RE = re.compile(r"\b([1-9]|1[0-2])\s*(?:tuan|weeks?)\b", re.IGNORECASE)
 _HOUR_SPAN_RE = re.compile(
     r"\b(\d{1,2}(?:[.,]\d+)?)\s*(?:gio(?:\s+dong\s+ho)?|tieng|hours?|hrs?)\b",
@@ -361,6 +646,7 @@ _DAY_WORDS = {
     "hai ngay": 2, "ba ngay": 3, "bon ngay": 4, "nam ngay": 5,
     "sau ngay": 6, "bay ngay": 7, "tam ngay": 8, "chin ngay": 9, "muoi ngay": 10,
     "two days": 2, "three days": 3, "four days": 4, "five days": 5,
+    "cuoi tuan": 2, "cuoi tuan nay": 2, "weekend": 2, "ky nghi le": 3, "ky nghi": 2,
 }
 _WEEK_WORDS = {
     "mot tuan": 7, "hai tuan": 14, "ba tuan": 21, "bon tuan": 28,
@@ -369,7 +655,18 @@ _WEEK_WORDS = {
 _PEOPLE_WORDS = {
     "mot nguoi": 1, "hai nguoi": 2, "ba nguoi": 3, "bon nguoi": 4,
     "one person": 1, "two people": 2, "couple": 2, "vo chong": 2,
+    "di mot minh": 1, "mot minh": 1, "minh toi": 1, "di doi": 2, "nguoi yeu": 2, "gia dinh": 4,
 }
+REGION_DESTINATIONS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("tay nguyen",), "Đà Lạt"),
+    (("tay bac", "vung cao"), "Sa Pa"),
+    (("dong bang song cuu long", "mien tay", "mekong"), "Cần Thơ"),
+    (("bien mien trung", "tam bien mien trung", "pho bien mien trung", "nam trung bo"), "Nha Trang"),
+    (("pho co mien trung",), "Hội An"),
+    (("mien trung",), "Đà Nẵng"),
+    (("mien nam",), "TP.HCM"),
+    (("mien bac",), "Hà Nội"),
+)
 
 
 def _hour_with_meridiem(hour: int, meridiem: str | None) -> int:
@@ -444,16 +741,63 @@ def _duration_shape(days: int | None, minutes: int | None, window: dict | None) 
     return "ca_ngay", "minute", effective_minutes, "day_trip", effective_minutes
 
 
-def _extract_time_window(folded: str) -> dict | None:
-    match = _CLOCK_RANGE_RE.search(folded)
+def _parse_dmy_year(raw: str | None, today: date) -> int:
+    if not raw:
+        return today.year
+    year = int(raw)
+    if year < 100:
+        year += 2000
+    return year
+
+
+def _safe_dmy(year: int, month: int, day: int) -> date | None:
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
+
+
+def _extract_date_range_days(folded: str, today: date | None = None) -> int | None:
+    today = today or date.today()
+    match = _DATE_RANGE_RE.search(folded)
     if not match:
         return None
-    return _normalize_time_window({
-        "start_hour": _hour_with_meridiem(int(match.group(1)), match.group(3)),
-        "start_minute": int(match.group(2) or 0),
-        "end_hour": _hour_with_meridiem(int(match.group(4)), match.group(6)),
-        "end_minute": int(match.group(5) or 0),
-    })
+    left = _safe_dmy(_parse_dmy_year(match.group(3), today), int(match.group(2)), int(match.group(1)))
+    year2 = _parse_dmy_year(match.group(6), today) if match.group(6) else _parse_dmy_year(match.group(3), today)
+    right = _safe_dmy(year2, int(match.group(5)), int(match.group(4)))
+    if not left or not right:
+        return None
+    if right < left:
+        try:
+            right = date(right.year + 1, right.month, right.day)
+        except ValueError:
+            return None
+    days = (right - left).days + 1
+    if 1 <= days <= MAX_ASKED_DAYS:
+        return days
+    return None
+
+
+def _has_explicit_clock(folded: str) -> bool:
+    return bool(re.search(r"\d{1,2}\s*(?:[:h]|gio|tieng|hours?|hrs?)", folded, re.I))
+
+
+def _extract_time_window(folded: str) -> dict | None:
+    date_match = _DATE_RANGE_RE.search(folded)
+    for match in _CLOCK_RANGE_RE.finditer(folded):
+        if date_match and match.start() >= date_match.start() and match.end() <= date_match.end():
+            continue
+        if date_match and not re.search(r"(?:[:h]|gio|tieng)", match.group(0), re.I):
+            continue
+        window = _normalize_time_window({
+            "start_hour": _hour_with_meridiem(int(match.group(1)), match.group(3)),
+            "start_minute": int(match.group(2) or 0),
+            "end_hour": _hour_with_meridiem(int(match.group(4)), match.group(6)),
+            "end_minute": int(match.group(5) or 0),
+        })
+        if window:
+            return window
+    return None
 
 
 def _extract_days(folded: str) -> int | None:
@@ -469,6 +813,17 @@ def _extract_days(folded: str) -> int | None:
     for phrase, days in _DAY_WORDS.items():
         if phrase in folded:
             return days
+    dated = _extract_date_range_days(folded)
+    if dated:
+        return dated
+    # Wizard answers like "10" then "2 người" lose the word "ngày" after folding.
+    people = _extract_people(folded)
+    if people is None:
+        return None
+    for match in _BARE_DAY_COUNT_RE.finditer(folded):
+        value = int(match.group(1))
+        if value != people:
+            return min(MAX_ASKED_DAYS, value)
     return None
 
 
@@ -511,11 +866,22 @@ def _extract_duration_minutes(folded: str, has_window: bool) -> tuple[int | None
 
 
 def _extract_purpose(folded: str) -> str | None:
+    hits: list[tuple[int, int, str]] = []
     for key in ("healing", "beach", "mountain", "cafe", "food", "general_travel"):
         spec = THEMES[key]
-        if any(_contains_term(folded, term) for term in spec.terms):
-            return key
-    return None
+        for term in spec.terms:
+            for start, end in _term_spans(folded, term):
+                hits.append((start, end, key))
+    if not hits:
+        return None
+    hits.sort(key=lambda row: (row[0], row[1]))
+    return hits[-1][2]
+
+
+def _purpose_for_destination(destination: IntentDestination | None, purpose: str | None) -> str | None:
+    if destination and destination.name in LANDMARK_ALIASES and purpose == "beach":
+        return "mountain"
+    return purpose
 
 
 def _extract_people(folded: str) -> int | None:
@@ -536,9 +902,10 @@ def _rule_extract(context: str) -> dict:
     if days:
         minutes = None
         ambiguities = [item for item in ambiguities if item.get("field") != "duration"]
+    destination = _find_destination(folded)
     return {
-        "destination": _find_destination(folded),
-        "purpose": _extract_purpose(folded),
+        "destination": destination,
+        "purpose": _purpose_for_destination(destination, _extract_purpose(folded)),
         "days": days,
         "minutes": minutes,
         "window": window,
@@ -701,7 +1068,8 @@ def _normalize_ambiguities(value: object) -> list[dict]:
 def _destination_mentioned(folded: str, destination: IntentDestination) -> bool:
     if _contains_term(folded, destination.name) or _fold(destination.name) in folded:
         return True
-    return any(_contains_term(folded, alias) for alias in DESTINATION_ALIASES.get(destination.name, ()))
+    aliases = DESTINATION_ALIASES.get(destination.name, ()) + LANDMARK_ALIASES.get(destination.name, ())
+    return any(_contains_term(folded, alias) for alias in aliases)
 
 
 def _build_intent_result(
@@ -759,9 +1127,23 @@ def _build_intent_result(
     elif "destination" in missing:
         question = _destination_ask_question(locale, purpose, suggestions)
     elif "duration" in missing:
-        question = "Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?" if locale == "vi" else "How long do you plan to stay: a few hours, 1 day, or multiple days?"
+        if locale == "vi":
+            question = (
+                f"Mình hiểu bạn muốn đi {destination.name}. Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?"
+                if destination
+                else "Bạn đi trong bao lâu: vài giờ, 1 ngày hay nhiều ngày?"
+            )
+        else:
+            question = (
+                f"Got it — {destination.name}. How long do you plan to stay: a few hours, 1 day, or multiple days?"
+                if destination
+                else "How long do you plan to stay: a few hours, 1 day, or multiple days?"
+            )
     elif "people" in missing:
-        question = "Bạn đi mấy người?" if locale == "vi" else "How many people are traveling?"
+        if locale == "vi":
+            question = f"Đi {destination.name} thì bạn đi mấy người?" if destination else "Bạn đi mấy người?"
+        else:
+            question = f"How many people for {destination.name}?" if destination else "How many people are traveling?"
 
     parsed_destination = None
     if destination:
@@ -810,14 +1192,17 @@ def _normalize_ai_intent(context: str, payload: dict, locale: str = "vi") -> dic
     window = rules.get("window")
     raw_window = rules.get("raw_window") or payload.get("time_window")
     if window is None:
-        window = _normalize_time_window(payload.get("time_window"))
+        ai_window = _normalize_time_window(payload.get("time_window"))
+        if ai_window and _DATE_RANGE_RE.search(folded) and not _has_explicit_clock(folded):
+            ai_window = None
+        window = ai_window
     days = rules.get("days")
     minutes = rules.get("minutes")
     if days is None and minutes is None and window is None:
         days, minutes = _normalize_duration(payload.get("duration_value"), payload.get("duration_unit"))
-        if days and not _DAY_COUNT_RE.search(folded) and not any(phrase in folded for phrase in _DAY_WORDS):
+        if days and not _DAY_COUNT_RE.search(folded) and not any(phrase in folded for phrase in _DAY_WORDS) and not any(phrase in folded for phrase in _WEEK_WORDS) and not _WEEK_COUNT_RE.search(folded) and not _DATE_RANGE_RE.search(folded):
             days = None
-        if minutes and not _HOUR_SPAN_RE.search(folded) and not _HOUR_COMPACT_RE.search(folded):
+        if minutes and not _HOUR_SPAN_RE.search(folded) and not _HOUR_COMPACT_RE.search(folded) and not _MINUTE_SPAN_RE.search(folded) and not _FRACTION_HOUR_RE.search(folded):
             minutes = None
     if window:
         minutes = None

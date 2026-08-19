@@ -130,3 +130,29 @@ def test_create_ai_adapter_raises_outside_local_without_key(monkeypatch):
     monkeypatch.setattr(ai_module, "settings", FakeSettings())
     with pytest.raises(RuntimeError):
         ai_module.create_ai_adapter()
+
+
+def test_qwen_chat_payload_disables_thinking():
+    from app.services.ai import _chat_reply_payload, _strip_cjk, _strip_chat_reasoning
+
+    payload = _chat_reply_payload("qwen/qwen3.6-27b", [{"role": "user", "content": "hi"}])
+    assert payload["reasoning_effort"] == "none"
+    assert payload["reasoning_format"] == "hidden"
+    llama = _chat_reply_payload("llama-3.3-70b-versatile", [{"role": "user", "content": "hi"}])
+    assert "reasoning_effort" not in llama
+    assert _strip_chat_reasoning("Ở Hà Nội nên đi Hồ Gươm.") == "Ở Hà Nội nên đi Hồ Gươm."
+    assert _strip_chat_reasoning("Here's a thinking process: GROUNDED_INTENT user_goal is places") == ""
+    assert "行程" not in _strip_cjk("dự kiến行程 kéo dài bao lâu", "vi")
+    assert "lịch trình" in _strip_cjk("dự kiến行程 kéo dài bao lâu", "vi")
+
+
+def test_offline_adapter_estimates_visit_durations_from_catalog():
+    adapter = OfflineAIAdapter()
+    estimates = adapter.estimate_visit_durations(
+        [
+            {"id": "curated-yen-tu", "name": "Yên Tử", "catalog_minutes": 300},
+            {"id": "curated-yen-tu-cap-treo", "name": "Cáp treo Yên Tử", "catalog_minutes": 50},
+        ]
+    )
+    assert estimates["curated-yen-tu"] == 300
+    assert estimates["curated-yen-tu-cap-treo"] == 50

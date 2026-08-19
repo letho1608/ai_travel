@@ -1,3 +1,6 @@
+import io
+import json
+import urllib.error
 from dataclasses import replace
 
 from app.services import google_places
@@ -74,3 +77,101 @@ def test_google_enrichment_applies_rating_review_to_slot_and_evidence():
     assert "rating" not in ranking["du_lieu_thieu"]
     assert "so_review" not in ranking["du_lieu_thieu"]
     assert slot["bang_chung"]["thong_tin_danh_gia"]["nguon"] == "Google Places API"
+
+
+class FakeUrlOpen:
+    def __init__(self, payload):
+        self._payload = json.dumps(payload).encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return self._payload
+
+
+def test_search_named_place_returns_google_hit(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(google_places.settings, google_maps_api_key="test-key"),
+    )
+
+    def fake_urlopen(request, timeout=8):
+        return FakeUrlOpen(
+            {
+                "places": [
+                    {
+                        "id": "ChIJtuanChau",
+                        "displayName": {"text": "Đảo Tuần Châu"},
+                        "location": {"latitude": 20.9226, "longitude": 106.9894},
+                        "types": ["tourist_attraction"],
+                        "googleMapsUri": "https://maps.google.com/?cid=tuan-chau",
+                        "rating": 4.4,
+                        "userRatingCount": 3200,
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    place = google_places.search_named_place("đảo tuần châu", (20.9108, 107.1839), "Hạ Long")
+    assert place is not None
+    assert place.id == "google-ChIJtuanChau"
+    assert place.name == "Đảo Tuần Châu"
+    assert place.source == "Google Places"
+    assert place.kind == "dia_danh"
+    assert place.google_place_id == "ChIJtuanChau"
+
+
+def test_enrich_does_not_count_blocked_places_api(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(
+            google_places.settings,
+            google_maps_api_key="test-key",
+            google_places_runtime_photos=False,
+            google_places_runtime_hours=False,
+        ),
+    )
+
+    def fake_urlopen(request, timeout=8):
+        raise urllib.error.HTTPError(
+            google_places.GOOGLE_TEXT_SEARCH_URL,
+            403,
+            "Forbidden",
+            {},
+            io.BytesIO(b'{"error":{"status":"PERMISSION_DENIED"}}'),
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    plan = {
+        "ngay": [
+            {
+                "khoang_gio": [
+                    {
+                        "dia_diem_id": "osm-node-1",
+                        "ten_dia_diem": "Hồ Gươm",
+                        "toa_do": {"lat": 21.0285, "lng": 105.852},
+                    },
+                    {
+                        "dia_diem_id": "osm-node-2",
+                        "ten_dia_diem": "Văn Miếu",
+                        "toa_do": {"lat": 21.0278, "lng": 105.835},
+                    },
+                ]
+            }
+        ]
+    }
+
+    enriched = google_places.enrich_plan_with_google(plan)
+
+    assert enriched["google_places"]["text_search_requests_this_plan"] == 0
+    assert enriched["google_places"]["text_search_daily_used"] == 0
+    assert enriched["google_places"]["quota_blocked"] == 1

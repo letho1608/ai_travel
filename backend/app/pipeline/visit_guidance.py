@@ -76,7 +76,7 @@ def _guidance_from_item(item: object) -> VisitGuidance | None:
     close_hour = optional_int("close_hour", 1, 24)
     if open_hour is not None and close_hour is not None and open_hour >= close_hour:
         return None
-    duration_min = optional_int("duration_min", 20, 240)
+    duration_min = optional_int("duration_min", 20, 480)
     tip = item.get("tip")
     source = item.get("source")
     return VisitGuidance(
@@ -388,6 +388,35 @@ VISIT_GUIDANCE_BY_NAME: dict[str, VisitGuidance] = {
         tip="Đi bộ ngắm cọn nước, thác Tiên Sa và trải nghiệm văn hóa bản địa người H'Mông.",
         source="Sapa Tourism",
     ),
+    # Yên Tử — pilgrimage mountain, not a 1-hour city stop
+    "yen tu": VisitGuidance(
+        open_hour=6, close_hour=18,
+        preferred=(7, 30, 16, 30),
+        duration_min=300,
+        tip="Leo núi / cáp treo lên Chùa Đồng rồi xuống chậm: đây là nửa ngày đến cả ngày, không phải điểm check-in 1 giờ.",
+        source="Yen Tu relic site guidance",
+    ),
+    "chua dong yen tu": VisitGuidance(
+        open_hour=6, close_hour=17,
+        preferred=(8, 0, 16, 0),
+        duration_min=120,
+        tip="Đỉnh núi Yên Tử: chùa đồng, view và thời gian lên xuống; ghép với cáp treo chứ không tách thành điểm 30 phút.",
+        source="Yen Tu relic site guidance",
+    ),
+    "thien vien truc lam yen tu": VisitGuidance(
+        open_hour=7, close_hour=18,
+        preferred=(8, 0, 16, 0),
+        duration_min=120,
+        tip="Khu thiền viện dưới chân núi: đi chậm qua sân, chính điện và vườn; chừa nửa buổi.",
+        source="Yen Tu relic site guidance",
+    ),
+    "khu bao ton thien nhien tay yen tu": VisitGuidance(
+        open_hour=7, close_hour=17,
+        preferred=(8, 0, 16, 0),
+        duration_min=240,
+        tip="Khu bảo tồn / rừng núi: đi lối mòn và quan sát thiên nhiên cả buổi, không ghé 1 giờ rồi rời.",
+        source="Forest protection area guidance",
+    ),
 }
 
 # Extra id aliases when name keys differ between curated/OSM copies.
@@ -404,6 +433,9 @@ VISIT_GUIDANCE_BY_ID: dict[str, VisitGuidance] = {
     "chua-tran-quoc": VISIT_GUIDANCE_BY_NAME["chua tran quoc"],
     "long-bien": VISIT_GUIDANCE_BY_NAME["cau long bien"],
     "bao-tang-phu-nu": VISIT_GUIDANCE_BY_NAME["bao tang phu nu viet nam"],
+    "curated-yen-tu": VISIT_GUIDANCE_BY_NAME["yen tu"],
+    "curated-yen-tu-chua-dong": VISIT_GUIDANCE_BY_NAME["chua dong yen tu"],
+    "curated-yen-tu-thien-vien": VISIT_GUIDANCE_BY_NAME["thien vien truc lam yen tu"],
 }
 
 GENERATED_VISIT_GUIDANCE_BY_ID, GENERATED_VISIT_GUIDANCE_BY_NAME = _load_generated_guidance()

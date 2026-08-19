@@ -14,11 +14,13 @@ import httpx
 from app.config import settings
 from app.data import (
     DISTANCE_METADATA,
+    KNOWN_PLACE_NAMES_BY_ID,
     PLACES,
     Place,
     famous_priority,
     image_for,
     is_famous_place,
+    place_match_key,
     source_for,
 )
 from app.pipeline.visit_guidance import VisitGuidance, guidance_for
@@ -91,9 +93,11 @@ def _title_span(request: PlanRequest, number_of_days: int) -> str:
     return f"{number_of_days} days"
 
 
-def _title_motif(request: PlanRequest) -> str:
+def _title_motif(request: PlanRequest, destination_label: str | None = None) -> str:
     folded = " ".join(_ascii_fold(request.context).split())
     locale = request.ngon_ngu
+    dest_key = _ascii_fold(destination_label or "").casefold()
+    inland = dest_key in {"yen tu", "chua huong"}
     catalog: tuple[tuple[tuple[str, ...], str, str], ...] = (
         (("ca phe", "cafe", "coffee"), "cà phê", "coffee"),
         (("an ngon", "am thuc", "hai san", "food"), "ẩm thực", "food"),
@@ -106,6 +110,8 @@ def _title_motif(request: PlanRequest) -> str:
     )
     picked: list[str] = []
     for keys, vi_label, en_label in catalog:
+        if inland and vi_label in {"biển", "the beach"}:
+            continue
         if any(key in folded for key in keys):
             picked.append(vi_label if locale == "vi" else en_label)
         if len(picked) == 2:
@@ -116,7 +122,7 @@ def _title_motif(request: PlanRequest) -> str:
 def _plan_title(destination_label: str | None, request: PlanRequest, number_of_days: int) -> str:
     dest = destination_label or ("Việt Nam" if request.ngon_ngu == "vi" else "Vietnam")
     people = request.so_nguoi
-    motif = _title_motif(request)
+    motif = _title_motif(request, destination_label)
     span = _title_span(request, number_of_days)
     prefix = _title_prefix(request.ngon_ngu)
     if request.ngon_ngu == "vi":
@@ -169,11 +175,11 @@ MAX_ASKED_DAYS = 365
 _ASKED_DAY_COUNT_RE = re.compile(r"\b([1-9]\d{0,2})\s*(?:ngay|days?)\b", re.IGNORECASE)
 _CLOCK_RANGE_RE = re.compile(
     r"(?:(?:tu|from)\s+)?(?:luc\s+)?"
-    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(?<![0-9/.])(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
     r"(sang|chieu|am|pm)?"
     r"\s*(?:-|–|—|~|den|toi|to|until)\s*"
     r"(?:luc\s+)?"
-    r"(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
+    r"(?<![0-9/.])(\d{1,2})(?:[:h\.](\d{2}))?\s*(?:gio|tieng|h(?!\w)|hours?|hrs?)?\s*"
     r"(sang|chieu|toi|am|pm)?",
     re.IGNORECASE,
 )
@@ -196,8 +202,8 @@ _HOUR_WORD = {
 }
 _DATE_RANGE_RE = re.compile(
     r"(?:(?:tu|from)\s+)?(?:ngay\s+)?"
-    r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?"
-    r"\s*(?:-|–|—|den|toi|to|until)\s*"
+    r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/?\s*"
+    r"(?:-|–|—|den|toi|to|until)\s*"
     r"(?:ngay\s+)?"
     r"(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?",
     re.IGNORECASE,
@@ -480,7 +486,10 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
                 clock_label = f"{hours} giờ" if request.ngon_ngu == "vi" else f"{hours} hours"
                 break
 
+    dated_preview = _DATE_RANGE_RE.search(folded)
     clock = None if structured_window else _CLOCK_RANGE_RE.search(folded)
+    if clock and dated_preview and not re.search(r"(?:[:h]|gio|tieng)", clock.group(0), re.I):
+        clock = None
     if clock:
         start_h = _hour_with_meridiem(int(clock.group(1)), clock.group(3))
         end_h = _hour_with_meridiem(int(clock.group(4)), clock.group(6))
@@ -503,7 +512,7 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
             max_minutes = span_min
             clock_label = f"{start_hour}h–{e_h % 24}h"
 
-    dated = None if structured_duration_days else _DATE_RANGE_RE.search(folded)
+    dated = _DATE_RANGE_RE.search(folded)
     if dated:
         year1 = _parse_year(dated.group(3), today)
         year2 = _parse_year(dated.group(6), today) if dated.group(6) else year1
@@ -517,7 +526,8 @@ def _trip_timing(request: PlanRequest, today: date | None = None) -> TripTiming:
                 right = _safe_date(right.year + 1, right.month, right.day) or right
             span_days = (right - left).days + 1
             if 1 <= span_days <= MAX_TRIP_DAYS:
-                days = span_days
+                if not structured_duration_days:
+                    days = span_days
                 start_date = request.ngay_di or left
                 date_label = f"{left.day}/{left.month}–{right.day}/{right.month}"
     else:
@@ -649,7 +659,33 @@ DURATION_FALLBACKS: dict[str, tuple[int, int]] = {
     "cafe": (45, 90),
     "nha_hang": (60, 90),
     "quan_an": (45, 75),
+    "nui": (180, 360),
+    "hang_dong": (90, 180),
+    "den_chua": (60, 180),
 }
+_MOUNTAIN_DESTINATION_KEYS = {
+    "yen tu",
+    "chua huong",
+    "sa pa",
+    "ha giang",
+    "tam dao",
+    "bach ma",
+    "nui chua",
+}
+_MOUNTAIN_COMPLEX_HINTS = (
+    "yen tu",
+    "chua huong",
+    "fansipan",
+    "langbiang",
+    "ba na",
+    "tam dao",
+    "bach ma",
+    "bao ton",
+    "vuon quoc gia",
+    "thien nhien",
+    "nui chua",
+)
+_MOUNTAIN_TRANSIT_HINTS = ("cap treo", "cable car", "ga cap")
 DATA_STALENESS_POLICY = {
     "gio_mo_cua": {"max_age_days": 30, "refresh": "kiem_tra_lai truoc khi xep lich"},
     "gia": {"max_age_days": 90, "refresh": "lam moi khi dia diem duoc goi trong lich"},
@@ -664,11 +700,35 @@ GENERIC_DESTINATION_NAMES = {
     "check in",
     "checkin",
 }
+_WEAK_STRIPPED_DESTINATION_ALIASES = {
+    "chua",
+    "nui",
+    "den",
+    "vinh",
+    "dao",
+    "bien",
+    "ho",
+    "song",
+    "cau",
+    "cho",
+    "park",
+    "peak",
+    "temple",
+    "pagoda",
+}
 DESTINATION_NAME_PREFIXES = (
+    "quan the di tich danh thang ",
+    "quan the danh thang ",
+    "khu du lich ",
+    "thien vien ",
+    "chua dong ",
+    "pho co ",
+    "chua ",
+    "nui ",
+    "den ",
     "vinh ",
     "tp ",
     "thanh pho ",
-    "khu du lich ",
     "dao ",
     "bien ",
 )
@@ -726,7 +786,14 @@ FOCUS_DESTINATIONS: dict[str, dict[str, object]] = {
         "label": "Hạ Long",
         "lat": 20.9712,
         "lng": 107.0448,
-        "aliases": {"ha long", "vinh ha long", "quang ninh"},
+        "aliases": {"ha long", "vinh ha long"},
+    },
+    "yen_tu": {
+        "label": "Yên Tử",
+        "lat": 21.1506,
+        "lng": 106.7189,
+        "landmark": True,
+        "aliases": {"yen tu", "nui yen tu", "chua yen tu", "thien vien yen tu", "danh thang yen tu"},
     },
     "sa_pa": {
         "label": "Sa Pa",
@@ -968,7 +1035,7 @@ INTENT_PROFILES = {
         "tags": {"cafe", "coffee", "coffee_shop", "chill", "view_dep"},
     },
     "food": {
-        "terms": {"an", "an_ngon", "am_thuc", "food", "restaurant", "quan_an", "nha_hang"},
+        "terms": {"an", "an_ngon", "an_uong", "am_thuc", "food", "restaurant", "quan_an", "nha_hang"},
         "kinds": {"nha_hang", "quan_an"},
         "tags": {"am_thuc", "an_vat", "vietnamese", "local", "ban_chay", "binh_dan"},
     },
@@ -1091,7 +1158,12 @@ FAMOUS_TOURIST_NAME_HINTS = {
     "co do hoa lu",
     "crazy house",
     "dai noi",
+    "dao ti top",
     "dao titop",
+    "dong thien cung",
+    "hang dau go",
+    "hang luon",
+    "nui bai tho",
     "de hai van",
     "dinh ban co",
     "dinh cau",
@@ -1143,6 +1215,8 @@ FAMOUS_TOURIST_NAME_HINTS = {
     "van mieu",
     "vien hai duong hoc",
     "vinh ha long",
+    "yen tu",
+    "nui yen tu",
     "vinpearl",
     "vinwonders",
     "vinwonders nha trang",
@@ -1195,7 +1269,12 @@ FAMOUS_TOURIST_NAME_HINTS = {
     "vinh ha long",
     "hang sung sot",
     "dao ti top",
+    "dao titop",
     "titop",
+    "dong thien cung",
+    "hang dau go",
+    "hang luon",
+    "nui bai tho",
     "dao tuan chau",
     "tuan chau",
     "bao tang quang ninh",
@@ -1330,30 +1409,79 @@ def _place_seed(place: Place, seed: int) -> int:
     return int(hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8], 16)
 
 
+def _destination_match_aliases(name: str) -> set[str]:
+    folded = _ascii_fold(name).casefold()
+    if not folded or folded in GENERIC_DESTINATION_NAMES:
+        return set()
+    aliases = {folded}
+    for prefix in DESTINATION_NAME_PREFIXES:
+        if not folded.startswith(prefix):
+            continue
+        remainder = folded.removeprefix(prefix).strip()
+        if (
+            remainder
+            and remainder not in _WEAK_STRIPPED_DESTINATION_ALIASES
+            and remainder not in GENERIC_DESTINATION_NAMES
+            and (len(remainder) >= 5 or remainder in {"hue", "sa pa", "ha giang"})
+        ):
+            aliases.add(remainder)
+    return aliases
+
+
+def _alias_mentioned(alias: str, context: str) -> bool:
+    if not alias:
+        return False
+    if len(alias) < 4 and alias not in {"hue", "sa pa", "ha giang"}:
+        return False
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", context))
+
+
+def _nearest_focus_destination(lat: float, lng: float, max_km: float = 25.0) -> dict[str, object] | None:
+    best: tuple[float, dict[str, object]] | None = None
+    for destination in FOCUS_DESTINATIONS.values():
+        distance = haversine_km(lat, lng, float(destination["lat"]), float(destination["lng"]))
+        if distance > max_km:
+            continue
+        if best is None or distance < best[0]:
+            best = (distance, destination)
+    return None if best is None else best[1]
+
+
 @lru_cache(maxsize=1024)
 def _destination_context_from_text(context: str, lat: float, lng: float) -> tuple[float, float, str | None]:
     if not context:
         return lat, lng, None
+    hits: list[tuple[int, dict[str, object]]] = []
     for destination in FOCUS_DESTINATIONS.values():
         aliases = destination["aliases"]
-        if any(re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", context) for alias in aliases):
-            return float(destination["lat"]), float(destination["lng"]), str(destination["label"])
+        if not isinstance(aliases, set | tuple | list):
+            continue
+        for alias in aliases:
+            alias_key = str(alias).strip()
+            if not alias_key:
+                continue
+            for match in re.finditer(rf"(?<![a-z0-9]){re.escape(alias_key)}(?![a-z0-9])", context):
+                hits.append((match.start(), destination))
+    if hits:
+        hits.sort(key=lambda row: row[0])
+        cut = None
+        for match in re.finditer(r"(?<![a-z0-9])thoi(?![a-z0-9])", context):
+            cut = match.start()
+        chosen = hits[-1][1]
+        if cut is not None:
+            after = [item for item in hits if item[0] >= cut]
+            if after:
+                chosen = after[-1][1]
+        return float(chosen["lat"]), float(chosen["lng"]), str(chosen["label"])
     best: tuple[int, float, Place] | None = None
     for place in PLACES:
         if _looks_like_non_travel_business(place) or _looks_closed(place):
             continue
-        name = _ascii_fold(place.name).casefold()
-        area = _ascii_fold(place.area).casefold()
-        if name in GENERIC_DESTINATION_NAMES:
+        name_aliases = _destination_match_aliases(place.name)
+        if not name_aliases:
             continue
-        name_aliases = {name}
-        for prefix in DESTINATION_NAME_PREFIXES:
-            if name.startswith(prefix):
-                name_aliases.add(name.removeprefix(prefix).strip())
-        name_match = any(
-            alias and (len(alias) >= 4 or alias in {"hue", "sa pa", "ha giang"}) and re.search(rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])", context)
-            for alias in name_aliases
-        )
+        name_match = any(_alias_mentioned(alias, context) for alias in name_aliases)
+        area = _ascii_fold(place.area).casefold()
         area_match = bool(
             area
             and area not in {"viet nam", "vietnam"}
@@ -1377,12 +1505,18 @@ def _destination_context_from_text(context: str, lat: float, lng: float) -> tupl
         candidate = (score, -distance, place)
         if best is None or candidate > best:
             best = candidate
-    if not best or best[0] < 6:
-        return lat, lng, None
-    place = best[2]
-    area_key = _ascii_fold(place.area).casefold()
-    label = place.area if area_key not in {"viet nam", "vietnam"} else place.name
-    return place.lat, place.lng, label or place.name
+    if best and best[0] >= 6:
+        place = best[2]
+        named = any(_alias_mentioned(alias, context) for alias in _destination_match_aliases(place.name))
+        if named:
+            return place.lat, place.lng, place.name
+        area_key = _ascii_fold(place.area).casefold()
+        label = place.area if area_key not in {"viet nam", "vietnam"} else place.name
+        return place.lat, place.lng, label or place.name
+    nearest = _nearest_focus_destination(lat, lng)
+    if nearest:
+        return float(nearest["lat"]), float(nearest["lng"]), str(nearest["label"])
+    return lat, lng, None
 
 
 def _destination_context(request: PlanRequest) -> tuple[float, float, str | None]:
@@ -1918,10 +2052,39 @@ PROVINCE_HIGHLIGHT_MAP: dict[str, tuple[str, ...]] = {
     "nha_trang": ("curated-thap-ba-ponagar", "curated-nha-trang-beach", "curated-hon-chong", "curated-vien-hai-duong-hoc", "curated-chua-long-son"),
     "ninh_binh": ("curated-trang-an", "curated-chua-bai-dinh", "curated-tam-coc", "curated-hang-mua"),
     "can_tho": ("curated-cho-noi-cai-rang", "curated-ben-ninh-kieu", "curated-nha-co-binh-thuy"),
-    "ha_long": ("curated-vinh-ha-long", "curated-hang-sung-sot", "curated-dao-ti-top"),
+    "ha_long": (
+        "curated-vinh-ha-long",
+        "curated-hang-sung-sot",
+        "curated-dao-ti-top",
+        "curated-dao-tuan-chau",
+        "curated-dong-thien-cung",
+        "curated-hang-dau-go",
+        "curated-hang-luon",
+        "curated-bai-chay",
+        "curated-nui-bai-tho",
+    ),
+    "yen_tu": (
+        "curated-yen-tu",
+        "curated-yen-tu-chua-dong",
+        "curated-yen-tu-thien-vien",
+        "curated-yen-tu-cap-treo",
+        "curated-yen-tu-giai-oan",
+    ),
     "sa_pa": ("curated-fansipan-peak", "curated-ban-cat-cat", "curated-nha-tho-da-sapa"),
     "phu_quoc": ("curated-bai-sao-phu-quoc", "curated-vinwonders-phu-quoc", "curated-sunset-sanato"),
 }
+
+
+def _catalog_place(place_id: str, by_id: dict[str, Place]) -> Place | None:
+    """Resolve a curated id even when the catalogue kept an OSM twin of the same stop."""
+    found = by_id.get(place_id)
+    if found:
+        return found
+    name = KNOWN_PLACE_NAMES_BY_ID.get(place_id)
+    if not name:
+        return None
+    want = place_match_key(name)
+    return next((place for place in by_id.values() if place_match_key(place.name) == want), None)
 
 
 def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
@@ -1945,6 +2108,7 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
             or not _near_anchor(place, origin)
             or _looks_like_non_travel_business(place)
             or _looks_closed(place)
+            or _mentions_other_destination(place, destination_label)
         ):
             return
         pinned.append(place)
@@ -1980,7 +2144,7 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
         else:
             place_ids = list(PROVINCE_HIGHLIGHT_MAP[matching_key])
         for place_id in place_ids:
-            _keep(by_id.get(place_id))
+            _keep(_catalog_place(place_id, by_id))
 
     destination_is_hanoi = destination_key in {"ha noi", "hanoi"} or (
         destination_label is None and haversine_km(destination_lat, destination_lng, 21.0285, 105.8542) <= 20
@@ -1989,22 +2153,35 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
     wants_hanoi_highlights = bool(destination_is_hanoi and explicit_anchor and (destination_label is None or tags.intersection({"ha_noi", "hanoi", "pho_co"})))
     wants_night = bool(destination_is_hanoi and tags.intersection(INTENT_PROFILES["night"]["terms"]))
     context_key = " ".join(_ascii_fold(request.context).split())
+    dest_key = _ascii_fold(destination_label or "").casefold()
 
     for place in _nearby_places(origin):
         name_key = _place_name_key(place)
-        if (
+        named_dest = bool(dest_key and dest_key in name_key)
+        mentioned = bool(
             name_key
             and " " in name_key
             and name_key in context_key
+        )
+        if (
+            (named_dest or mentioned)
             and not _is_evening_place(place)
             and not _is_bare_city_place(place)
+            and (
+                mentioned
+                or (
+                    _is_sight_place(place)
+                    and _is_iconic_place(place)
+                    and place.kind not in {"khach_san", "nha_nghi", "homestay"}
+                )
+            )
         ):
             _keep(place)
     for place_id in (
         *((*HANOI_HIGHLIGHT_IDS,) if wants_hanoi_highlights else ()),
         *((*HANOI_NIGHT_IDS,) if wants_night else ()),
     ):
-        _keep(by_id.get(place_id))
+        _keep(_catalog_place(place_id, by_id))
     if destination_label:
         famous = sorted(
             (
@@ -2020,7 +2197,7 @@ def _highlight_places(request: PlanRequest, excluded: set[str]) -> list[Place]:
                 haversine_km(destination_lat, destination_lng, place.lat, place.lng),
             ),
         )
-        highlight_cap = 10 if request.thoi_luong == "nhieu_ngay" else 6
+        highlight_cap = 12 if request.thoi_luong == "nhieu_ngay" else 6
         for place in famous[:highlight_cap]:
             _keep(place)
     return pinned
@@ -2031,11 +2208,19 @@ def _wants_night(request: PlanRequest) -> bool:
 
 
 def _wants_coffee(request: PlanRequest) -> bool:
-    return bool(relevant_tags(request.context).intersection(INTENT_PROFILES["coffee"]["terms"]))
+    return bool(relevant_tags(request.context).intersection(INTENT_PROFILES["coffee"]["terms"])) or _is_food_trip(request)
 
 
-def _is_sight_place(place: Place, *, allow_cafe: bool = False) -> bool:
+def _is_food_trip(request: PlanRequest | None) -> bool:
+    if not request:
+        return False
+    return str(_policy_get(request.intent_policy, "primary_intent") or "") == "food"
+
+
+def _is_sight_place(place: Place, *, allow_cafe: bool = False, allow_food: bool = False) -> bool:
     if place.kind in SIGHT_KINDS:
+        return True
+    if allow_food and place.kind in DINING_KINDS:
         return True
     return allow_cafe and place.kind == "cafe"
 
@@ -2044,57 +2229,13 @@ def _place_name_key(place: Place) -> str:
     return " ".join(_ascii_fold(place.name).split())
 
 
-NAME_AFFIX_TOKENS = {
-    "bai",
-    "bay",
-    "beach",
-    "bien",
-    "bridge",
-    "cape",
-    "cave",
-    "cho",
-    "chua",
-    "dao",
-    "den",
-    "dong",
-    "falls",
-    "hang",
-    "ho",
-    "hon",
-    "island",
-    "islands",
-    "lake",
-    "market",
-    "mountain",
-    "museum",
-    "nui",
-    "pagoda",
-    "palace",
-    "park",
-    "peak",
-    "point",
-    "song",
-    "temple",
-    "thac",
-    "tower",
-    "vinh",
-    "waterfall",
-}
-
-
 def _place_alias_key(place: Place) -> str:
-    """Collapse OSM twins like 'Bãi Trường' and 'Bãi Trường Beach'."""
-    key = _place_name_key(place)
-    tokens = key.split()
-    while len(tokens) > 1 and tokens[0] in NAME_AFFIX_TOKENS:
-        tokens = tokens[1:]
-    while len(tokens) > 1 and tokens[-1] in NAME_AFFIX_TOKENS:
-        tokens = tokens[:-1]
-    return " ".join(tokens) or key
+    """Collapse OSM twins like 'Bãi Trường' / 'Bãi Trường Beach' and 'Ti Tốp' / 'Titop'."""
+    return place_match_key(place.name)
 
 
 def _place_name_keys(place: Place) -> set[str]:
-    return {key for key in (_place_name_key(place), _place_alias_key(place)) if key}
+    return {key for key in (_place_name_key(place), _place_alias_key(place), place_match_key(place.name)) if key}
 
 
 def _name_taken(place: Place, used_names: set[str] | None) -> bool:
@@ -2104,6 +2245,8 @@ def _name_taken(place: Place, used_names: set[str] | None) -> bool:
 def _prefer_place(left: Place, right: Place) -> Place:
     left_score = (
         int(left.source == "curated"),
+        int(bool(left.rating)),
+        int(left.review_count or 0),
         int(left.source == "Nominatim"),
         int("beach" in left.tags),
         -len(left.name),
@@ -2111,6 +2254,8 @@ def _prefer_place(left: Place, right: Place) -> Place:
     )
     right_score = (
         int(right.source == "curated"),
+        int(bool(right.rating)),
+        int(right.review_count or 0),
         int(right.source == "Nominatim"),
         int("beach" in right.tags),
         -len(right.name),
@@ -2195,6 +2340,16 @@ def _meal_labels(locale: str) -> dict[str, str]:
 
 
 def _sight_candidates(candidates: list[Place], request: PlanRequest | None = None) -> list[Place]:
+    if request and _is_food_trip(request):
+        foodish = [
+            place
+            for place in candidates
+            if _is_dining_place(place)
+            or place.kind in {"cho", "cafe"}
+            or "am_thuc" in place.tags
+        ]
+        if len(foodish) >= 2:
+            return foodish
     allow_cafe = bool(request and _wants_coffee(request))
     sights = [
         place
@@ -2222,13 +2377,31 @@ def _intent_policy_sets(request: PlanRequest) -> tuple[set[str], set[str]]:
     return set(policy.allowed_place_themes), set(policy.avoid_place_themes)
 
 
+def _is_requested_place(place: Place, destination_label: str | None, context: str) -> bool:
+    dest_key = _ascii_fold(destination_label or "").casefold()
+    name_key = _place_name_key(place)
+    if dest_key and dest_key in name_key:
+        return True
+    context_key = " ".join(_ascii_fold(context).split())
+    return bool(name_key and " " in name_key and name_key in context_key)
+
+
 def _apply_intent_policy_to_sights(sights: list[Place], request: PlanRequest, sight_count: int) -> tuple[list[Place], dict | None]:
     allowed, avoided = _intent_policy_sets(request)
     if not allowed and not avoided:
         return sights, None
-    strict = [place for place in sights if place_matches_policy(place, allowed, avoided)]
+    _, _, destination_label = _destination_context(request)
+    named = []
+    if not _is_food_trip(request):
+        named = [place for place in sights if _is_requested_place(place, destination_label, request.context)]
+    named_ids = {place.id for place in named}
+    strict = [
+        place
+        for place in sights
+        if place.id not in named_ids and place_matches_policy(place, allowed, avoided)
+    ]
     min_needed = min(sight_count, 2)
-    if len(strict) >= min_needed:
+    if named or len(strict) >= min_needed:
         ranked = sorted(
             strict,
             key=lambda place: (
@@ -2237,13 +2410,13 @@ def _apply_intent_policy_to_sights(sights: list[Place], request: PlanRequest, si
                 place.id,
             ),
         )
-        return ranked, {
+        return named + ranked, {
             "ap_dung": True,
             "che_do": "strict_filter",
             "allowed_place_themes": sorted(allowed),
             "avoid_place_themes": sorted(avoided),
             "so_ung_vien_truoc": len(sights),
-            "so_ung_vien_sau": len(ranked),
+            "so_ung_vien_sau": len(named) + len(ranked),
         }
     ranked = sorted(
         sights,
@@ -2645,7 +2818,7 @@ def _build_day_route(
                 remaining_budget -= rest.cost
             # Keep one more afternoon attraction when the day still looks thin.
             thin_day = len(day_sights) + len(day_meals) <= (3 if _is_long_trip(timing.days) else 5)
-            if thin_day:
+            if thin_day and not _is_mountain_destination(request):
                 extra = _choose_extra_sight(request, used, anchor, seed + 1, remaining_budget, used_names)
                 if extra:
                     insert_at = lunch_at + (2 if rest else 1)
@@ -2669,6 +2842,8 @@ def _build_day_route(
         return route
     timing = _trip_timing(request)
     sight_cap = 2 if timing.max_minutes <= 90 else 3 if timing.max_minutes <= 150 else min(4, max(2, timing.max_minutes // 45))
+    if _is_mountain_destination(request) and timing.max_minutes > 180:
+        sight_cap = min(2, sight_cap)
     sights = day_sights[:sight_cap]
     anchor = _anchor_for_places(sights, _lodging_anchor(request))
     refresh = None
@@ -2763,6 +2938,46 @@ def _effective_hours(place: Place) -> tuple[int, int]:
     return open_hour, close_hour
 
 
+def _place_folded_name(place: Place) -> str:
+    return _ascii_fold(place.name)
+
+
+def _is_mountain_transit(place: Place) -> bool:
+    folded = _place_folded_name(place)
+    return any(hint in folded for hint in _MOUNTAIN_TRANSIT_HINTS)
+
+
+def _is_major_mountain_complex(place: Place) -> bool:
+    if _is_mountain_transit(place):
+        return False
+    folded = _place_folded_name(place)
+    if place.kind == "nui":
+        return True
+    return any(hint in folded for hint in _MOUNTAIN_COMPLEX_HINTS)
+
+
+def _is_mountain_experience(place: Place) -> bool:
+    if _is_mountain_transit(place):
+        return False
+    if _is_major_mountain_complex(place):
+        return True
+    tags = set(place.tags)
+    if place.kind == "nui":
+        return True
+    return bool({"nui", "trekking", "peak"}.intersection(tags))
+
+
+def _is_mountain_destination(request: PlanRequest) -> bool:
+    if _is_food_trip(request):
+        return False
+    purpose = _policy_get(request.intent_policy, "primary_intent") if request.intent_policy else None
+    if purpose == "mountain":
+        return True
+    _, _, label = _destination_context(request)
+    key = _ascii_fold(label or "")
+    return key in _MOUNTAIN_DESTINATION_KEYS or any(hint in key for hint in ("yen tu", "nui "))
+
+
 def _is_outdoor_place(place: Place) -> bool:
     tags = set(place.tags)
     if "nightlife" in tags or "cho_dem" in tags or _effective_hours(place)[0] >= 17:
@@ -2818,6 +3033,8 @@ def _preferred_window(place: Place, meal_type: str | None) -> tuple[int, int, in
         return open_hour, 0, close_hour, 0
     if "nightlife" in tags or "cho_dem" in tags or open_hour >= 17:
         return max(open_hour, 18), 0, close_hour, 0
+    if _is_mountain_experience(place):
+        return max(open_hour, 7), 0, min(close_hour, 17), 0
     if place.kind == "bao_tang" or {"museum", "van_hoa", "lich_su", "heritage"}.intersection(tags):
         return max(open_hour, 8), 30, min(close_hour, 17), 0
     if _is_outdoor_place(place):
@@ -2860,7 +3077,12 @@ def _outdoor_afternoon_window(base: datetime) -> tuple[datetime, datetime]:
     return _at_clock(base, 14, 0), _at_clock(base, 17, 45)
 
 
-def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest) -> int:
+def _visit_minutes_for(
+    place: Place,
+    meal_type: str | None,
+    request: PlanRequest,
+    duration_override: int | None = None,
+) -> int:
     short_window = request.thoi_luong == "vai_gio" or _trip_timing(request).max_minutes <= 180
     if meal_type:
         minutes = min(MEAL_DURATION[meal_type], place.duration_min, 90)
@@ -2870,8 +3092,18 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
 
     # Specific realistic durations for major landmark categories
     folded_name = _ascii_fold(place.name)
-    if any(k in folded_name for k in ["ba na hills", "vinwonders", "sun world", "fansipan"]):
+    if _is_mountain_transit(place):
+        minutes = min(60, max(40, place.duration_min or 45))
+    elif any(k in folded_name for k in ["ba na hills", "vinwonders", "sun world", "fansipan"]):
         minutes = 240
+    elif _is_major_mountain_complex(place):
+        tip = _guidance(place)
+        minutes = max(240, tip.duration_min if tip and tip.duration_min else 0, place.duration_min or 0)
+        minutes = min(360, minutes)
+    elif _is_mountain_experience(place):
+        tip = _guidance(place)
+        minutes = max(180, tip.duration_min if tip and tip.duration_min else 0, place.duration_min or 0)
+        minutes = min(300, minutes)
     elif place.kind == "bao_tang" or any(k in folded_name for k in ["dai noi", "dinh doc lap", "hoang thanh"]):
         minutes = max(90, place.duration_min)
     elif place.kind in {"cau", "tuong_dai"} or any(k in folded_name for k in ["cau rong", "cau vang", "cot co"]):
@@ -2879,7 +3111,13 @@ def _visit_minutes_for(place: Place, meal_type: str | None, request: PlanRequest
     else:
         tip = _guidance(place)
         minutes = tip.duration_min if tip and tip.duration_min else place.duration_min
-    if short_window and minutes < 180:
+    if duration_override and not meal_type:
+        minutes = max(MIN_VISIT_MINUTES, min(480, int(duration_override)))
+        if _is_major_mountain_complex(place):
+            minutes = max(180, minutes)
+        elif _is_mountain_experience(place):
+            minutes = max(120, minutes)
+    if short_window and minutes < 180 and not _is_mountain_experience(place):
         window_minutes = _trip_timing(request).max_minutes
         if window_minutes <= 90:
             minutes = min(minutes, 35)
@@ -3232,6 +3470,19 @@ def _at_clock(base: datetime, hour: int, minute: int = 0) -> datetime:
     return base.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
+def _visit_duration_override(details: dict | None) -> int | None:
+    if not isinstance(details, dict):
+        return None
+    raw = details.get("thoi_luong_phut") or details.get("duration_min")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if MIN_VISIT_MINUTES <= value <= 480:
+        return value
+    return None
+
+
 def _compute_slot_bounds(
     place: Place,
     meal_type: str | None,
@@ -3242,6 +3493,7 @@ def _compute_slot_bounds(
     *,
     relax: bool = False,
     weather: dict | None = None,
+    duration_override: int | None = None,
 ) -> tuple[datetime, datetime, int] | None:
     open_hour, close_hour = _effective_hours(place)
     opening = _at_clock(arrive, open_hour, 0)
@@ -3249,7 +3501,7 @@ def _compute_slot_bounds(
     pref_start, pref_m, pref_end, pref_end_m = _pick_visit_window(place, meal_type, arrive)
     preferred_open = _at_clock(arrive, pref_start, pref_m)
     preferred_close = _at_clock(arrive, pref_end, pref_end_m)
-    visit = _visit_minutes_for(place, meal_type, request)
+    visit = _visit_minutes_for(place, meal_type, request, duration_override)
     night_market = _is_night_market(place)
 
     earliest = max(arrive, opening, day_start)
@@ -3269,7 +3521,7 @@ def _compute_slot_bounds(
     # Outdoor without explicit dual guidance: morning if early, else afternoon cool window.
     tip = _guidance(place)
     adverse_outdoor_weather = _weather_discourages_midday_outdoor(weather)
-    if not meal_type and _is_outdoor_place(place) and not tip and not relax:
+    if not meal_type and _is_outdoor_place(place) and not _is_mountain_experience(place) and not tip and not relax:
         arrive_hour = arrive.hour + arrive.minute / 60
         cool_start, cool_end = _outdoor_afternoon_window(arrive)
         if adverse_outdoor_weather:
@@ -3286,6 +3538,7 @@ def _compute_slot_bounds(
         not meal_type
         and adverse_outdoor_weather
         and _is_outdoor_place(place)
+        and not _is_mountain_experience(place)
         and 11 <= (arrive.hour + arrive.minute / 60) < 15
     ):
         ideal = max(earliest, _at_clock(arrive, 15, 0))
@@ -3379,7 +3632,8 @@ def _pack_day_slots(
                 travel = travel_minutes(previous, place) if previous else 0
                 arrive = cursor + timedelta(minutes=travel)
                 bounds = _compute_slot_bounds(
-                    place, meal_type, arrive, day_start, day_end, request, relax=relax, weather=weather
+                    place, meal_type, arrive, day_start, day_end, request, relax=relax, weather=weather,
+                    duration_override=_visit_duration_override(llm_details_by_id.get(place.id)),
                 )
                 if not bounds:
                     continue
@@ -3599,7 +3853,8 @@ def _fill_trailing_window(
             travel = travel_minutes(prev_place, option)
             arrive = cursor + timedelta(minutes=travel)
             bounds = _compute_slot_bounds(
-                option, None, arrive, day_start, day_end, request, relax=True, weather=weather
+                option, None, arrive, day_start, day_end, request, relax=True, weather=weather,
+                duration_override=_visit_duration_override(llm_details_by_id.get(option.id)),
             )
             if not bounds:
                 continue
@@ -3703,9 +3958,11 @@ def _backfill_day_gaps(
             travel = travel_minutes(prev_place, option)
             arrive = cursor + timedelta(minutes=travel)
             option_bounds = _compute_slot_bounds(
-                option, None, arrive, day_start, day_end, request, weather=weather
+                option, None, arrive, day_start, day_end, request, weather=weather,
+                duration_override=_visit_duration_override(llm_details_by_id.get(option.id)),
             ) or _compute_slot_bounds(
-                option, None, arrive, day_start, day_end, request, relax=True, weather=weather
+                option, None, arrive, day_start, day_end, request, relax=True, weather=weather,
+                duration_override=_visit_duration_override(llm_details_by_id.get(option.id)),
             )
             if not option_bounds:
                 continue
@@ -3788,7 +4045,10 @@ def _schedule_stop(
     labels: dict[str, str],
 ) -> tuple[dict | None, datetime, int]:
     day_end = day_start + timedelta(minutes=max_minutes)
-    bounds = _compute_slot_bounds(place, meal_type, cursor, day_start, day_end, request)
+    bounds = _compute_slot_bounds(
+        place, meal_type, cursor, day_start, day_end, request,
+        duration_override=_visit_duration_override(llm_detail),
+    )
     if not bounds:
         return None, cursor, 0
     start, end, _visit = bounds
@@ -3815,16 +4075,27 @@ def _schedule_stop(
     return slot, end, place.cost * request.so_nguoi
 
 
+def _landmark_destination_labels() -> set[str]:
+    return {
+        _ascii_fold(str(destination["label"])).casefold()
+        for destination in FOCUS_DESTINATIONS.values()
+        if destination.get("landmark")
+    }
+
+
 def _is_bare_city_place(place: Place) -> bool:
     """True when the catalogue row is the city itself, not a visit-able stop."""
     name_key = _place_name_key(place)
     if not name_key:
+        return False
+    if name_key in _landmark_destination_labels():
         return False
     if name_key in BARE_CITY_SPELLINGS:
         return True
     return any(
         name_key == _ascii_fold(str(destination["label"])).casefold()
         for destination in FOCUS_DESTINATIONS.values()
+        if not destination.get("landmark")
     )
 
 
@@ -3847,11 +4118,12 @@ def _mentions_other_destination(place: Place, current_label: str | None) -> bool
     if not current_label:
         return False
     name_key = _place_name_key(place)
+    area_key = _ascii_fold(place.area).casefold()
     current_key = _ascii_fold(current_label).casefold()
     destination_terms = {
         "Hà Nội": {"ha noi", "hanoi"},
         "TP.HCM": {"tp hcm", "sai gon", "saigon", "thanh pho ho chi minh"},
-        "Hạ Long": {"ha long", "halong"},
+        "Hạ Long": {"ha long", "halong", "bai chay", "tuan chau"},
         "Đà Nẵng": {"da nang", "danang"},
         "Hội An": {"hoi an"},
         "Nha Trang": {"nha trang"},
@@ -3862,6 +4134,9 @@ def _mentions_other_destination(place: Place, current_label: str | None) -> bool
         "Huế": {"hue"},
         "Cần Thơ": {"can tho"},
         "Ninh Bình": {"ninh binh"},
+        "Hải Phòng": {"hai phong", "haiphong", "do son", "cat ba"},
+        "Yên Tử": {"yen tu"},
+        "Chùa Hương": {"chua huong"},
     }
     current_terms = next(
         (terms for label, terms in destination_terms.items() if _ascii_fold(label).casefold() == current_key),
@@ -3875,6 +4150,20 @@ def _mentions_other_destination(place: Place, current_label: str | None) -> bool
             and not (term == "hue" and "nguyen hue" in name_key)
             for term in terms
         ):
+            return True
+    landmark_homes = {
+        "yen tu": {"quang ninh", "yen tu", "uong bi", "viet nam", "vietnam"},
+        "chua huong": {"ha noi", "hanoi", "my duc", "viet nam", "vietnam"},
+    }
+    if current_key in landmark_homes and current_key not in name_key:
+        if area_key in landmark_homes[current_key]:
+            return False
+        foreign_area_terms = {
+            "ha noi", "hanoi", "hai phong", "haiphong", "ha long", "halong",
+            "thanh pho hai phong", "cat ba", "do son", "da nang", "nha trang",
+            "sa pa", "sapa", "tp hcm", "hoi an", "hue", "da lat", "vung tau",
+        }
+        if any(term in area_key for term in foreign_area_terms):
             return True
     return False
 
@@ -3894,7 +4183,11 @@ def _tourism_quality_score(place: Place) -> int:
     elif priority == 2:
         score += 55
     elif priority == 3:
-        score += 20
+        score += 8
+    if (place.review_count or 0) >= 5000:
+        score += 18
+    elif (place.review_count or 0) >= 1000:
+        score += 8
     if place.image_url or image_for(place)[0]:
         score += 35
     if place.kind in {"bai_bien", "nui", "hang_dong", "di_tich", "den_chua", "bao_tang", "giai_tri"}:
@@ -3947,6 +4240,7 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     candidates = [
         p for p in source_places
         if p.id not in excluded
+        and str(p.name or "").strip()
         and p.cost <= request.ngan_sach
         and is_routable(p)
         and not _is_place_disliked(p, disliked_profiles, request.context)
@@ -3969,6 +4263,8 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     ranked = sorted(
         candidates,
         key=lambda p: (
+            -int(_is_requested_place(p, destination_label, request.context)),
+            -int(_is_food_trip(request) and (_is_dining_place(p) or p.kind in {"cho", "cafe"})),
             -_intent_score(p, profiles),
             -_tourism_quality_score(p),
             -int(p.kind in SIGHT_KINDS),
@@ -3985,10 +4281,20 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
     if not quality_pool:
         return []
     highlights = _highlight_places(request, excluded)
+    must_see_ids = {
+        place_id
+        for ids in PROVINCE_HIGHLIGHT_MAP.values()
+        for place_id in ids
+    } | set(HANOI_HIGHLIGHT_IDS) | set(HANOI_NIGHT_IDS)
+    must_highlights = [place for place in highlights if place.id in must_see_ids]
+    flex_highlights = [place for place in highlights if place.id not in must_see_ids]
+    rng = random.Random(seed)
+    rng.shuffle(must_highlights)
+    rng.shuffle(flex_highlights)
+    highlights = must_highlights + flex_highlights
     highlight_ids = {place.id for place in highlights}
     intent_matches = [place for place in quality_pool if _intent_score(place, profiles) > 0]
     other_matches = [place for place in quality_pool if _intent_score(place, profiles) <= 0]
-    rng = random.Random(seed)
     if destination_label:
         nearby_iconic = {
             place.id
@@ -4008,9 +4314,19 @@ def choose_candidates(request: PlanRequest, excluded: set[str] | None = None) ->
         )
         rest_intent = [place for place in intent_matches if place.id not in nearby_iconic]
         rest_other = [place for place in other_matches if place.id not in nearby_iconic]
-        fillers = rest_intent[3:] + rest_other
-        rng.shuffle(fillers)
-        ordered = iconic_matches + rest_intent[:3] + fillers
+        fillers = sorted(
+            rest_intent[3:] + rest_other,
+            key=lambda place: (
+                -_tourism_quality_score(place),
+                famous_priority(place) or 9,
+                haversine_km(destination_lat, destination_lng, place.lat, place.lng),
+            ),
+        )
+        notable = [place for place in fillers if _tourism_quality_score(place) >= 50]
+        obscure = [place for place in fillers if _tourism_quality_score(place) < 50]
+        rng.shuffle(iconic_matches)
+        rng.shuffle(notable)
+        ordered = iconic_matches + rest_intent[:3] + notable + obscure
         return highlights + [place for place in ordered if place.id not in highlight_ids]
     if intent_matches:
         pinned = intent_matches[:1]
@@ -4252,6 +4568,57 @@ def _select_llm_first_places(
     return selected, details_by_id
 
 
+def _enrich_visit_durations(
+    places: list[Place],
+    request: PlanRequest,
+    details_by_id: dict[str, dict] | None,
+) -> dict[str, dict]:
+    details = dict(details_by_id or {})
+    if not places:
+        return details
+    payload = [
+        {
+            "id": place.id,
+            "name": place.name,
+            "kind": place.kind,
+            "tags": list(place.tags)[:8],
+            "area": place.area,
+            "catalog_minutes": _visit_minutes_for(place, None, request),
+        }
+        for place in places[:16]
+    ]
+    estimates: dict = {}
+    should_ask_llm = _is_mountain_destination(request) or any(
+        _is_mountain_experience(place) or _is_major_mountain_complex(place) for place in places
+    )
+    estimator = getattr(ai_adapter, "estimate_visit_durations", None)
+    if should_ask_llm and callable(estimator):
+        try:
+            estimates = estimator(payload, request.ngon_ngu) or {}
+        except Exception:
+            estimates = {}
+    if not isinstance(estimates, dict):
+        estimates = {}
+    for place in places:
+        raw = estimates.get(place.id)
+        try:
+            minutes = int(raw)
+        except (TypeError, ValueError):
+            minutes = 0
+        if minutes < MIN_VISIT_MINUTES or minutes > 480:
+            continue
+        if _is_major_mountain_complex(place):
+            minutes = max(180, minutes)
+        elif _is_mountain_experience(place):
+            minutes = max(120, minutes)
+        elif _is_mountain_transit(place):
+            minutes = min(60, minutes)
+        entry = dict(details.get(place.id) or {})
+        entry["thoi_luong_phut"] = minutes
+        details[place.id] = entry
+    return details
+
+
 def _join_sentences(parts: list[str], limit: int = 700) -> str:
     text = " ".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
     return text[:limit].rstrip()
@@ -4307,6 +4674,15 @@ def _named_attraction_copy(place: Place) -> tuple[str, str] | None:
         (("fansipan",),
          "Fansipan: cáp hoặc trekking lên nóc nhà Đông Dương, nhiệt độ thấp hơn thị trấn Sa Pa rõ rệt.",
          "Mang áo ấm; tính giờ cáp khứ hồi, mây dày có thể che view."),
+        (("yen tu", "chua dong"),
+         "Yên Tử là hành trình núi và chùa: cáp hoặc leo bộ lên Chùa Đồng, dừng thở và xuống chậm — nửa ngày đến cả ngày, không phải điểm ghé 1 giờ.",
+         "Đi sớm, mang giày bám và nước; tính giờ cáp khứ hồi và xuống trước khi cổng đóng."),
+        (("thien vien truc lam",),
+         "Thiền viện Trúc Lâm dưới chân Yên Tử: đi chậm qua sân, chính điện và vườn thông, chừa nửa buổi.",
+         "Trang phục kín đáo; kết hợp buổi sáng hoặc chiều với lối lên núi, đừng xếp sát điểm khác 1 giờ."),
+        (("bao ton", "vuon quoc gia"),
+         "Khu bảo tồn / rừng núi: đi lối mòn, quan sát và nghỉ trong rừng cả buổi thay vì check-in rồi đi.",
+         "Mang nước, mũ và xuống trước tối; hỏi lối mòn nào được phép đi."),
     )
     for hints, activity, tip in named:
         if any(hint in key for hint in hints):
@@ -4567,6 +4943,7 @@ def _select_sight_places(
     sight_pool, policy_evidence = _apply_intent_policy_to_sights(sight_pool, request, sight_count)
     llm_details_by_id: dict[str, dict] = {}
     allow_cafe = _wants_coffee(request)
+    allow_food = _is_food_trip(request)
     llm_first = _select_llm_first_places(sight_pool, sight_count, request)
     if llm_first:
         chosen, llm_details_by_id = llm_first
@@ -4574,7 +4951,8 @@ def _select_sight_places(
             [
                 place
                 for place in chosen
-                if not _is_dining_place(place) and _is_sight_place(place, allow_cafe=allow_cafe)
+                if _is_sight_place(place, allow_cafe=allow_cafe, allow_food=allow_food)
+                and (allow_food or not _is_dining_place(place))
             ]
         )
         if len(chosen) >= min(sight_count, 2):
@@ -4604,7 +4982,7 @@ def _select_sight_places(
             sight_pool,
             8 * 60,
             8 * 60 + max_minutes,
-            {place.id: max(MIN_VISIT_MINUTES, place.duration_min or 60) for place in sight_pool[:80]},
+            {place.id: _visit_minutes_for(place, None, request) for place in sight_pool[:80]},
             score_by_id,
             travel_minutes,
             min_places=sight_count,
@@ -4746,6 +5124,8 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
         else:
             min_slots = max(min(min_slots, 2), 2)
     destination_lat, destination_lng, destination_label = _destination_context(request)
+    if _is_mountain_destination(request) and max_minutes > 180:
+        sight_total = min(sight_total, max(2, 2 * number_of_days))
     if input_understanding is None:
         input_understanding = _request_understanding(request)
     candidates = choose_candidates(request, excluded)
@@ -4758,6 +5138,7 @@ def build_plan(request: PlanRequest, excluded: set[str] | None = None, input_und
         number_of_days,
     )
     sight_chosen = _dedupe_places(sight_chosen)
+    llm_details_by_id = _enrich_visit_durations(sight_chosen, request, llm_details_by_id)
     if len(sight_chosen) < min(sight_total, 2):
         raise PipelineUnavailable("Không đủ địa điểm tham quan tin cậy trong ngân sách")
 

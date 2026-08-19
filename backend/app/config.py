@@ -58,6 +58,7 @@ class Settings:
     weather_enabled: bool = False
     ai_base_url: str = "https://api.deepseek.com"
     ai_model: str = "deepseek-v4-flash"
+    ai_chat_model: str = "deepseek-v4-flash"
     ai_api_key: str | None = None
     ai_input_usd_per_million: float = 0.14
     ai_output_usd_per_million: float = 0.28
@@ -262,6 +263,17 @@ class Settings:
                 "llama-3.3-70b-versatile"
                 if os.getenv("AI_MODE", "groq") == "groq"
                 else "deepseek-v4-flash"
+            ),
+            ai_chat_model=(
+                os.getenv("TEN_MODEL_GROQ_CHAT")
+                if os.getenv("AI_MODE", "groq") == "groq"
+                else os.getenv("TEN_MODEL_DEEPSEEK_CHAT")
+            ) or (
+                "qwen/qwen3.6-27b"
+                if os.getenv("AI_MODE", "groq") == "groq"
+                else (
+                    os.getenv("TEN_MODEL_DEEPSEEK") or "deepseek-v4-flash"
+                )
             ),
             ai_api_key=(
                 os.getenv("API_KEY_GROQ")

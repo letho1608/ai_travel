@@ -8,6 +8,7 @@ place is not billed repeatedly across later plans.
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from copy import deepcopy
@@ -67,7 +68,8 @@ def _load_cache() -> dict[str, Any]:
         return {"metadata": {}, "places": {}}
     metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     places = payload.get("places") if isinstance(payload.get("places"), dict) else {}
-    return {"metadata": metadata, "places": places}
+    lookups = payload.get("lookups") if isinstance(payload.get("lookups"), dict) else {}
+    return {"metadata": metadata, "places": places, "lookups": lookups}
 
 
 def _save_cache(cache: dict[str, Any]) -> None:
@@ -108,6 +110,11 @@ def _record_request(cache: dict[str, Any], sku: str) -> None:
 
 def _quota_available(cache: dict[str, Any], sku: str, daily_cap: int, monthly_cap: int) -> bool:
     return _today_usage(cache, sku) < daily_cap and _month_usage(cache, sku) < monthly_cap
+
+
+def _places_http_blocked(exc: BaseException) -> bool:
+    """True when Google rejected the key/method; those calls are not billed usage."""
+    return isinstance(exc, urllib.error.HTTPError) and exc.code in {401, 403}
 
 
 def _photo_url(photo_name: str, api_key: str) -> str:
@@ -282,6 +289,7 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
     photo_quota_blocked = 0
     hours_quota_blocked = 0
     cache_changed = False
+    places_api_blocked = False
     for day in result.get("ngay", []):
         slots = day.get("khoang_gio") if isinstance(day, dict) else None
         if not isinstance(slots, list):
@@ -310,7 +318,8 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
                 ):
                     continue
             if (
-                per_plan_remaining <= 0
+                places_api_blocked
+                or per_plan_remaining <= 0
                 or text_daily_cap <= 0
                 or text_monthly_cap <= 0
                 or not _quota_available(
@@ -329,10 +338,6 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
             )
             if wants_hours and not has_hours_quota:
                 hours_quota_blocked += 1
-            _record_request(cache, "text_search")
-            request_count += 1
-            per_plan_remaining -= 1
-            cache_changed = True
             try:
                 enriched = _fetch_google_slot(
                     slot,
@@ -340,8 +345,14 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
                     include_photos=has_photo_quota,
                     include_hours=has_hours_quota,
                 )
-            except Exception:
+            except Exception as exc:
+                if _places_http_blocked(exc):
+                    places_api_blocked = True
                 continue
+            _record_request(cache, "text_search")
+            request_count += 1
+            per_plan_remaining -= 1
+            cache_changed = True
             if not enriched:
                 cache_places[slot_id] = {
                     "negative": True,
@@ -391,3 +402,147 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
         "hours_quota_blocked": hours_quota_blocked,
     }
     return result
+
+
+_GOOGLE_KIND_BY_TYPE = {
+    "museum": "bao_tang",
+    "art_gallery": "bao_tang",
+    "restaurant": "nha_hang",
+    "cafe": "cafe",
+    "coffee_shop": "cafe",
+    "park": "cong_vien",
+    "amusement_park": "giai_tri",
+    "tourist_attraction": "dia_danh",
+    "church": "den_chua",
+    "hindu_temple": "den_chua",
+    "mosque": "den_chua",
+    "pagoda": "den_chua",
+    "place_of_worship": "den_chua",
+    "beach": "bai_bien",
+    "natural_feature": "dia_danh",
+    "market": "cho",
+}
+
+
+def _kind_from_google_types(types: list[str] | None) -> str:
+    for google_type in types or []:
+        kind = _GOOGLE_KIND_BY_TYPE.get(str(google_type))
+        if kind:
+            return kind
+    return "dia_danh"
+
+
+def search_named_place(
+    name: str,
+    origin: tuple[float, float],
+    city: str | None = None,
+) -> Any | None:
+    """Look up a user-typed place on Google Maps. Returns a Place or None."""
+    from app.data import Place
+    from app.pipeline.routing import haversine_km
+
+    query = " ".join(str(name or "").split())
+    if not query or not settings.google_maps_api_key:
+        return None
+    cache = _load_cache()
+    lookup_key = f"{query.casefold()}|{city or ''}|{origin[0]:.2f}|{origin[1]:.2f}"
+    lookups = cache.setdefault("lookups", {})
+    cached = lookups.get(lookup_key)
+    if isinstance(cached, dict):
+        if cached.get("negative"):
+            return None
+        try:
+            data = {key: value for key, value in cached.items() if key in Place.__dataclass_fields__}
+            if isinstance(data.get("tags"), list):
+                data["tags"] = tuple(data["tags"])
+            return Place(**data)
+        except (TypeError, ValueError):
+            pass
+    if not _quota_available(
+        cache,
+        "text_search",
+        settings.google_places_text_search_daily_cap,
+        settings.google_places_text_search_monthly_cap,
+    ):
+        return None
+    query_text = f"{query} {city} Việt Nam" if city else f"{query} Việt Nam"
+    body = json.dumps(
+        {
+            "textQuery": query_text,
+            "languageCode": "vi",
+            "regionCode": "VN",
+            "locationBias": {
+                "circle": {
+                    "center": {"latitude": float(origin[0]), "longitude": float(origin[1])},
+                    "radius": 45000.0,
+                }
+            },
+            "pageSize": 3,
+        }
+    ).encode()
+    request = urllib.request.Request(
+        GOOGLE_TEXT_SEARCH_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": settings.google_maps_api_key,
+            "X-Goog-FieldMask": (
+                "places.id,places.displayName,places.formattedAddress,places.location,"
+                "places.types,places.googleMapsUri,places.rating,places.userRatingCount"
+            ),
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            rows = json.load(response).get("places") or []
+    except (OSError, TimeoutError, ValueError, TypeError):
+        return None
+    _record_request(cache, "text_search")
+    chosen = None
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        location = row.get("location") if isinstance(row.get("location"), dict) else {}
+        try:
+            lat = float(location.get("latitude"))
+            lng = float(location.get("longitude"))
+        except (TypeError, ValueError):
+            continue
+        if haversine_km(origin[0], origin[1], lat, lng) > 55:
+            continue
+        display = row.get("displayName") if isinstance(row.get("displayName"), dict) else {}
+        label = str(display.get("text") or query).strip()
+        place_id = str(row.get("id") or "").strip()
+        if not place_id or not label:
+            continue
+        maps_url = row.get("googleMapsUri") or f"https://www.google.com/maps/search/?api=1&query_place_id={place_id}"
+        rating = row.get("rating")
+        reviews = row.get("userRatingCount")
+        chosen = Place(
+            id=f"google-{place_id}",
+            name=label,
+            kind=_kind_from_google_types(row.get("types") if isinstance(row.get("types"), list) else None),
+            area=city or "Việt Nam",
+            lat=lat,
+            lng=lng,
+            cost=0,
+            duration_min=75,
+            tags=("map_verified", "google_verified"),
+            open_hour=7,
+            close_hour=22,
+            source="Google Places",
+            source_url=str(maps_url),
+            rating=float(rating) if isinstance(rating, int | float) else None,
+            review_count=int(reviews) if isinstance(reviews, int | float) else None,
+            google_place_id=place_id,
+            google_maps_url=str(maps_url),
+        )
+        break
+    if chosen:
+        cached_place = {key: getattr(chosen, key) for key in chosen.__dataclass_fields__}
+        cached_place["tags"] = list(chosen.tags)
+        lookups[lookup_key] = cached_place
+    else:
+        lookups[lookup_key] = {"negative": True}
+    _save_cache(cache)
+    return chosen

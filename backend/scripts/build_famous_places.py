@@ -44,8 +44,10 @@ sys.path.insert(0, str(ROOT))
 from app.data import (  # noqa: E402
     CURATED_HANOI_ANCHORS,
     CURATED_NHA_TRANG_ANCHORS,
+    CURATED_OTHER_PROVINCE_ANCHORS,
     CURATED_VN_ANCHORS,
     Place,
+    place_match_key,
     place_name_key,
 )
 from app.pipeline.famous_score import (  # noqa: E402
@@ -513,7 +515,7 @@ def dedupe(rows: list[dict]) -> list[dict]:
     kept: list[dict] = []
     index: dict[str, int] = {}
     for row in rows:
-        key = place_name_key(row["name"])
+        key = place_match_key(row["name"]) or place_name_key(row["name"])
         existing_i = index.get(key)
         if existing_i is None:
             index[key] = len(kept)
@@ -665,8 +667,15 @@ def main() -> None:
 
     payload = json.loads(args.input.read_text(encoding="utf-8"))
     catalog = payload.get("places") or []
-    curated = (*CURATED_HANOI_ANCHORS, *CURATED_NHA_TRANG_ANCHORS, *CURATED_VN_ANCHORS)
-    curated_keys = {place_name_key(place.name) for place in curated}
+    curated = (
+        *CURATED_HANOI_ANCHORS,
+        *CURATED_NHA_TRANG_ANCHORS,
+        *CURATED_OTHER_PROVINCE_ANCHORS,
+        *CURATED_VN_ANCHORS,
+    )
+    curated_keys = {place_name_key(place.name) for place in curated} | {
+        place_match_key(place.name) for place in curated
+    }
 
     osm_hits = [
         item
@@ -711,13 +720,15 @@ def main() -> None:
                 extra["source_url"] = f"https://www.wikidata.org/wiki/{extra.get('wikidata_id')}"
             rows.append(row_from_wikidata(extra))
     existing_keys = {place_name_key(row["name"]) for row in rows}
+    existing_matches = {place_match_key(row["name"]) for row in rows}
     for place in curated:
         if place.kind in SKIP_KINDS:
             continue
-        if place_name_key(place.name) in existing_keys:
+        if place_name_key(place.name) in existing_keys or place_match_key(place.name) in existing_matches:
             continue
         rows.append(row_from_place(place, curated_keys))
         existing_keys.add(place_name_key(place.name))
+        existing_matches.add(place_match_key(place.name))
 
     rows = [row for row in dedupe(rows) if in_vietnam(row["lat"], row["lng"])]
     rows = apply_hybrid_scores(

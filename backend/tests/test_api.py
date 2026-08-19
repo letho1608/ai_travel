@@ -31,6 +31,7 @@ def setup_function():
     store.available = True
     limiter.hits.clear()
     limiter.available = True
+    plans_router._MAP_PLACE_CACHE.clear()
 
 
 def test_global_request_body_limit_rejects_oversized_json_before_route_parsing():
@@ -62,6 +63,59 @@ def test_intent_parse_endpoint_returns_ask_back_and_suggestions(monkeypatch):
     assert body["parsed"]["primary_intent"] == "healing"
     assert body["parsed"]["planner_mode"] == "intent_discovery"
     assert len(body["suggestions"]) >= 2
+
+
+def test_chat_turn_endpoint_returns_conversational_reply(monkeypatch):
+    from app.pipeline import chat_turn, intent_parse
+
+    class FakeAIAdapter:
+        def extract_planning_intent(self, _context: str, _locale: str = "vi") -> dict:
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
+            return f"Yên Tử nghe hay đó. Bạn muốn đi {destination} trong bao lâu?"
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", FakeAIAdapter())
+    monkeypatch.setattr(intent_parse, "ai_adapter", FakeAIAdapter())
+    response = client.post(
+        "/api/chat/turn",
+        json={"messages": [{"role": "user", "content": "tôi muốn lên plan đi chùa yên tử"}], "ngon_ngu": "vi"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["intent"]["parsed"]["destination"]["name"] == "Yên Tử"
+    assert body["ready_to_plan"] is False
+    assert "Yên Tử" in body["reply"]
+
+
+def test_chat_turn_accepts_long_assistant_history(monkeypatch):
+    from app.pipeline import chat_turn, intent_parse
+
+    class FakeAIAdapter:
+        def extract_planning_intent(self, _context: str, _locale: str = "vi") -> dict:
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            return "Đi biển thì Vũng Tàu gần nhất."
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", FakeAIAdapter())
+    monkeypatch.setattr(intent_parse, "ai_adapter", FakeAIAdapter())
+    long_reply = "Nha Trang đẹp lắm. " * 40
+    assert len(long_reply) > 500
+    response = client.post(
+        "/api/chat/turn",
+        json={
+            "messages": [
+                {"role": "user", "content": "sài gòn thì đi đâu chơi"},
+                {"role": "assistant", "content": long_reply},
+                {"role": "user", "content": "thôi tôi muốn đi biển cơ"},
+            ],
+            "ngon_ngu": "vi",
+        },
+    )
+    assert response.status_code == 200
+    assert "biển" in response.json()["reply"].casefold() or "Vũng Tàu" in response.json()["reply"]
 
 
 def test_all_inventory_search_routes_enforce_ip_and_session_limit(monkeypatch):
@@ -255,6 +309,36 @@ def test_google_oauth_issues_session_without_password_hash():
     assert "mat_khau_hash" not in me.json()
 
 
+def test_generate_hanoi_date_range_returns_plan():
+    response = client.post(
+        "/api/plan/generate",
+        json={
+            "context": "du lịch hà nội\n20/8 - 21/8\n2 người",
+            "location": {"lat": 21.0285, "lng": 105.8542},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "ngan_sach": 1000000,
+            "ma_phien": "hanoi-dates-session",
+            "ngay_di": "2026-08-20",
+            "intent_policy": {
+                "schema_version": "intent-parse-v2",
+                "planner_mode": "multi_day_trip",
+                "duration": "nhieu_ngay",
+                "duration_days": 2,
+                "duration_unit": "day",
+            },
+        },
+    )
+    assert response.status_code == 200
+    assert "event: error" not in response.text
+    assert "event: result" in response.text
+    assert "Máy chủ không trả kế hoạch" not in response.text
+    result_line = next(line for line in response.text.splitlines() if line.startswith("data: {\"type\""))
+    payload = json.loads(result_line[6:])
+    assert payload["plan"]["thoi_luong"] == "nhieu_ngay"
+    assert len(payload["plan"]["ngay"]) == 2
+
+
 def test_generate_sse_and_shared_read_only():
     response = client.post("/api/plan/generate", json=PAYLOAD)
     assert response.status_code == 200
@@ -265,6 +349,27 @@ def test_generate_sse_and_shared_read_only():
     assert shared.status_code == 200
     denied = client.patch(f"/api/plans/{result['token']}/swipe", json={"diem_bi_loai": result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"], "phien_ban": 1, "ma_phien": "wrong"})
     assert denied.status_code == 403
+
+
+def test_generate_sse_reports_unexpected_planner_errors(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise ValueError("osm place has invalid clock")
+
+    monkeypatch.setattr(plans_router, "build_plan", boom)
+    monkeypatch.setattr(plans_router, "_request_understanding", lambda *_a, **_k: {"bat_buoc_thieu": []})
+    monkeypatch.setattr(
+        plans_router,
+        "missing_required_inputs",
+        lambda *_a, **_k: {"missing_fields": [], "questions": [], "understanding": {}},
+    )
+    response = client.post(
+        "/api/plan/generate",
+        json=PAYLOAD | {"ma_phien": "unexpected-err-session", "nonce": "unexpected-err-0001"},
+    )
+    assert response.status_code == 200
+    assert "event: error" in response.text
+    assert "Không tạo được lịch trình cho điểm đến này" in response.text
+    assert "event: result" not in response.text
 
 
 def test_generate_logs_input_extraction_for_quality_measurement():
@@ -453,14 +558,93 @@ def test_auto_replacement_ranks_similarity_before_distance():
     assert min((close_wrong, similar), key=lambda place: plans_router._replacement_rank(place, rejected)) is similar
 
 
-def test_free_text_replacement_rejects_unverified_external_operational_data(monkeypatch):
+def test_free_text_replacement_accepts_map_verified_place(monkeypatch):
     result = _generated_plan()
     target = result["plan"]["ngay"][0]["khoang_gio"][0]
-    external = Place("osm-verified-node-987", "Vườn nghệ thuật mới", "dia_danh", "Hà Nội", target["toa_do"]["lat"], target["toa_do"]["lng"], 0, 60, ("osm_verified",), 7, 22, "Nominatim", "https://www.openstreetmap.org/node/987")
-    monkeypatch.setattr(plans_router, "verify_place_name", lambda name, origin: external)
-    response = client.patch(f"/api/plans/{result['token']}/swipe", headers={"X-Session-Id": PAYLOAD["ma_phien"]}, json={"diem_bi_loai": target["dia_diem_id"], "ten_dia_diem_thay_the": external.name, "phien_ban": 1, "ma_phien": PAYLOAD["ma_phien"]})
-    assert response.status_code == 422
-    assert "không dùng AI" in response.json()["detail"]
+    external = Place(
+        "google-tuan-chau",
+        "Đảo Tuần Châu",
+        "dia_danh",
+        "Hạ Long",
+        target["toa_do"]["lat"],
+        target["toa_do"]["lng"],
+        0,
+        75,
+        ("map_verified", "google_verified"),
+        7,
+        22,
+        "Google Places",
+        "https://maps.google.com/?cid=tuan-chau",
+        google_place_id="tuan-chau",
+        google_maps_url="https://maps.google.com/?cid=tuan-chau",
+    )
+    monkeypatch.setattr(plans_router, "_resolve_named_place", lambda name, origin, city=None: external)
+    response = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+        json={
+            "diem_bi_loai": target["dia_diem_id"],
+            "ten_dia_diem_thay_the": "đảo tuần châu",
+            "phien_ban": 1,
+            "ma_phien": PAYLOAD["ma_phien"],
+        },
+    )
+    assert response.status_code == 200
+    slots = [slot for day in response.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"]]
+    replacement = next(slot for slot in slots if slot["dia_diem_id"] == external.id)
+    assert replacement["ten_dia_diem"] == "Đảo Tuần Châu"
+    assert replacement["nguon"] == "Google Places"
+    assert replacement["nguon_url"]
+    assert replacement["toa_do"]["lat"] == target["toa_do"]["lat"]
+
+
+def test_free_text_replacement_reports_missing_map_place(monkeypatch):
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]
+    monkeypatch.setattr(plans_router, "_resolve_named_place", lambda name, origin, city=None: None)
+    response = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+        json={
+            "diem_bi_loai": target["dia_diem_id"],
+            "ten_dia_diem_thay_the": "địa điểm không có thật xyz",
+            "phien_ban": 1,
+            "ma_phien": PAYLOAD["ma_phien"],
+        },
+    )
+    assert response.status_code == 404
+    assert "không tồn tại" in response.json()["detail"].casefold()
+
+
+def test_replacement_candidates_include_map_hit_when_catalog_misses(monkeypatch):
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]
+    mapped = Place(
+        "google-tuan-chau",
+        "Đảo Tuần Châu",
+        "dia_danh",
+        "Hạ Long",
+        target["toa_do"]["lat"],
+        target["toa_do"]["lng"],
+        0,
+        75,
+        ("map_verified",),
+        7,
+        22,
+        "Google Places",
+        "https://maps.google.com/?cid=tuan-chau",
+    )
+    monkeypatch.setattr(plans_router, "_resolve_named_place", lambda name, origin, city=None: mapped)
+    search = client.get(
+        f"/api/plans/{result['token']}/replacement-candidates",
+        params={"diem_bi_loai": target["dia_diem_id"], "q": "đảo tuần châu"},
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+    )
+    assert search.status_code == 200
+    suggestions = search.json()["goi_y"]
+    assert suggestions
+    assert suggestions[0]["id"] == mapped.id
+    assert suggestions[0]["ten"] == "Đảo Tuần Châu"
 
 
 def test_budget_counter_fails_closed():

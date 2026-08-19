@@ -294,11 +294,13 @@ def test_groq_environment_uses_groq_key_model_and_base_url(monkeypatch):
     monkeypatch.setenv("AI_MODE", "groq")
     monkeypatch.setenv("API_KEY_GROQ", "groq-key")
     monkeypatch.setenv("TEN_MODEL_GROQ", "llama-3.3-70b-versatile")
+    monkeypatch.delenv("TEN_MODEL_GROQ_CHAT", raising=False)
     monkeypatch.delenv("API_KEY_DEEPSEEK", raising=False)
     settings = Settings.from_env()
     assert settings.ai_mode == "groq"
     assert settings.ai_api_key == "groq-key"
     assert settings.ai_model == "llama-3.3-70b-versatile"
+    assert settings.ai_chat_model == "qwen/qwen3.6-27b"
     assert settings.ai_base_url == "https://api.groq.com/openai/v1"
 
 

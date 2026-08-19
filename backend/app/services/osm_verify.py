@@ -16,18 +16,28 @@ ALLOWED_NOMINATIM_CLASSES = {
     "leisure",
     "historic",
     "natural",
+    "place",
+    "boundary",
 }
 ALLOWED_NOMINATIM_TYPES = {
     "attraction",
+    "archipelago",
+    "bay",
+    "beach",
     "cafe",
+    "cape",
     "fast_food",
     "food_court",
+    "island",
+    "islet",
     "marketplace",
     "memorial",
     "monument",
     "museum",
     "park",
+    "peak",
     "place_of_worship",
+    "protected_area",
     "restaurant",
     "theme_park",
     "viewpoint",
@@ -120,6 +130,101 @@ def _catalog_match(name: str, origin: tuple[float, float]) -> Place | None:
     return min(matches, key=lambda place: haversine_km(origin[0], origin[1], place.lat, place.lng))
 
 
+def _nominatim_class(row: dict) -> str:
+    return str(row.get("category") or row.get("class") or "").casefold()
+
+
+def _nominatim_type(row: dict) -> str:
+    return str(row.get("type") or "").casefold()
+
+
+def _nominatim_search(query: str, origin: tuple[float, float], *, bounded: bool) -> list[dict]:
+    params: dict[str, object] = {
+        "q": query,
+        "format": "jsonv2",
+        "limit": 8,
+        "addressdetails": 1,
+    }
+    if bounded:
+        delta = 0.85
+        params["viewbox"] = f"{origin[1] - delta},{origin[0] + delta},{origin[1] + delta},{origin[0] - delta}"
+        params["bounded"] = 1
+    try:
+        response = httpx.get(
+            NOMINATIM_URL,
+            params=params,
+            headers={"User-Agent": USER_AGENT},
+            timeout=httpx.Timeout(8, connect=2),
+        )
+        response.raise_for_status()
+        rows = response.json()
+    except (httpx.HTTPError, ValueError, TypeError):
+        return []
+    return rows if isinstance(rows, list) else []
+
+
+def _place_from_nominatim(name: str, origin: tuple[float, float], city: str | None, rows: list[dict]) -> Place | None:
+    valid_rows = [
+        row
+        for row in rows
+        if _nominatim_class(row) in ALLOWED_NOMINATIM_CLASSES
+        and _nominatim_type(row) in ALLOWED_NOMINATIM_TYPES
+    ]
+    needle_tokens = _tokens(name)
+    named_rows = [
+        row
+        for row in valid_rows
+        if needle_tokens.intersection(_tokens(str(row.get("name") or row.get("display_name") or "")))
+    ]
+    candidates = named_rows or valid_rows
+    if not candidates:
+        return None
+    scored: list[tuple[float, dict]] = []
+    for row in candidates:
+        try:
+            lat = float(row["lat"])
+            lng = float(row["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        scored.append((haversine_km(origin[0], origin[1], lat, lng), row))
+    if not scored:
+        return None
+    row = min(scored, key=lambda item: item[0])[1]
+    if _nominatim_class(row) not in ALLOWED_NOMINATIM_CLASSES or _nominatim_type(row) not in ALLOWED_NOMINATIM_TYPES:
+        return None
+    display_name = str(row.get("display_name", ""))
+    folded_display_name = _fold(display_name)
+    if "viet nam" not in folded_display_name and "vietnam" not in folded_display_name:
+        return None
+    try:
+        lat = float(row["lat"])
+        lng = float(row["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
+        return None
+    if haversine_km(origin[0], origin[1], lat, lng) > VERIFY_RADIUS_KM:
+        return None
+    osm_id, osm_type = row.get("osm_id"), str(row.get("osm_type", "")).casefold()
+    if not isinstance(osm_id, int) or osm_type not in {"node", "way", "relation"}:
+        return None
+    return Place(
+        id=f"osm-verified-{osm_type}-{osm_id}",
+        name=str(row.get("name") or name),
+        kind="dia_danh",
+        area=city or "Việt Nam",
+        lat=lat,
+        lng=lng,
+        cost=0,
+        duration_min=60,
+        tags=("osm_verified", "map_verified"),
+        open_hour=7,
+        close_hour=22,
+        source="Nominatim",
+        source_url=f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
+    )
+
+
 def verify_place_name(name: str, origin: tuple[float, float], city: str | None = None) -> Place | None:
     catalog = _catalog_match(name, origin)
     if catalog:
@@ -146,70 +251,13 @@ def verify_place_name(name: str, origin: tuple[float, float], city: str | None =
                 return cached_place
         except (TypeError, ValueError):
             pass
-    delta = 0.65
-    viewbox = f"{origin[1] - delta},{origin[0] + delta},{origin[1] + delta},{origin[0] - delta}"
     query = f"{name}, {city}, Vietnam" if city else f"{name}, Vietnam"
-    try:
-        response = httpx.get(
-            NOMINATIM_URL,
-            params={
-                "q": query,
-                "format": "jsonv2",
-                "limit": 5,
-                "addressdetails": 1,
-                "viewbox": viewbox,
-                "bounded": 1,
-            },
-            headers={"User-Agent": USER_AGENT},
-            timeout=httpx.Timeout(6, connect=2),
-        )
-        response.raise_for_status()
-        rows = response.json()
-    except (httpx.HTTPError, ValueError, TypeError):
+    rows = _nominatim_search(query, origin, bounded=True)
+    place = _place_from_nominatim(name, origin, city, rows)
+    if place is None:
+        place = _place_from_nominatim(name, origin, city, _nominatim_search(query, origin, bounded=False))
+    if place is None:
         return None
-    if not isinstance(rows, list) or not rows:
-        return None
-    valid_rows = [row for row in rows if str(row.get("class", "")).casefold() in ALLOWED_NOMINATIM_CLASSES and str(row.get("type", "")).casefold() in ALLOWED_NOMINATIM_TYPES]
-    exact_rows = [row for row in valid_rows if _fold(str(row.get("name", ""))) == _fold(name)]
-    candidates = exact_rows or valid_rows
-    if len(candidates) != 1:
-        return None
-    row = candidates[0]
-    place_class = str(row.get("class", "")).casefold()
-    place_type = str(row.get("type", "")).casefold()
-    if place_class not in ALLOWED_NOMINATIM_CLASSES or place_type not in ALLOWED_NOMINATIM_TYPES:
-        return None
-    display_name = str(row.get("display_name", ""))
-    folded_display_name = _fold(display_name)
-    if "viet nam" not in folded_display_name and "vietnam" not in folded_display_name:
-        return None
-    try:
-        lat = float(row["lat"])
-        lng = float(row["lon"])
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
-        return None
-    if haversine_km(origin[0], origin[1], lat, lng) > VERIFY_RADIUS_KM:
-        return None
-    osm_id, osm_type = row.get("osm_id"), str(row.get("osm_type", "")).casefold()
-    if not isinstance(osm_id, int) or osm_type not in {"node", "way", "relation"}:
-        return None
-    place = Place(
-        id=f"osm-verified-{osm_type}-{osm_id}",
-        name=str(row.get("name") or name),
-        kind="dia_danh",
-        area=city or "Việt Nam",
-        lat=lat,
-        lng=lng,
-        cost=0,
-        duration_min=60,
-        tags=("osm_verified", "llm_suggested"),
-        open_hour=7,
-        close_hour=22,
-        source="Nominatim",
-        source_url=f"https://www.openstreetmap.org/{osm_type}/{osm_id}",
-    )
     cache[cache_keys[0]] = place.__dict__
     _save_cache(cache)
     return place

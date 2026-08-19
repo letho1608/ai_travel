@@ -21,6 +21,8 @@ type IntentTimeWindow = {
 type ParsedIntent = {
   status?: "ready_to_plan" | "ask_user_missing_fields";
   question?: string | null;
+  ask_topic?: string | null;
+  user_goal?: string | null;
   missing_fields?: string[];
   suggestions?: DestinationSuggestion[];
   parsed?: {
@@ -54,8 +56,10 @@ type IntentPolicy = {
 
 const DEFAULT_LOCATION: Coordinate = { lat: 21.0285, lng: 105.8542 };
 const DESTINATION_LOCATIONS: { pattern: RegExp; location: Coordinate }[] = [
+  { pattern: /\b(yen tu|chua yen tu|nui yen tu)\b/, location: { lat: 21.1506, lng: 106.7189 } },
+  { pattern: /\b(chua huong|huong tich|huong son)\b/, location: { lat: 20.6194, lng: 105.7456 } },
   { pattern: /\b(ha noi|hanoi)\b/, location: { lat: 21.0285, lng: 105.8542 } },
-  { pattern: /\b(ha long|halong|quang ninh)\b/, location: { lat: 20.9712, lng: 107.0448 } },
+  { pattern: /\b(ha long|halong)\b/, location: { lat: 20.9712, lng: 107.0448 } },
   { pattern: /\b(da nang|danang)\b/, location: { lat: 16.0544, lng: 108.2022 } },
   { pattern: /\b(hoi an|pho co hoi an)\b/, location: { lat: 15.8801, lng: 108.338 } },
   { pattern: /\b(nha trang|khanh hoa)\b/, location: { lat: 12.2388, lng: 109.1967 } },
@@ -147,9 +151,11 @@ export default function Planner() {
   const mounted = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
   const messageId = useRef(0);
-  const lastRequest = useRef<{ context: string; duration: Duration; people: number } | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const lastRequest = useRef<{ context: string; duration: Duration; people: number; durationDays?: number | null } | null>(null);
   const pendingIntentPolicy = useRef<IntentPolicy | null>(null);
   const pendingIntentLocation = useRef<Coordinate | null>(null);
+  const pendingDestinationName = useRef<string | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -162,6 +168,9 @@ export default function Planner() {
 
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ block: "nearest" });
+  }, [messages]);
+  useEffect(() => {
+    messagesRef.current = messages;
   }, [messages]);
 
   const safeStatusKey = (value: string): PlannerTranslationKey =>
@@ -197,9 +206,13 @@ export default function Planner() {
 
   function inferClockRange(value: string): { startHour: number; minutes: number; label: string } | null {
     const normalized = normalizeText(value);
+    const dates = inferDateRange(value);
     const match = normalized.match(
-      /(?:(?:tu|from)\s+)?(?:luc\s+)?(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|am|pm)?\s*(?:-|–|—|~|den|toi|to|until)\s*(?:luc\s+)?(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|toi|am|pm)?/,
+      /(?:(?:tu|from)\s+)?(?:luc\s+)?(?<![0-9/.])(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|am|pm)?\s*(?:-|–|—|~|den|toi|to|until)\s*(?:luc\s+)?(?<![0-9/.])(\d{1,2})(?:[:h.]\d{2})?\s*(?:gio|tieng|h(?![a-z])|hours?|hrs?)?\s*(sang|chieu|toi|am|pm)?/,
     );
+    if (dates && match && !/(?:\d{1,2}\s*(?:[:h]|gio|tieng|hours?|hrs?))/.test(match[0] || "")) {
+      return null;
+    }
     if (!match) return null;
     const startHour = hourWithMeridiem(Number(match[1]), match[2]);
     const endHour = hourWithMeridiem(Number(match[3]), match[4]);
@@ -250,7 +263,7 @@ export default function Planner() {
     const normalized = normalizeText(value);
     const today = new Date();
     const slash = normalized.match(
-      /(?:(?:tu|from)\s+)?(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\s*(?:-|–|—|den|toi|to|until)\s*(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/,
+      /(?:(?:tu|from)\s+)?(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?\/?\s*(?:-|–|—|den|toi|to|until)\s*(?:ngay\s+)?(\d{1,2})[/\-.](\d{1,2})(?:[/\-.](\d{2,4}))?/,
     );
     if (slash) {
       const start = parseSlashDate(slash[1], slash[2], slash[3], today);
@@ -314,6 +327,13 @@ export default function Planner() {
     if (wordDays) return wordDays[1];
     const dates = inferDateRange(value);
     if (dates) return dates.days;
+    const people = normalized.match(/\b([1-9]|[12][0-9]|30)\s*(?:nguoi|people|person|persons|travelers?)\b/);
+    if (people) {
+      const extra = [...normalized.matchAll(/\b([1-9]|[12][0-9]|30)\b(?!\s*(?:nguoi|ngay|days?|gio|hours?|people|person|persons|travelers?|trieu|dong|vnd))/g)]
+        .map((item) => Number(item[1]))
+        .find((item) => item !== Number(people[1]));
+      if (extra) return extra;
+    }
     const pair = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*[,/ ]+\s*(?:[1-9]|[12][0-9]|30)\s*$/);
     if (pair) return Number(pair[1]);
     const bareNumber = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*$/);
@@ -352,14 +372,12 @@ export default function Planner() {
     return pair ? Number(pair[1]) : null;
   }
 
-  const PEOPLE_UNITS = "(?:nguoi|nguoi lon|ng|ban|dua|tre em|tre con|con|vo chong|em be|khach|pax|adults?|kids?|children|people|person|travelers?)";
+  const PEOPLE_UNITS = "(?:nguoi|nguoi lon|ban|dua|tre em|tre con|khach|pax|adults?|kids?|children|people|person|travelers?)";
 
   function inferPeople(value: string): number | null {
     const paired = inferPairedPeople(value);
     if (paired) return paired;
     const normalized = normalizeText(value);
-    const bareNumber = normalized.match(/^\s*([1-9]|[12][0-9]|30)\s*$/);
-    if (bareNumber) return Number(bareNumber[1]);
     const labeled: RegExpExecArray[] = [];
     const peoplePattern = new RegExp(`\\b([1-9]|[12][0-9]|30)\\s*${PEOPLE_UNITS}\\b`, "g");
     let peopleMatch: RegExpExecArray | null;
@@ -415,7 +433,19 @@ export default function Planner() {
 
   function destinationLocation(value: string): Coordinate {
     const normalized = normalizeText(value);
-    return DESTINATION_LOCATIONS.find((item) => item.pattern.test(normalized))?.location ?? DEFAULT_LOCATION;
+    const matches: { index: number; location: Coordinate }[] = [];
+    for (const item of DESTINATION_LOCATIONS) {
+      const re = new RegExp(item.pattern.source, "gi");
+      for (const match of normalized.matchAll(re)) {
+        if (match.index == null) continue;
+        matches.push({ index: match.index, location: item.location });
+      }
+    }
+    matches.sort((a, b) => a.index - b.index);
+    const cut = [...normalized.matchAll(/\bthoi\b/gi)].at(-1)?.index;
+    const pool = cut == null ? matches : matches.filter((item) => item.index >= cut);
+    const chosen = (pool.length ? pool : matches).at(-1);
+    return chosen?.location ?? DEFAULT_LOCATION;
   }
 
   function describeTripPurpose(): string {
@@ -463,6 +493,7 @@ export default function Planner() {
     } else {
       pendingIntentLocation.current = destinationLocation(picked.label);
     }
+    if (picked.label.trim()) pendingDestinationName.current = picked.label.trim();
     const purpose = describeTripPurpose();
     const reason = picked.reason ? ` ${picked.reason.charAt(0).toUpperCase()}${picked.reason.slice(1)}.` : "";
     addMessage(
@@ -479,7 +510,6 @@ export default function Planner() {
     const duration = durationOverride !== undefined ? durationOverride : pendingDuration;
     if (!duration) {
       setNeedsDuration(true);
-      addMessage("assistant", durationQuestion());
       setErrorKey(null);
       setStatusKey(null);
       return;
@@ -502,7 +532,35 @@ export default function Planner() {
     return data && typeof data === "object" ? data as ParsedIntent : null;
   }
 
+  async function chatTurn(history: { role: "user" | "assistant"; content: string }[]): Promise<{
+    reply: string;
+    intent: ParsedIntent;
+    ready_to_plan: boolean;
+  } | null> {
+    const payload = history.map((item) => ({
+      role: item.role,
+      content: item.content.slice(0, 2000),
+    }));
+    const response = await fetch(`${API_URL}/api/chat/turn`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: payload, ngon_ngu: locale }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || typeof data !== "object") return null;
+    return {
+      reply: typeof data.reply === "string" ? data.reply.trim() : "",
+      intent: data.intent as ParsedIntent,
+      ready_to_plan: Boolean(data.ready_to_plan),
+    };
+  }
+
   function clockRangeToWindow(value: string): IntentTimeWindow | null {
+    const dates = inferDateRange(value);
+    if (dates && !/(?:\d{1,2}\s*(?:[:h]|gio|tieng|hours?|hrs?))/.test(normalizeText(value))) {
+      return null;
+    }
     const clock = inferClockRange(value);
     if (!clock) return null;
     const endHour = (clock.startHour + Math.floor(clock.minutes / 60)) % 24;
@@ -581,9 +639,18 @@ export default function Planner() {
     return null;
   }
 
-  function composeRequestContext(raw: string, duration: Duration, travelers: number) {
-    const idea = stripBareCounts(raw);
-    const days = inferDayCount(raw) ?? (duration === "nhieu_ngay" ? 2 : 1);
+  function composeRequestContext(raw: string, duration: Duration, travelers: number, knownDays?: number | null) {
+    let idea = stripBareCounts(raw);
+    const destName = pendingDestinationName.current?.trim();
+    if (destName) {
+      const foldedDest = normalizeText(destName);
+      if (foldedDest && !normalizeText(idea).includes(foldedDest)) {
+        idea = `${idea} ${destName}`.trim();
+      }
+    }
+    const days = (knownDays && knownDays >= 1)
+      ? knownDays
+      : inferDayCount(raw) ?? (duration === "nhieu_ngay" ? 2 : 1);
     const dayText = locale === "vi"
       ? duration === "vai_gio"
         ? "vài giờ"
@@ -609,7 +676,7 @@ export default function Planner() {
   }
 
   function continueOrAskPeople(requestContext: string, duration: Duration, peopleHint: number | null = null) {
-    const travelers = peopleHint ?? inferPeople(requestContext) ?? (validPeopleValue(people) ? people : null);
+    const travelers = peopleHint ?? inferPeople(requestContext);
     if (!travelers) {
       setPendingContext(requestContext);
       setPendingDuration(duration);
@@ -626,29 +693,32 @@ export default function Planner() {
     setPendingContext(null);
     setPendingDuration(null);
     setNeedsPeople(false);
-    void generatePlan(requestContext, duration, travelers);
+    void generatePlan(requestContext, duration, travelers, inferDayCount(requestContext));
   }
 
-  async function generatePlan(requestContext: string, duration: Duration, travelers: number) {
+  async function generatePlan(requestContext: string, duration: Duration, travelers: number, durationDays?: number | null) {
     if (!requestContext.trim() || !validPeopleValue(travelers)) {
       setErrorKey("generateFailed");
       return;
     }
-    const composedContext = composeRequestContext(requestContext, duration, travelers);
-    const days = inferDayCount(composedContext) ?? inferDayCount(requestContext);
+    const knownDays = durationDays && durationDays >= 1 ? durationDays : inferDayCount(requestContext);
+    const composedContext = composeRequestContext(requestContext, duration, travelers, knownDays);
+    const days = inferDayCount(composedContext) ?? knownDays ?? inferDayCount(requestContext);
     const window = clockRangeToWindow(composedContext) ?? clockRangeToWindow(requestContext);
     pendingIntentPolicy.current = {
       schema_version: "intent-parse-v2",
       primary_intent: pendingIntentPolicy.current?.primary_intent ?? null,
-      planner_mode: pendingIntentPolicy.current?.planner_mode ?? (
-        days && days >= 8 ? "long_trip" : days && days >= 2 ? "multi_day_trip" : null
-      ),
+      planner_mode: days && days >= 8
+        ? "long_trip"
+        : days && days >= 2
+          ? "multi_day_trip"
+          : pendingIntentPolicy.current?.planner_mode ?? null,
       duration,
       duration_value: days && days >= 2 ? days : window ? window.minutes / 60 : null,
       duration_unit: days && days >= 2 ? "day" : window ? "minute" : null,
-      duration_minutes: window?.minutes ?? null,
+      duration_minutes: days && days >= 2 ? null : (window?.minutes ?? null),
       duration_days: days && days >= 2 ? days : null,
-      time_window: window ?? null,
+      time_window: days && days >= 2 ? null : (window ?? null),
       allowed_place_themes: pendingIntentPolicy.current?.allowed_place_themes ?? [],
       avoid_place_themes: pendingIntentPolicy.current?.avoid_place_themes ?? [],
     };
@@ -657,7 +727,7 @@ export default function Planner() {
     const ngayDi = tripStart
       ? `${tripStart.getFullYear()}-${String(tripStart.getMonth() + 1).padStart(2, "0")}-${String(tripStart.getDate()).padStart(2, "0")}`
       : undefined;
-    lastRequest.current = { context: composedContext, duration, people: travelers };
+    lastRequest.current = { context: composedContext, duration, people: travelers, durationDays: days };
     submitting.current = true;
     setBusy(true);
     setNeedsDuration(false);
@@ -768,18 +838,10 @@ export default function Planner() {
     addMessage("user", answer);
     setContext("");
     if (!duration) {
-      if (isUncertainReply(answer)) {
-        const fallback: Duration = "ca_ngay";
-        addMessage("assistant", locale === "vi"
-          ? "Mình sẽ mặc định lên lịch trình trọn vẹn 1 ngày (cả ngày) nhé. Bạn có thể thay đổi sau."
-          : "I'll default to a 1-day full trip. You can adjust it later.");
-        duration = fallback;
-      } else {
-        addMessage("assistant", durationQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
-        return;
-      }
+      addMessage("assistant", durationQuestion());
+      setErrorKey(null);
+      setStatusKey(null);
+      return;
     }
     const requestContext = `${pendingContext.trim()}\n${durationContextLine(answer)}`;
     const knownDestination = hasDestination(pendingContext) || pendingIntentLocation.current != null;
@@ -838,13 +900,7 @@ export default function Planner() {
     if (submitting.current || !pendingContext || !pendingDuration) return;
     addMessage("user", answer);
     setContext("");
-    let travelers = inferPeople(answer);
-    if (travelers === null && isUncertainReply(answer)) {
-      travelers = 2;
-      addMessage("assistant", locale === "vi"
-        ? "Mình sẽ xếp mặc định cho 2 người nhé. Bạn có thể đổi sau."
-        : "I'll default to 2 people. You can adjust it later.");
-    }
+    const travelers = inferPeople(answer);
     if (!travelers) {
       addMessage("assistant", peopleQuestion());
       setErrorKey(null);
@@ -856,151 +912,198 @@ export default function Planner() {
     continueOrAskPeople(requestContext, duration, travelers);
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (submitting.current) return;
-    const answer = context.trim();
-    if (needsDuration) {
-      if (answer) answerDuration(answer);
-      return;
-    }
-    if (needsDestination) {
-      answerDestination(answer);
-      return;
-    }
-    if (needsPeople) {
-      if (answer) answerPeople(answer);
-      return;
-    }
-    if (!answer) {
-      setErrorKey("generateFailed");
-      return;
-    }
-    const peopleHint = inferPeople(answer);
-    if (peopleHint) setPeople(peopleHint);
-    addMessage("user", answer);
+  function isSlotAnswer(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return false;
+    if (inferDuration(trimmed) || inferPeople(trimmed) != null) return true;
+    return /^\s*([1-9]|[12][0-9]|30)\s*$/.test(normalizeText(trimmed));
+  }
 
+  function isThemeChange(value: string) {
+    const normalized = normalizeText(value);
+    return /(?:di bien|tam bien|bai bien|leo nui|di nui|chua lanh|stress|cang thang|an gi|mua nao|cho nao choi|di dau choi)/.test(normalized);
+  }
+
+  function assistantQuestionTail(text: string) {
+    const normalized = normalizeText(text).trim();
+    if (!normalized) return "";
+    const chunks = normalized.split(/[.?!]/).map((part) => part.trim()).filter(Boolean);
+    if (chunks.length) return chunks.slice(-2).join(" ").slice(-240);
+    return normalized.slice(-240);
+  }
+
+  function lastAssistantAsked(text: string): "duration" | "people" | "both" | null {
+    const tail = assistantQuestionTail(text);
+    const peopleAsk = /may nguoi|bao nhieu nguoi|di cung|di voi ai|cung ai|gia dinh|ban be|mot minh|how many people|traveling with|with family|with friends|group size/;
+    const durationAsk = /may ngay|bao nhieu ngay|bao lau|keo dai|how many days|how long/;
+    const people = peopleAsk.test(tail);
+    const duration = durationAsk.test(tail);
+    if (people && duration) return "both";
+    if (people) return "people";
+    if (duration) return "duration";
+    const full = normalizeText(text);
+    const peopleFull = peopleAsk.test(full);
+    const durationFull = durationAsk.test(full);
+    if (peopleFull && durationFull) return "both";
+    if (peopleFull) return "people";
+    if (durationFull) return "duration";
+    return null;
+  }
+
+  function expandBareCount(answer: string, assistant: string): string {
+    const match = answer.trim().match(/^([1-9]|[12][0-9]|30)$/);
+    if (!match) return answer;
+    const asked = lastAssistantAsked(assistant);
+    if (asked === "people") return `${match[1]} người`;
+    if (asked === "duration" || asked === "both") return `${match[1]} ngày`;
+    return answer;
+  }
+
+  async function sendUserTurn(text: string) {
+    if (submitting.current) return;
+    const answer = text.trim();
+    if (!answer) return;
+    const lastAssistant = [...messagesRef.current].reverse().find((item) => item.role === "assistant")?.text || "";
+    const expandedAnswer = expandBareCount(answer, lastAssistant);
+    const history = [
+      ...messagesRef.current.map((item) => ({ role: item.role, content: item.text })),
+      { role: "user" as const, content: expandedAnswer },
+    ];
+    const userContext = history.filter((item) => item.role === "user").map((item) => item.content).join("\n");
+    addMessage("user", expandedAnswer);
+    setContext("");
+    submitting.current = true;
+    setBusy(true);
+    setErrorKey(null);
+    setErrorDetail(null);
+    const asked = lastAssistantAsked(lastAssistant);
+    if (asked === "people") {
+      const peopleHint = inferPeople(expandedAnswer);
+      if (peopleHint) setPeople(peopleHint);
+    }
     try {
-      const intent = await parseIntent(answer);
-      pendingIntentPolicy.current = policyFromIntent(intent, answer);
-      pendingIntentLocation.current = locationFromIntent(intent) ?? (hasDestination(answer) ? destinationLocation(answer) : null);
-      const missing = intent?.missing_fields ?? [];
-      const parsedDuration = intent?.parsed?.duration ?? inferDuration(answer);
-      const parsedPeople = intent?.parsed?.people ?? peopleHint;
-      const knownDestination = Boolean(intent?.parsed?.destination) || hasDestination(answer);
-      if (intent?.status === "ask_user_missing_fields" && missing.includes("destination") && !knownDestination) {
-        const suggestions = (intent.suggestions ?? [])
-          .filter((item) => Boolean(item.label))
-          .map((item) => ({ label: item.label || "", lat: item.lat, lng: item.lng, reason: item.reason }));
-        setPendingContext(answer);
-        setPendingDuration(parsedDuration ?? null);
+      let turn = await chatTurn(history);
+      if (!turn?.intent) {
+        turn = await chatTurn(history.map((item) => ({
+          role: item.role,
+          content: item.content.slice(0, 480),
+        })));
+      }
+      if (!turn?.intent) throw new Error("chat turn failed");
+      const intent = turn.intent;
+      pendingIntentPolicy.current = policyFromIntent(intent, userContext);
+      pendingIntentLocation.current = locationFromIntent(intent) ?? (hasDestination(userContext) ? destinationLocation(userContext) : null);
+      const destName = intent.parsed?.destination?.name?.trim();
+      if (destName) pendingDestinationName.current = destName;
+      const missing = intent.missing_fields ?? [];
+      const parsedDuration = missing.includes("duration")
+        ? null
+        : (intent.parsed?.duration ?? inferDuration(expandedAnswer));
+      const parsedPeople = missing.includes("people")
+        ? null
+        : (intent.parsed?.people ?? inferPeople(expandedAnswer));
+      setPendingContext(userContext);
+      if (parsedDuration) setPendingDuration(parsedDuration);
+      const suggestions = (intent.suggestions ?? [])
+        .filter((item) => Boolean(item.label))
+        .map((item) => ({ label: item.label || "", lat: item.lat, lng: item.lng, reason: item.reason }));
+      setDestinationSuggestions(suggestions);
+      if (turn.reply) addMessage("assistant", turn.reply);
+      const ready = Boolean(turn.ready_to_plan)
+        && Boolean(intent.parsed?.destination)
+        && Boolean(parsedDuration)
+        && Boolean(parsedPeople)
+        && !missing.includes("destination")
+        && !missing.includes("duration")
+        && !missing.includes("people");
+      const qaTopic = intent.ask_topic === "season" || intent.ask_topic === "food"
+        || intent.ask_topic === "beach" || intent.ask_topic === "mountain"
+        || intent.ask_topic === "places" || intent.ask_topic === "healing";
+      const wantsPlan = /len lich|xep lich|lap lich|tao lich|len plan|thiet ke lich|make a plan|itinerary/.test(normalizeText(answer));
+      const qaOnly = (qaTopic || intent.user_goal === "answer" || intent.user_goal === "places") && !wantsPlan;
+      const themePick = intent.ask_topic === "beach" || intent.ask_topic === "mountain"
+        || intent.ask_topic === "healing" || isThemeChange(answer);
+      setNeedsDestination((missing.includes("destination") || (themePick && !intent.parsed?.destination)) && !ready);
+      setNeedsDuration(
+        missing.includes("duration")
+        && !missing.includes("destination")
+        && !parsedDuration
+        && !ready
+        && !qaOnly,
+      );
+      setNeedsPeople(
+        missing.includes("people")
+        && !missing.includes("destination")
+        && Boolean(parsedDuration || !missing.includes("duration"))
+        && !ready
+        && !qaOnly,
+      );
+      if (ready && parsedDuration && parsedPeople) {
+        setNeedsDestination(false);
         setNeedsDuration(false);
         setNeedsPeople(false);
-        setContext("");
-        setDestinationSuggestions(suggestions);
-        if (isUncertainReply(answer)) {
-          const intentKey = intent.parsed?.primary_intent || "general_travel";
-          const fallbackLabel = (THEME_DESTINATION_FALLBACKS[intentKey] || THEME_DESTINATION_FALLBACKS.general_travel)[0];
-          const picked = withSuggestionCoords(suggestions[0] || {
-            label: fallbackLabel,
-            reason: THEME_SUGGESTION_REASON[intentKey] || THEME_SUGGESTION_REASON.general_travel,
-          });
-          applyPickedDestination(picked, answer, parsedDuration ?? null);
-          return;
-        }
-        setNeedsDestination(true);
-        addMessage("assistant", intent.question || destinationQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
-        return;
-      }
-      if (intent?.status === "ask_user_missing_fields" && missing.includes("duration") && !parsedDuration) {
-        setPendingContext(answer);
-        setPendingDuration(null);
-        setNeedsDuration(true);
-        setNeedsDestination(false);
-        setNeedsPeople(false);
-        setContext("");
-        addMessage("assistant", intent.question || durationQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
-        return;
-      }
-      if (intent?.status === "ask_user_missing_fields" && missing.includes("people") && parsedDuration) {
-        setPendingContext(answer);
-        setPendingDuration(parsedDuration);
-        setNeedsPeople(true);
-        setNeedsDuration(false);
-        setNeedsDestination(false);
-        setContext("");
-        addMessage("assistant", intent.question || peopleQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
-        return;
-      }
-      if ((intent?.status === "ready_to_plan" || (knownDestination && parsedDuration)) && parsedDuration && parsedPeople) {
-        continueOrAskPeople(answer, parsedDuration, parsedPeople);
-        return;
-      }
-      if (knownDestination && parsedDuration && !parsedPeople) {
-        setPendingContext(answer);
-        setPendingDuration(parsedDuration);
-        setNeedsPeople(true);
-        setNeedsDuration(false);
-        setNeedsDestination(false);
-        setContext("");
-        addMessage("assistant", intent?.question || peopleQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
-        return;
-      }
-      if (knownDestination && !parsedDuration) {
-        setPendingContext(answer);
-        setPendingDuration(null);
-        setNeedsDuration(true);
-        setNeedsDestination(false);
-        setNeedsPeople(false);
-        setContext("");
-        addMessage("assistant", intent?.question || durationQuestion());
-        setErrorKey(null);
-        setStatusKey(null);
+        await generatePlan(userContext, parsedDuration, parsedPeople, intent.parsed?.duration_days ?? inferDayCount(userContext));
         return;
       }
     } catch {
       pendingIntentPolicy.current = null;
       pendingIntentLocation.current = null;
-      // Fall through to the legacy local parser if the backend intent endpoint is unavailable.
+      pendingDestinationName.current = null;
+      if (asked === "people") {
+        setNeedsPeople(true);
+        setNeedsDuration(false);
+        addMessage("assistant", peopleQuestion());
+        return;
+      }
+      const duration = inferDuration(expandedAnswer) ?? (asked === "duration" || asked === "both" ? inferDuration(answer) : null);
+      if (duration) {
+        setPendingContext(userContext);
+        setPendingDuration(duration);
+        setNeedsDuration(false);
+        if (!hasDestination(userContext) && !pendingIntentLocation.current) {
+          setNeedsDestination(true);
+          setNeedsPeople(false);
+        } else {
+          setNeedsDestination(false);
+          setNeedsPeople(true);
+        }
+        addMessage(
+          "assistant",
+          locale === "vi"
+            ? `Mình nhận ${expandedAnswer}. ${!hasDestination(userContext) && !pendingIntentLocation.current ? "Bạn muốn đi đâu?" : "Bạn đi mấy người?"}`
+            : `Got ${expandedAnswer}. ${!hasDestination(userContext) && !pendingIntentLocation.current ? "Where do you want to go?" : "How many people?"}`,
+        );
+        return;
+      }
+      setPendingContext(userContext);
+      setNeedsDuration(false);
+      setNeedsPeople(false);
+      addMessage(
+        "assistant",
+        locale === "vi"
+          ? "Mình chưa kết nối được máy chủ. Bạn gửi lại câu vừa rồi giúp mình, đừng cần chọn Vài giờ/Nửa ngày."
+          : "I couldn't reach the server. Please send that message again.",
+      );
+    } finally {
+      submitting.current = false;
+      if (mounted.current) setBusy(false);
     }
+  }
 
-    const duration = inferDuration(answer);
-    if (!duration) {
-      setPendingContext(answer);
-      setNeedsDuration(true);
-      setNeedsPeople(false);
-      setContext("");
-      addMessage("assistant", durationQuestion());
-      setErrorKey(null);
-      setStatusKey(null);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const answer = context.trim();
+    if (!answer) {
+      setErrorKey("generateFailed");
       return;
     }
-    if (!hasDestination(answer)) {
-      setPendingContext(answer);
-      setPendingDuration(duration);
-      setNeedsDestination(true);
-      setNeedsPeople(false);
-      setContext("");
-      addMessage("assistant", destinationQuestion());
-      setErrorKey(null);
-      setStatusKey(null);
-      return;
-    }
-    continueOrAskPeople(answer, duration, peopleHint);
+    await sendUserTurn(answer);
   }
 
   function retryGenerate() {
     const request = lastRequest.current;
     if (!request || submitting.current) return;
-    void generatePlan(request.context, request.duration, request.people);
+    void generatePlan(request.context, request.duration, request.people, request.durationDays);
   }
 
   return (
@@ -1024,7 +1127,7 @@ export default function Planner() {
                 ["fullDay", "ca_ngay"],
                 ["multiDay", "nhieu_ngay"],
               ] as const).map(([key, duration]) => (
-                <button type="button" className="chip" key={duration} onClick={() => answerDuration(t(key), duration)} disabled={busy}>
+                <button type="button" className="chip" key={duration} onClick={() => void sendUserTurn(t(key))} disabled={busy}>
                   {t(key)}
                 </button>
               ))}
@@ -1036,11 +1139,7 @@ export default function Planner() {
                 type="button"
                 className="chip"
                 key="__surprise__"
-                onClick={() => {
-                  if (submitting.current || !pendingContext) return;
-                  addMessage("user", locale === "vi" ? "Gợi ý cho tôi" : "Surprise me");
-                  applyPickedDestination(pickSuggestedDestination());
-                }}
+                onClick={() => void sendUserTurn(locale === "vi" ? "Gợi ý cho tôi" : "Surprise me")}
                 disabled={busy}
               >
                 {locale === "vi" ? "✨ Gợi ý cho tôi" : "✨ Surprise me"}
@@ -1050,15 +1149,19 @@ export default function Planner() {
                   type="button"
                   className="chip"
                   key={destination.label}
-                  onClick={() => {
-                    if (typeof destination.lat === "number" && typeof destination.lng === "number") {
-                      pendingIntentLocation.current = { lat: destination.lat, lng: destination.lng };
-                    }
-                    answerDestination(destination.label);
-                  }}
+                  onClick={() => void sendUserTurn(destination.label)}
                   disabled={busy}
                 >
                   {destination.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {needsPeople && (
+            <div className="duration-suggestions" role="group" aria-label={t("peopleLabel")}>
+              {(locale === "vi" ? ["1 người", "2 người", "4 người"] : ["1 person", "2 people", "4 people"]).map((label) => (
+                <button type="button" className="chip" key={label} onClick={() => void sendUserTurn(label)} disabled={busy}>
+                  {label}
                 </button>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import asyncio
 import json
-import re
+import logging
 from asyncio import to_thread
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -10,10 +10,23 @@ from fastapi.responses import Response, StreamingResponse
 
 from app.config import settings
 from app.data import PLACES, Place, image_for
+from app.pipeline.chat_turn import run_chat_turn
+from app.pipeline.intent_parse import parse_intent
+from app.pipeline.plan_chat import (
+    _folded,
+    _wants_theme_change,
+    classify_plan_message,
+    compose_plan_chat_reply,
+    current_destination_label,
+    excluded_ids_for_refine,
+    refined_plan_request,
+    target_slot_id_for_message,
+)
 from app.pipeline.planner import (
     COPY,
     LONG_TRIP_DAYS,
     PipelineUnavailable,
+    _destination_context,
     _effective_hours,
     _request_understanding,
     _trip_timing,
@@ -22,9 +35,9 @@ from app.pipeline.planner import (
     travel_minutes,
     validate_plan,
 )
-from app.pipeline.intent_parse import parse_intent
 from app.routers.auth import resolve_user
 from app.schemas import (
+    ChatTurnRequest,
     CommentRequest,
     DeleteSlotRequest,
     IntentParseRequest,
@@ -37,27 +50,18 @@ from app.schemas import (
     SwipeRequest,
     TripFeedbackRequest,
 )
+from app.services.google_places import enrich_plan_with_google, search_named_place
+from app.services.osm_verify import _catalog_match, verify_place_name
 from app.services.pdf_export import build_itinerary_pdf
-from app.services.google_places import enrich_plan_with_google
-from app.services.osm_verify import verify_place_name
 from app.services.rate_limit import limiter
 from app.services.store import store
 from app.text_utils import ascii_fold
 
-SWAP_INTENT = re.compile(
-    r"\b(đổi|thay|replace|swap|cambiar|remplacer|ersetzen|sostituire|substituir|"
-    r"vervangen|zamień|заменить|değiştir|替换|更换|交換|置き換え|교체|เปลี่ยน|"
-    r"استبدال|החלף|बदलें|смени)\b",
-    re.IGNORECASE,
-)
-PEOPLE_INTENT = re.compile(
-    r"\b(\d{1,2})\s*(người|people|persons?|personas?|personnes?|personen|persone|"
-    r"pessoas?|osób|человек|kişi|人|명|คน|أشخاص|אנשים|लोग|души)\b",
-    re.IGNORECASE,
-)
-
 router = APIRouter(prefix="/api", tags=["plans"])
+logger = logging.getLogger(__name__)
 GENERATE_NONCE_SCOPE = "00000000-0000-0000-0000-000000000000"
+_MAP_PLACE_CACHE: dict[str, Place] = {}
+_MAP_SOURCES = {"Google Places", "Nominatim"}
 
 
 def _generate_nonce_key(session_id: str, nonce: str) -> str:
@@ -94,7 +98,7 @@ def owner(item, session_id: str | None, authorization: str | None = None) -> Non
 
 
 def sse(event: str, payload: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False, allow_nan=False)}\n\n"
 
 
 async def _keepalive_until(task: asyncio.Task):
@@ -140,6 +144,14 @@ def read_notification(
 @router.post("/intent/parse")
 def parse_user_intent(payload: IntentParseRequest):
     return parse_intent(payload.context, payload.ngon_ngu)
+
+
+@router.post("/chat/turn")
+def chat_turn(payload: ChatTurnRequest):
+    return run_chat_turn(
+        [{"role": item.role, "content": item.content} for item in payload.messages],
+        payload.ngon_ngu,
+    )
 
 
 @router.post("/plan/generate")
@@ -211,8 +223,26 @@ async def generate(payload: PlanRequest, request: Request):
                 store.log(session_id, "boc_tach_yeu_cau", plan["dau_vao_da_hieu"])
             store.log(session_id, "tao_ke_hoach_thanh_cong", {"id_ke_hoach": item.token})
             yield sse("result", {"type": "plan", "ma_phien": session_id, "token": item.token, "phien_ban": 1, "plan": plan})
+        except asyncio.CancelledError:
+            yield sse(
+                "error",
+                {
+                    "code": "499",
+                    "detail": "Kết nối bị ngắt khi đang tạo lịch trình. Vui lòng thử lại.",
+                },
+            )
+            return
         except (PipelineUnavailable, RuntimeError) as exc:
             yield sse("error", {"code": "503", "detail": str(exc)})
+        except Exception:
+            logger.exception("plan generate failed")
+            yield sse(
+                "error",
+                {
+                    "code": "500",
+                    "detail": "Không tạo được lịch trình cho điểm đến này. Vui lòng thử lại.",
+                },
+            )
 
     return StreamingResponse(
         stream(),
@@ -410,11 +440,70 @@ def list_plans(
     return {"ds_ke_hoach": items}
 
 
+def _remember_map_place(place: Place | None) -> Place | None:
+    if place and place.id not in {item.id for item in PLACES}:
+        _MAP_PLACE_CACHE[place.id] = place
+    return place
+
+
+def _slot_origin(slot: dict, request: PlanRequest) -> tuple[tuple[float, float], str | None]:
+    dest_lat, dest_lng, dest_name = _destination_context(request)
+    coordinates = slot.get("toa_do") or {}
+    try:
+        lat = float(coordinates.get("lat", dest_lat))
+        lng = float(coordinates.get("lng", dest_lng))
+    except (TypeError, ValueError):
+        lat, lng = dest_lat, dest_lng
+    return (lat, lng), dest_name
+
+
+def _resolve_named_place(name: str, origin: tuple[float, float], city: str | None = None) -> Place | None:
+    catalog = _catalog_match(name, origin)
+    if catalog:
+        return catalog
+    google = search_named_place(name, origin, city)
+    if google:
+        return _remember_map_place(google)
+    osm = verify_place_name(name, origin, city)
+    if osm:
+        return _remember_map_place(osm)
+    return None
+
+
 def _place_from_slot(slot: dict) -> Place:
     coordinates = slot.get("toa_do") or {}
-    if not slot.get("du_lieu_uoc_tinh") or not slot.get("nguon_url") or not all(key in slot for key in ("gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi")):
+    try:
+        lat = float(coordinates["lat"])
+        lng = float(coordinates["lng"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Địa điểm ngoài catalog thiếu tọa độ") from exc
+    source = str(slot.get("nguon") or "")
+    source_url = slot.get("nguon_url")
+    map_verified = source in _MAP_SOURCES and bool(source_url)
+    estimated = bool(slot.get("du_lieu_uoc_tinh")) and bool(source_url) and all(
+        key in slot for key in ("gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi")
+    )
+    if not map_verified and not estimated:
         raise ValueError("Địa điểm ngoài catalog thiếu metadata đã xác minh")
-    return Place(slot["dia_diem_id"], slot.get("ten_dia_diem") or slot["dia_diem_id"], slot.get("loai") or "dia_danh", "Hà Nội", float(coordinates.get("lat", 0)), float(coordinates.get("lng", 0)), max(0, int(slot.get("chi_phi_moi_nguoi", 0))), 60, ("verified_external",), int(slot.get("gio_mo_cua_uoc_tinh", 7)), int(slot.get("gio_dong_cua_uoc_tinh", 22)), slot.get("nguon") or "Nominatim", slot.get("nguon_url"), slot.get("anh"), slot.get("anh_nguon"))
+    return Place(
+        id=slot["dia_diem_id"],
+        name=slot.get("ten_dia_diem") or slot["dia_diem_id"],
+        kind=slot.get("loai") or "dia_danh",
+        area=slot.get("khu_vuc") or "Việt Nam",
+        lat=lat,
+        lng=lng,
+        cost=max(0, int(slot.get("chi_phi_moi_nguoi", 0))),
+        duration_min=60,
+        tags=("verified_external", "map_verified") if map_verified else ("verified_external",),
+        open_hour=int(slot.get("gio_mo_cua_uoc_tinh", 7)),
+        close_hour=int(slot.get("gio_dong_cua_uoc_tinh", 22)),
+        source=source or "Nominatim",
+        source_url=source_url,
+        image_url=slot.get("anh"),
+        image_credit=slot.get("anh_nguon"),
+        google_place_id=slot.get("google_place_id"),
+        google_maps_url=slot.get("google_maps_url") or slot.get("google_review_url"),
+    )
 
 
 def _plan_external_places(plan: dict) -> tuple[Place, ...]:
@@ -430,7 +519,7 @@ def _plan_external_places(plan: dict) -> tuple[Place, ...]:
     return tuple(places)
 
 
-def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, additional: tuple[Place, ...] = ()):
+def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, additional: tuple[Place, ...] = (), strict_travel: bool = True):
     slots = [slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", [])]
     matches = [slot for slot in slots if slot.get("dia_diem_id") == rejected_id]
     if len(matches) != 1:
@@ -464,11 +553,11 @@ def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, 
             return False
         if not (f"{open_hour:02d}:00" <= target["bat_dau"] and target["ket_thuc"] <= f"{close_hour:02d}:00"):
             return False
-        if previous_slot:
+        if previous_slot and strict_travel:
             previous = by_id.get(previous_slot["dia_diem_id"])
             if previous and minutes(target["bat_dau"]) - minutes(previous_slot["ket_thuc"]) < travel_minutes(previous, candidate):
                 return False
-        if next_slot:
+        if next_slot and strict_travel:
             following = by_id.get(next_slot["dia_diem_id"])
             if following and minutes(next_slot["bat_dau"]) - minutes(target["ket_thuc"]) < travel_minutes(candidate, following):
                 return False
@@ -511,27 +600,38 @@ def swipe(
         current = next((slot for day in item.plan.get("ngay", []) for slot in day.get("khoang_gio", []) if slot.get("dia_diem_id") == payload.diem_bi_loai), None)
         if not current:
             raise HTTPException(404, "Địa điểm không nằm trong kế hoạch")
-        coordinates = current.get("toa_do") or {}
-        requested_place = verify_place_name(
-            payload.ten_dia_diem_thay_the.strip(),
-            (float(coordinates.get("lat", 21.0285)), float(coordinates.get("lng", 105.8542))),
-        )
+        origin, city = _slot_origin(current, PlanRequest.model_validate(item.request))
+        requested_place = _resolve_named_place(payload.ten_dia_diem_thay_the.strip(), origin, city)
         if not requested_place:
-            raise HTTPException(404, "Không tìm thấy địa điểm này")
-        if requested_place.id not in {place.id for place in PLACES}:
-            raise HTTPException(
-                422,
-                "Địa điểm ngoài danh mục thiếu giờ mở cửa/giá đã xác minh; không dùng AI để ước tính dữ liệu vận hành",
-            )
-    external = (requested_place,) if requested_place and requested_place.id not in {place.id for place in PLACES} else ()
-    target, rejected, candidates = _replacement_candidates(item, payload.diem_bi_loai, same_kind=False, additional=external)
-    if not candidates:
-        raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
+            raise HTTPException(404, "Địa điểm không tồn tại")
+    elif payload.dia_diem_thay_the:
+        requested_place = _MAP_PLACE_CACHE.get(payload.dia_diem_thay_the)
+    catalog_ids = {place.id for place in PLACES}
+    external = (requested_place,) if requested_place and requested_place.id not in catalog_ids else ()
+    explicit = bool(payload.dia_diem_thay_the or payload.ten_dia_diem_thay_the)
+    target, rejected, candidates = _replacement_candidates(
+        item,
+        payload.diem_bi_loai,
+        same_kind=False,
+        additional=external,
+        strict_travel=not explicit,
+    )
+    meal_type = target.get("bua_an")
+    if meal_type and not explicit:
+        preferred = [place for place in candidates if place.kind == rejected.kind]
+        if not preferred and meal_type in {"trua", "toi", "sang"}:
+            preferred = [place for place in candidates if place.kind in {"nha_hang", "quan_an"}]
+        if not preferred and meal_type == "nghi":
+            preferred = [place for place in candidates if place.kind in {"cafe", "cong_vien", "nha_hang", "quan_an"}]
+        if preferred:
+            candidates = preferred
     if payload.dia_diem_thay_the or requested_place:
         replacement = next((p for p in candidates if p.id == (payload.dia_diem_thay_the or requested_place.id)), None)
         if not replacement:
             raise HTTPException(422, "Địa điểm thay thế không phù hợp với khung giờ hoặc lịch trình")
     else:
+        if not candidates:
+            raise HTTPException(404, "Không có địa điểm thay thế phù hợp")
         replacement = min(
             candidates,
             key=lambda p: _replacement_rank(p, rejected),
@@ -559,8 +659,19 @@ def swipe(
             "nguon_url": replacement.source_url,
         }
     )
-    for stale_key in ("du_lieu_uoc_tinh", "gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi", "nguon_du_lieu_uoc_tinh"):
+    for stale_key in ("du_lieu_uoc_tinh", "nguon_du_lieu_uoc_tinh"):
         new_target.pop(stale_key, None)
+    if replacement.id in catalog_ids:
+        for stale_key in ("gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi", "google_place_id", "google_maps_url"):
+            new_target.pop(stale_key, None)
+    else:
+        new_target["gio_mo_cua_uoc_tinh"] = replacement.open_hour
+        new_target["gio_dong_cua_uoc_tinh"] = replacement.close_hour
+        new_target["chi_phi_moi_nguoi"] = replacement.cost
+        if replacement.google_place_id:
+            new_target["google_place_id"] = replacement.google_place_id
+        if replacement.google_maps_url:
+            new_target["google_maps_url"] = replacement.google_maps_url
     swap_image_url, swap_image_credit = image_for(replacement)
     new_target["anh"] = swap_image_url
     new_target["anh_nguon"] = swap_image_credit
@@ -573,8 +684,18 @@ def swipe(
             raise PipelineUnavailable("; ".join(errors))
         plan = enrich_plan_with_google(plan)
         if message:
+            dest_name = _destination_context(plan_request)[2]
+            reply = compose_plan_chat_reply(
+                locale=plan_request.ngon_ngu,
+                action="swap",
+                message=message,
+                plan=plan,
+                dest_name=dest_name,
+                old_name=rejected.name,
+                new_name=replacement.name,
+            )
             _append_turn(plan, "user", message)
-            _append_turn(plan, "assistant", "Đã đổi địa điểm được chọn và kiểm tra lại ràng buộc.")
+            _append_turn(plan, "assistant", reply)
         store.update(item, payload.phien_ban, plan, item.request, f"Tinh chỉnh: {message or 'Đổi điểm'}")
     except ValueError as exc:
         raise HTTPException(409, "Lịch trình vừa được cập nhật, vui lòng tải lại") from exc
@@ -612,13 +733,24 @@ def replacement_candidates(
     owner(item, x_session_id, authorization)
     if not limiter.check(f"candidate-search:{item.session_id}", 60):
         raise HTTPException(429, "Bạn đã tìm kiếm quá nhiều lần")
-    _, _, eligible = _replacement_candidates(item, diem_bi_loai)
+    target, _, eligible = _replacement_candidates(item, diem_bi_loai)
     query = ascii_fold(q.strip()).lower()
     candidates = [
         place for place in eligible
         if not query or query in ascii_fold(f"{place.name} {place.kind} {place.area}").lower()
-    ][:10]
-    return {"goi_y": [{"id": p.id, "ten": p.name, "loai": p.kind, "khu_vuc": p.area} for p in candidates]}
+    ]
+    if q.strip() and len(q.strip()) >= 3:
+        plan_request = PlanRequest.model_validate(item.request)
+        origin, city = _slot_origin(target, plan_request)
+        mapped = _resolve_named_place(q.strip(), origin, city)
+        used_ids = {
+            slot.get("dia_diem_id")
+            for day in item.plan.get("ngay", [])
+            for slot in day.get("khoang_gio", [])
+        }
+        if mapped and mapped.id not in used_ids and mapped.id not in {place.id for place in candidates}:
+            candidates = [mapped, *candidates]
+    return {"goi_y": [{"id": p.id, "ten": p.name, "loai": p.kind, "khu_vuc": p.area} for p in candidates[:10]]}
 
 
 @router.delete("/plans/{token}/slots")
@@ -715,29 +847,7 @@ def regenerate(
 
 
 def _refined_request(item, message: str) -> PlanRequest:
-    current = PlanRequest.model_validate(item.request)
-    updates: dict = {"context": f"{current.context}; {message}"[-500:]}
-    normalized = ascii_fold(message)
-    people = PEOPLE_INTENT.search(message)
-    if people:
-        updates["so_nguoi"] = int(people.group(1))
-    budget = re.search(
-        r"(?:ngân sách|budget|dưới|tối đa)\s*(\d+(?:[.,]\d+)?)\s*(k|nghìn|triệu|tr)?",
-        message, re.IGNORECASE,
-    )
-    if budget:
-        amount = float(budget.group(1).replace(",", "."))
-        unit = (budget.group(2) or "").lower()
-        multiplier = 1_000_000 if unit in {"triệu", "tr"} else 1_000 if unit in {"k", "nghìn"} else 1
-        updates["ngan_sach"] = round(amount * multiplier)
-    if re.search(r"\b(cheaper|lower cost|save money|re hon|tiet kiem|gia re|it tien)\b", normalized):
-        updates["ngan_sach"] = max(100_000, round((updates.get("ngan_sach") or current.ngan_sach) * 0.8))
-        updates["context"] = f"{updates['context']}; prioritize lower-cost places and free/low-price experiences"[-500:]
-    if re.search(r"\b(less travel|shorter route|nearby|it di chuyen|gan nhau|gan hon|di bo it)\b", normalized):
-        updates["context"] = f"{updates['context']}; keep stops geographically close together and reduce transfers"[-500:]
-    if re.search(r"\b(more cafe|coffee|cafe|them cafe|quan cafe|ca phe)\b", normalized):
-        updates["context"] = f"{updates['context']}; add more cafe and relaxed drink stops when suitable"[-500:]
-    return current.model_copy(update=updates)
+    return refined_plan_request(item, message)
 
 
 @router.post("/plans/{token}/refine")
@@ -752,21 +862,15 @@ def refine(
     owner(item, payload.ma_phien, authorization)
     if not limiter.check(f"refine:{item.session_id}", 20):
         raise HTTPException(429, "Bạn đã tinh chỉnh quá nhiều lần")
-    if SWAP_INTENT.search(payload.message):
-        target_slot_id = payload.dia_diem_dang_chon
-        if not target_slot_id:
-            msg_lower = ascii_fold(payload.message).lower()
-            all_slots = [s for day in item.plan.get("ngay", []) for s in day.get("khoang_gio", [])]
-            if any(w in msg_lower for w in ("an", "com", "pho", "bun", "restaurant", "food", "toi", "trua")):
-                meal_slots = [s for s in all_slots if s.get("loai") in ("nha_hang", "food", "quan_an") or s.get("bua_an")]
-                if meal_slots:
-                    target_slot_id = meal_slots[-1].get("dia_diem_id") if "toi" in msg_lower else meal_slots[0].get("dia_diem_id")
-            elif any(w in msg_lower for w in ("cafe", "ca phe", "coffee", "uong")):
-                cafe_slots = [s for s in all_slots if s.get("loai") in ("cafe", "ca_phe", "drinks")]
-                if cafe_slots:
-                    target_slot_id = cafe_slots[0].get("dia_diem_id")
-            elif all_slots:
-                target_slot_id = all_slots[0].get("dia_diem_id")
+    current_request = PlanRequest.model_validate(item.request)
+    locale = current_request.ngon_ngu
+    action = classify_plan_message(payload.message, item, payload.dia_diem_dang_chon)
+    theme = _wants_theme_change(payload.message, _folded(payload.message))
+
+    if action == "swap":
+        target_slot_id = target_slot_id_for_message(
+            item.plan, payload.message, payload.dia_diem_dang_chon
+        )
         if target_slot_id:
             try:
                 result = swipe(
@@ -780,26 +884,71 @@ def refine(
                     authorization,
                     message=payload.message,
                 )
+                plan = result["ke_hoach_moi"]
+                history = _conversation(plan)
+                reply = history[-1]["noi_dung"] if history and history[-1].get("vai_tro") == "assistant" else result.get("tra_loi")
                 return {
-                    "ke_hoach": result["ke_hoach_moi"], "phien_ban": result["phien_ban"],
-                    "tra_loi": "Đã đổi địa điểm phù hợp theo yêu cầu của bạn.",
+                    "ke_hoach": plan,
+                    "phien_ban": result["phien_ban"],
+                    "tra_loi": reply or "Mình đổi điểm đó rồi.",
                     "tra_loi_key": "swipeSuccess",
-                    "hoi_thoai": _conversation(result["ke_hoach_moi"]),
+                    "tham_so": _constraint_echo(current_request),
+                    "hoi_thoai": history,
                 }
             except Exception:
-                pass
-    refined = _refined_request(item, payload.message)
+                action = "rebuild"
+
+    if action == "talk":
+        plan = json.loads(json.dumps(item.plan, ensure_ascii=False))
+        reply = compose_plan_chat_reply(
+            locale=locale,
+            action="talk",
+            message=payload.message,
+            plan=plan,
+            dest_name=current_destination_label(item),
+        )
+        try:
+            _append_turn(plan, "user", payload.message)
+            _append_turn(plan, "assistant", reply)
+            store.update(item, payload.phien_ban, plan, item.request, f"Chat: {payload.message}")
+        except ValueError as exc:
+            raise HTTPException(409, "Kế hoạch vừa được cập nhật, vui lòng tải lại") from exc
+        store.log(item.session_id, "tinh_chinh_bang_chat", {"message": payload.message, "action": "talk"})
+        return {
+            "ke_hoach": plan,
+            "phien_ban": item.version,
+            "tra_loi": reply,
+            "tra_loi_key": "assistantWelcome",
+            "tham_so": _constraint_echo(current_request),
+            "hoi_thoai": plan.get("hoi_thoai", []),
+        }
+
+    refined = refined_plan_request(item, payload.message)
     previous = _conversation(item.plan)
+    dest_name = _destination_context(refined)[2]
+    dest_changed = dest_name != current_destination_label(item)
+    excluded = excluded_ids_for_refine(payload.message, item)
     try:
-        plan = build_plan(refined)
+        try:
+            plan = build_plan(refined, excluded)
+        except PipelineUnavailable:
+            if theme == "food" and excluded:
+                plan = build_plan(refined, None)
+            else:
+                raise
         plan = enrich_plan_with_google(plan)
         plan["hoi_thoai"] = [*previous, *plan.get("hoi_thoai", [])][-50:]
-        _append_turn(plan, "user", payload.message)
-        _append_turn(
-            plan, "assistant",
-            f"Đã áp dụng yêu cầu: ngân sách {refined.ngan_sach} VND, {refined.so_nguoi} người, "
-            f"{refined.thoi_luong}. Lịch trình mới đã sẵn sàng.",
+        reply = compose_plan_chat_reply(
+            locale=locale,
+            action="rebuild",
+            message=payload.message,
+            plan=plan,
+            dest_name=dest_name,
+            theme=theme,
+            dest_changed=bool(dest_changed),
         )
+        _append_turn(plan, "user", payload.message)
+        _append_turn(plan, "assistant", reply)
         store.update(
             item, payload.phien_ban, plan, refined.model_dump(mode="json"),
             f"Tinh chỉnh: {payload.message}",
@@ -808,10 +957,10 @@ def refine(
         raise HTTPException(409, "Kế hoạch vừa được cập nhật, vui lòng tải lại") from exc
     except (PipelineUnavailable, RuntimeError) as exc:
         raise HTTPException(503, str(exc)) from exc
-    store.log(item.session_id, "tinh_chinh_bang_chat", {"message": payload.message})
+    store.log(item.session_id, "tinh_chinh_bang_chat", {"message": payload.message, "action": "rebuild"})
     return {
         "ke_hoach": plan, "phien_ban": item.version,
-        "tra_loi": "Đã áp dụng yêu cầu và tạo phiên bản lịch trình mới.",
+        "tra_loi": reply,
         "tra_loi_key": "assistantWelcome",
         "tham_so": _constraint_echo(refined),
         "hoi_thoai": plan.get("hoi_thoai", previous),

@@ -1,7 +1,7 @@
 from dataclasses import replace
 from datetime import date, datetime, timedelta
 
-from app.data import PLACES, Place, place_name_key, source_for
+from app.data import PLACES, Place, place_match_key, place_name_key, source_for
 from app.pipeline import planner
 from app.pipeline import visit_guidance
 from app.pipeline.cp_sat_solver import (
@@ -135,6 +135,59 @@ def test_intent_policy_filters_sight_candidates_by_theme():
     assert [place.id for place in filtered] == ["test-peak"]
 
 
+def test_food_trip_sight_pool_uses_restaurants_not_city_named_gardens():
+    req = request().model_copy(update={
+        "context": "Đà Lạt chữa lành; đổi sang ăn uống",
+        "intent_policy": {
+            "schema_version": "intent-parse-v2",
+            "primary_intent": "food",
+            "allowed_place_themes": ["food", "local_food", "market", "seafood"],
+            "avoid_place_themes": [],
+        },
+    })
+    garden = planner.Place(
+        id="test-garden",
+        name="Vườn hoa thành phố Đà Lạt",
+        kind="cong_vien",
+        area="Đà Lạt",
+        lat=11.94,
+        lng=108.44,
+        cost=0,
+        duration_min=60,
+        tags=("view_dep", "checkin"),
+    )
+    restaurant = planner.Place(
+        id="test-food",
+        name="Quán lẩu gà lá é",
+        kind="nha_hang",
+        area="Đà Lạt",
+        lat=11.94,
+        lng=108.45,
+        cost=150_000,
+        duration_min=60,
+        tags=("am_thuc", "local"),
+    )
+    market = planner.Place(
+        id="test-market",
+        name="Chợ Đà Lạt",
+        kind="cho",
+        area="Đà Lạt",
+        lat=11.94,
+        lng=108.43,
+        cost=0,
+        duration_min=45,
+        tags=("am_thuc", "local"),
+    )
+    pool = planner._sight_candidates([garden, restaurant, market], req)
+    assert restaurant in pool
+    assert market in pool
+    filtered, evidence = planner._apply_intent_policy_to_sights(pool, req, 2)
+    ids = {place.id for place in filtered[:4]}
+    assert "test-food" in ids or "test-market" in ids
+    assert evidence["che_do"] != "soft_rank_not_enough_strict_matches" or restaurant in filtered
+
+
+
 def test_plan_title_labels_days_and_people_instead_of_raw_numbers():
     req = request().model_copy(
         update={
@@ -146,6 +199,29 @@ def test_plan_title_labels_days_and_people_instead_of_raw_numbers():
     assert planner._plan_title("Hà Nội", req, 2) == "Lịch trình du lịch Hà Nội 2 ngày cho 2 người"
     english = req.model_copy(update={"ngon_ngu": "en"})
     assert planner._plan_title("Hà Nội", english, 2) == "Travel itinerary: Hà Nội · 2 days for 2 people"
+
+
+def test_healing_anywhere_with_dalat_coords_is_not_nui_chua():
+    req = PlanRequest(
+        context="tôi muốn đi chữa lành tôi không biết nữa, đi đâu cũng được 3 ngày 2 người",
+        location={"lat": 11.9404, "lng": 108.4583},
+        thoi_luong="nhieu_ngay",
+        so_nguoi=2,
+        ngan_sach=1_000_000,
+        ma_phien="heal-dalat-title",
+    )
+    _, _, label = planner._destination_context(req)
+    assert label == "Đà Lạt"
+    title = planner._plan_title(label, req, 3)
+    assert "Đà Lạt" in title
+    folded = planner._ascii_fold(title).casefold()
+    assert "nui chua" not in folded
+
+    hanoi_coords = PlanRequest.model_validate(
+        {**req.model_dump(mode="json"), "location": {"lat": 21.0285, "lng": 105.8542}}
+    )
+    _, _, hanoi_label = planner._destination_context(hanoi_coords)
+    assert planner._ascii_fold(hanoi_label or "").casefold() != "nui chua"
 
 
 def test_finalize_plan_title_prefers_llm_sentence_from_user_request():
@@ -206,6 +282,8 @@ def test_trip_timing_understands_hours_clock_and_date_ranges():
     assert date_timing.days == 3
     assert date_timing.start_date == date(2026, 8, 20)
     assert date_timing.date_label == "20/8–22/8"
+    assert date_timing.clock_label != "8h–22h"
+    assert date_timing.clock_label != "8h–21h"
     assert planner._plan_title("Hà Nội", dates, 3) == "Lịch trình du lịch Hà Nội 20/8–22/8 cho 2 người"
 
     month_days = request().model_copy(update={"context": "từ ngày 20 đến ngày 22", "thoi_luong": "nhieu_ngay"})
@@ -445,6 +523,114 @@ def test_saigon_alias_resolves_to_hcm_region():
     )
 
 
+def test_planner_follows_corrected_city_after_thoi():
+    req = request().model_copy(
+        update={
+            "context": "hà nội có những chỗ nào chơi? thôi tôi muốn đi biển cơ Nha Trang 2 ngày, 2 người",
+            "thoi_luong": "nhieu_ngay",
+            "nonce": "nonce-thoi-nhatrang-0001",
+        }
+    )
+    _, _, destination_label = planner._destination_context(req)
+    assert destination_label == "Nha Trang"
+
+
+def test_yen_tu_plan_is_not_quang_ninh_beach():
+    req = request().model_copy(
+        update={
+            "context": "tôi mệt quá tôi stress quá tôi muốn đi biển tôi muốn leo núi t muốn đi núi yên tử 4 người, 2 ngày",
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 4,
+            "nonce": "nonce-yen-tu-not-beach-0001",
+            "intent_policy": {
+                "schema_version": "intent-parse-v2",
+                "primary_intent": "mountain",
+                "planner_mode": "multi_day_trip",
+                "allowed_place_themes": ["mountain", "trekking", "viewpoint", "nature"],
+                "avoid_place_themes": ["museum", "urban_landmark"],
+            },
+        }
+    )
+    destination_lat, destination_lng, destination_label = planner._destination_context(req)
+    assert destination_label == "Yên Tử"
+    assert abs(destination_lat - 21.1506) < 0.05
+    assert abs(destination_lng - 106.7189) < 0.05
+    title = planner._plan_title(destination_label, req, 2)
+    assert "Yên Tử" in title
+    assert "biển" not in title
+    assert "Quảng Ninh" not in title
+
+    plan = build_plan(req)
+    names = {slot["ten_dia_diem"] for day in plan["ngay"] for slot in day["khoang_gio"]}
+    ids = {slot["dia_diem_id"] for day in plan["ngay"] for slot in day["khoang_gio"]}
+    folded_names = {planner._ascii_fold(name) for name in names}
+    assert "curated-yen-tu" in ids
+    assert any("yen tu" in key for key in folded_names)
+    assert not any("hai phong" in key or "vuon hoa cheo" in key or "bai tho" in key or "cat ba" in key for key in folded_names)
+    assert "Yên Tử" in plan["tieu_de"]
+    assert "biển" not in plan["tieu_de"]
+    sight_slots = [
+        slot
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+        if not slot.get("bua_an")
+    ]
+    def minutes(slot):
+        start = slot["bat_dau"].split(":")
+        end = slot["ket_thuc"].split(":")
+        return int(end[0]) * 60 + int(end[1]) - (int(start[0]) * 60 + int(start[1]))
+    mountain_slots = [
+        slot for slot in sight_slots
+        if "yen tu" in planner._ascii_fold(slot.get("ten_dia_diem") or "")
+        or "bao ton" in planner._ascii_fold(slot.get("ten_dia_diem") or "")
+        or "thien vien" in planner._ascii_fold(slot.get("ten_dia_diem") or "")
+    ]
+    assert mountain_slots
+    assert max(minutes(slot) for slot in mountain_slots) >= 150
+
+
+def test_yen_tu_attraction_is_not_treated_as_bare_city():
+    yen = next(place for place in PLACES if place.id == "curated-yen-tu")
+    assert planner._is_bare_city_place(yen) is False
+    assert planner._looks_like_non_travel_business(yen) is False
+
+
+def test_mountain_visits_use_half_or_full_day_windows():
+    req = request().model_copy(update={"thoi_luong": "nhieu_ngay", "context": "leo núi Yên Tử 2 ngày"})
+    yen = next(place for place in PLACES if place.id == "curated-yen-tu")
+    monastery = next(place for place in PLACES if place.id == "curated-yen-tu-thien-vien")
+    cable = next(place for place in PLACES if place.id == "curated-yen-tu-cap-treo")
+    cafe = next((place for place in PLACES if place.kind == "cafe"), PLACES[0])
+    assert planner._visit_minutes_for(yen, None, req) >= 240
+    assert planner._visit_minutes_for(monastery, None, req) >= 180
+    assert planner._visit_minutes_for(cable, None, req) <= 60
+    if cafe.kind == "cafe":
+        assert planner._visit_minutes_for(cafe, None, req) < 120
+
+    reserve = replace(
+        yen,
+        id="osm-tay-yen-tu",
+        name="Khu bảo tồn thiên nhiên Tây Yên Tử",
+        kind="dia_danh",
+        tags=("nui", "ngoai_troi"),
+        duration_min=60,
+        source="OpenStreetMap",
+    )
+    assert planner._visit_minutes_for(reserve, None, req) >= 180
+    day_start = planner.datetime(2026, 8, 19, 8, 0)
+    bounds = planner._compute_slot_bounds(
+        reserve, None, day_start, day_start, day_start.replace(hour=17), req
+    )
+    assert bounds is not None
+    start, end, visit = bounds
+    assert visit >= 150
+    assert end > day_start.replace(hour=10, minute=30)
+
+    details = planner._enrich_visit_durations([yen, monastery, cable], req, {})
+    assert details[yen.id]["thoi_luong_phut"] >= 180
+    assert details[cable.id]["thoi_luong_phut"] <= 60
+
+
 def test_other_provinces_select_famous_tourism_anchors():
     provinces_to_test = [
         ("tôi muốn du lịch Huế 1 ngày", "Huế", {"Đại Nội Huế", "Chùa Thiên Mụ", "Lăng Khải Định", "Lăng Tự Đức"}),
@@ -481,6 +667,53 @@ def test_other_provinces_select_famous_tourism_anchors():
             <= planner.DESTINATION_RADIUS_KM
             for slot in slots
         ), f"Some stops exceeded radius in {expected_label}"
+
+
+def test_ha_long_three_day_plan_uses_famous_stops_once():
+    req = PlanRequest.model_validate(
+        {
+            "context": "du lịch Hạ Long 3 ngày 2 người",
+            "location": {"lat": 20.9712, "lng": 107.0448},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "ngan_sach": 5_000_000,
+            "ma_phien": "test-halong-3day",
+            "nonce": "nonce-halong-3day-famous-0001",
+        }
+    )
+    destination_lat, destination_lng, destination_label = planner._destination_context(req)
+    assert destination_label == "Hạ Long"
+
+    plan = build_plan(req)
+    assert len(plan["ngay"]) == 3
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    names = [slot["ten_dia_diem"] for slot in slots]
+    ids = [slot["dia_diem_id"] for slot in slots]
+    assert len(ids) == len(set(ids))
+    titop_slots = [name for name in names if place_match_key(name) == "titop"]
+    assert len(titop_slots) <= 1
+    famous_anchors = {
+        "Vịnh Hạ Long",
+        "Hang Sửng Sốt",
+        "Đảo Ti Tốp",
+        "Đảo Titop",
+        "Động Thiên Cung",
+        "Hang Đầu Gỗ",
+        "Hang Luồn",
+        "Bãi Cháy",
+        "Núi Bài Thơ",
+        "Bảo tàng Quảng Ninh",
+    }
+    assert set(names).intersection(famous_anchors), f"expected famous Ha Long stops, got {names}"
+    obscure = {"High long mountain", "Thay Cave", "Bãi tắm Quảng Hồng"}
+    assert not set(names).intersection(obscure)
+    cat_co = [name for name in names if "cát cỏ" in name.casefold() or "cat co" in place_match_key(name)]
+    assert len(cat_co) <= 1
+    assert all(
+        planner.haversine_km(destination_lat, destination_lng, slot["toa_do"]["lat"], slot["toa_do"]["lng"])
+        <= planner.DESTINATION_RADIUS_KM
+        for slot in slots
+    )
 
 
 def test_nha_trang_uses_curated_tourism_anchors():
@@ -1263,6 +1496,18 @@ def test_plan_never_repeats_same_place_name():
         assert names.count("Lăng Chủ tịch Hồ Chí Minh") <= 1
 
 
+def test_place_name_dedupe_collapses_titop_spelling_twins():
+    first = replace(PLACES[0], id="curated-dao-ti-top", name="Đảo Ti Tốp")
+    twin = replace(PLACES[0], id="curated-dao-titop", name="Đảo Titop")
+    distinct = replace(PLACES[0], id="curated-hang-sung-sot", name="Hang Sửng Sốt")
+    deduped = planner._dedupe_places([first, twin, distinct])
+    assert len(deduped) == 2
+    assert planner._name_taken(twin, planner._place_name_keys(first))
+    names = {place.name for place in deduped}
+    assert "Hang Sửng Sốt" in names
+    assert len({place_match_key(name) for name in names if place_match_key(name) == "titop"}) == 1
+
+
 def test_place_name_dedupe_uses_accent_case_and_spacing_normalization():
     first = replace(PLACES[0], id="alias-one", name="  Café   Đinh ")
     alias = replace(PLACES[0], id="alias-two", name="cafe dinh")
@@ -1392,11 +1637,12 @@ def test_extra_candidate_skips_beach_english_suffix_alias(monkeypatch):
 
 def test_backfill_tries_next_candidate_when_first_cannot_fit(monkeypatch):
     day_start = planner.datetime(2026, 8, 10, 8)
-    previous = replace(PLACES[0], id="previous", name="Điểm đầu")
-    following = replace(PLACES[0], id="following", name="Điểm cuối")
-    cannot_fit = replace(PLACES[0], id="cannot-fit", name="Không vừa giờ")
-    fits = replace(PLACES[0], id="fits", name="Điểm thay thế")
+    previous = replace(PLACES[0], id="previous", name="Điểm đầu", kind="dia_danh", lat=21.0285, lng=105.8542, open_hour=7, close_hour=22, source="curated")
+    following = replace(PLACES[0], id="following", name="Điểm cuối", kind="dia_danh", lat=21.0290, lng=105.8545, open_hour=7, close_hour=22, source="curated")
+    cannot_fit = replace(PLACES[0], id="cannot-fit", name="Không vừa giờ", kind="dia_danh", lat=21.0287, lng=105.8543, open_hour=7, close_hour=22, source="curated")
+    fits = replace(PLACES[0], id="fits", name="Điểm thay thế", kind="dia_danh", lat=21.0288, lng=105.8544, open_hour=7, close_hour=22, source="curated")
     monkeypatch.setattr(planner, "PLACES", [previous, following, cannot_fit, fits])
+    planner._places_near.cache_clear()
 
     def choose(*args, **kwargs):
         excluded = args[1]
@@ -1657,6 +1903,28 @@ def test_three_day_hanoi_request_keeps_three_days():
         )
     )
     assert len(plan["ngay"]) == 3
+
+
+def test_wizard_bare_day_count_is_not_collapsed_to_two_days():
+    ten = request().model_copy(
+        update={
+            "context": "đi Hà Nội\n10\n2 người",
+            "thoi_luong": "nhieu_ngay",
+            "nonce": "nonce-hanoi-wizard-10-days-0001",
+        }
+    )
+    assert planner._trip_timing(ten).days == 10
+
+    five = request().model_copy(
+        update={
+            "context": "đi biển Phú Quốc\n5\n2 người",
+            "location": {"lat": 10.2899, "lng": 103.984},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "nonce": "nonce-phu-quoc-wizard-5-days-0001",
+        }
+    )
+    assert planner._trip_timing(five).days == 5
 
 
 def test_multi_day_hanoi_ignores_stale_short_time_window():

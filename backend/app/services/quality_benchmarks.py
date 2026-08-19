@@ -761,7 +761,7 @@ def audit_release_spec(build_plan: Callable[[PlanRequest], dict] | None = None) 
             "evidence": [
                 "Slots include coordinates, source, source_url, cost, opening hours, image fields, and missing-data evidence.",
                 "AI adapter is only allowed to edit copy, not quantitative facts.",
-                "Free-text replacement rejects external places without verified operational metadata instead of asking AI to estimate hours/cost.",
+                "Map-verified replacements are allowed into the itinerary; AI still must not invent hours or cost.",
                 f"Google Places readiness for rating/review/photo/hour enrichment: {google_places_status['status']}.",
             ],
             "blockers": [

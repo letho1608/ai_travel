@@ -86,6 +86,24 @@ class PlanRequest(BaseModel):
         return " ".join(value.replace("<", "").replace(">", "").split()) if value else value
 
 
+class ChatMessageIn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def clean_content(cls, value: str) -> str:
+        cleaned = " ".join(value.replace("<", "").replace(">", "").split())
+        if not cleaned:
+            raise ValueError("Nội dung không hợp lệ")
+        return cleaned
+
+
+class ChatTurnRequest(BaseModel):
+    messages: list[ChatMessageIn] = Field(min_length=1, max_length=24)
+    ngon_ngu: Locale = "vi"
+
+
 class IntentParseRequest(BaseModel):
     context: str = Field(min_length=2, max_length=500)
     ngon_ngu: Locale = "vi"

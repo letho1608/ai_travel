@@ -50,6 +50,56 @@ def test_verify_place_name_queries_requested_city(monkeypatch, tmp_path):
     assert "Hanoi" not in captured["params"]["q"]
 
 
+def test_verify_place_name_accepts_jsonv2_category_island_after_empty_viewbox(monkeypatch, tmp_path):
+    monkeypatch.setattr(osm_verify, "CACHE_PATH", tmp_path / "osm_verify_cache.json")
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append(kwargs.get("params", {}))
+        if kwargs.get("params", {}).get("bounded") == 1:
+            return FakeResponse([])
+        return FakeResponse(
+            [
+                {
+                    "category": "place",
+                    "type": "island",
+                    "display_name": "Đảo San Hô Ảo, Hạ Long, Quảng Ninh, Việt Nam",
+                    "lat": "20.9200",
+                    "lon": "106.9800",
+                    "osm_type": "relation",
+                    "osm_id": 19465350,
+                    "name": "Đảo San Hô Ảo",
+                },
+                {
+                    "category": "place",
+                    "type": "island",
+                    "display_name": "Đảo xa, Hạ Long, Quảng Ninh, Việt Nam",
+                    "lat": "20.7000",
+                    "lon": "107.2000",
+                    "osm_type": "way",
+                    "osm_id": 222,
+                    "name": "Đảo xa",
+                },
+            ]
+        )
+
+    monkeypatch.setattr(osm_verify.httpx, "get", fake_get)
+    place = osm_verify.verify_place_name("đảo san hô ảo", (20.9100, 107.1830), "Hạ Long")
+    assert place is not None
+    assert place.name == "Đảo San Hô Ảo"
+    assert place.id == "osm-verified-relation-19465350"
+    assert abs(place.lat - 20.92) < 0.001
+    assert any(params.get("bounded") == 1 for params in calls)
+    assert any("bounded" not in params for params in calls)
+
+
+def test_catalog_match_finds_tuan_chau():
+    place = osm_verify._catalog_match("đảo tuần châu", (20.8589, 107.0803))
+    assert place is not None
+    assert place.id == "curated-dao-tuan-chau"
+    assert place.name == "Đảo Tuần Châu"
+
+
 def test_verify_place_name_accepts_attraction_outside_hanoi(monkeypatch, tmp_path):
     monkeypatch.setattr(osm_verify, "CACHE_PATH", tmp_path / "osm_verify_cache.json")
 

@@ -215,6 +215,7 @@ test("workspace mutations fail safely and guard duplicate actions",()=>{
   assert.match(planViewSource,/className=\{`action-toast \$\{errorMessageKeys\.has\(message\.key\)\s*\?\s*"error"\s*:\s*"success"\}`\}[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"/);
   assert.match(planViewSource,/setMessage\(\(?current\)?\s*=>\s*current\?\?\{key:"commentsFailed"\}\)/);
   assert.match(planViewSource,/body:JSON\.stringify\(\{ma_phien:session,nonce\}\),?\},90000,?/);
+  assert.match(planViewSource,/\/refine`,\{method:"POST"[\s\S]*\},90000\)/);
   assert.match(planViewSource,/setMessage\(\{key:"regenerateSuccess"\}\)/);
   assert.match(globalsSource,/\.action-toast\{position:fixed/);
   assert.match(globalsSource,/\.action-toast\.error\{[^}]*background:#9f2f20/);
@@ -416,7 +417,8 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/ngay_di: ngayDi/);
   assert.match(plannerSource,/từ 20\/8 đến 22\/8/);
   assert.match(plannerSource,/setNeedsDuration\(true\)/);
-  assert.match(plannerSource,/needsDuration &&/);
+  assert.match(plannerSource,/\/api\/chat\/turn/);
+  assert.match(plannerSource,/async function sendUserTurn/);
   assert.match(plannerSource,/const \[pendingContext, setPendingContext\]/);
   assert.match(plannerSource,/const \[needsDestination, setNeedsDestination\]/);
   assert.match(plannerSource,/const \[pendingDuration, setPendingDuration\]/);
@@ -433,6 +435,7 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/if \(!hasDestination\(answer\)\) \{/);
   assert.match(plannerSource,/const DEFAULT_LOCATION/);
   assert.match(plannerSource,/const DESTINATION_LOCATIONS/);
+  assert.match(plannerSource,/yen tu\|chua yen tu\|nui yen tu/);
   assert.match(plannerSource,/function destinationLocation\(value: string\)/);
   assert.match(plannerSource,/pendingIntentLocation/);
   assert.match(plannerSource,/location: pendingIntentLocation\.current \?\? destinationLocation\(composedContext\)/);
@@ -456,6 +459,10 @@ test("planner keeps its timeout, safe status and request contracts",()=>{
   assert.match(plannerSource,/function answerPeople\(answer: string\)/);
   assert.match(plannerSource,/if \(needsPeople\) \{/);
   assert.match(plannerSource,/const bareNumber = normalized\.match/);
+  assert.match(plannerSource,/!missing.includes\("people"\)/);
+  assert.match(plannerSource,/Boolean\(turn.ready_to_plan\)/);
+  assert.doesNotMatch(plannerSource,/Mình sẽ xếp mặc định cho 2 người/);
+  assert.doesNotMatch(plannerSource,/I'll default to 2 people/);
   assert.match(plannerSource,/if \(\!travelers\) \{/);
   assert.doesNotMatch(plannerSource,/id="planner-people"/);
   assert.doesNotMatch(plannerSource,/htmlFor="planner-people"/);
