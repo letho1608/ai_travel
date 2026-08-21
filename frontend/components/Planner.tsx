@@ -1218,12 +1218,13 @@ export default function Planner() {
             ↑
           </button>
         </div>
+        {statusKey && (
+          <div className="status busy" role="status" aria-live="polite">
+            <span className="spinner" aria-hidden="true" />
+            <span>{waitNotice ?? t(statusKey)}</span>
+          </div>
+        )}
       </div>
-      {statusKey && (
-        <div className="status" role="status" aria-live="polite">
-          {waitNotice ?? t(statusKey)}
-        </div>
-      )}
       {errorKey && (
         <div className="error retry-panel" role="alert">
           <span>
@@ -1235,8 +1236,6 @@ export default function Planner() {
           </button>
         </div>
       )}
-      <p className="disclaimer">{t("dataNotice")}</p>
-      <p className="disclaimer">{t("disclaimer")}</p>
     </form>
   );
 }
