@@ -417,6 +417,35 @@ VISIT_GUIDANCE_BY_NAME: dict[str, VisitGuidance] = {
         tip="Khu bảo tồn / rừng núi: đi lối mòn và quan sát thiên nhiên cả buổi, không ghé 1 giờ rồi rời.",
         source="Forest protection area guidance",
     ),
+    "vuon quoc gia cat ba": VisitGuidance(
+        open_hour=7, close_hour=17,
+        preferred=(8, 0, 16, 0),
+        duration_min=180,
+        tip="Đường mòn rừng đá vôi trên đảo Cát Bà; nửa ngày, mang nước và giày bám.",
+        source="Cat Ba National Park",
+    ),
+    "vinh lan ha": VisitGuidance(
+        open_hour=7, close_hour=17,
+        preferred=(8, 0, 16, 0),
+        duration_min=180,
+        tip="Thuyền Lan Hạ xuất phát từ Cát Bà, không ghép tour Bãi Cháy / Hạ Long city.",
+        source="Cat Ba / Lan Ha Bay",
+    ),
+    "bai cat co 1": VisitGuidance(
+        open_hour=6, close_hour=19,
+        preferred=(8, 0, 11, 0),
+        alt_preferred=(15, 0, 18, 0),
+        duration_min=90,
+        tip="Bãi tắm gần thị trấn Cát Bà; đi sớm tránh đông, dép bám đá.",
+        source="Cat Ba beaches",
+    ),
+    "hang quan y": VisitGuidance(
+        open_hour=8, close_hour=17,
+        preferred=(9, 0, 16, 0),
+        duration_min=60,
+        tip="Hang bệnh viện trong núi; mang đèn, trần thấp.",
+        source="Hospital Cave Cat Ba",
+    ),
 }
 
 # Extra id aliases when name keys differ between curated/OSM copies.

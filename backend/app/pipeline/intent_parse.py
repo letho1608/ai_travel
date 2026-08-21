@@ -21,6 +21,7 @@ class IntentDestination:
     name: str
     lat: float
     lng: float
+    radius_km: float | None = None
 
 
 @dataclass(frozen=True)
@@ -121,18 +122,33 @@ DESTINATION_ALIASES: dict[str, tuple[str, ...]] = {
     "Phan Thiết": ("phan thiet", "mui ne", "binh thuan", "mui ne beach", "판티엣", "무이네", "潘切"),
     "Quảng Bình": ("quang binh", "dong hoi", "phong nha", "phong nha ke bang", "꽝빈", "广平"),
     "Hà Giang": ("ha giang", "dong van", "ma pi leng", "ha giang loop", "하기앙", "河江"),
-    "Hải Phòng": ("hai phong", "cat ba", "do son", "cat ba island", "하이퐁", "海防"),
+    "Hải Phòng": ("hai phong", "do son", "하이퐁", "海防"),
 }
 
 # Named sights that are trip destinations even when they are not focus cities.
 LANDMARK_DESTINATIONS: tuple[IntentDestination, ...] = (
+    IntentDestination("Cát Bà", 20.7278, 107.0482, 13.0),
     IntentDestination("Yên Tử", 21.1506, 106.7189),
     IntentDestination("Chùa Hương", 20.6194, 105.7456),
 )
 LANDMARK_ALIASES: dict[str, tuple[str, ...]] = {
+    "Cát Bà": ("cat ba", "dao cat ba", "cat ba island", "vinh lan ha", "lan ha"),
     "Yên Tử": ("yen tu", "chua yen tu", "nui yen tu", "thien vien yen tu", "chua dong yen tu", "danh thang yen tu"),
     "Chùa Hương": ("chua huong", "huong tich", "chua huong tich", "huong son"),
 }
+
+
+def _destination_payload(destination: IntentDestination) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "name": destination.name,
+        "lat": destination.lat,
+        "lng": destination.lng,
+    }
+    if destination.radius_km:
+        payload["radius_km"] = destination.radius_km
+    return payload
+
+
 POI_NAME_PREFIXES = (
     "quan the di tich danh thang ",
     "quan the danh thang ",
@@ -501,7 +517,9 @@ PLACE_THEME_KINDS: dict[str, set[str]] = {
     "cafe_chill": {"cafe"},
     "beach": {"bai_bien"},
     "island": {"bai_bien", "dia_danh"},
-    "seafood": {"nha_hang", "quan_an"},
+    # Seafood is tag-based (hai_san), not "any restaurant". Otherwise quán chay
+    # matches beach trips because every nha_hang/quan_an was treated as seafood.
+    "seafood": set(),
     "mountain": {"nui", "hang_dong", "den_chua"},
     "trekking": {"nui", "hang_dong", "den_chua"},
     "trail": {"nui"},
@@ -546,7 +564,7 @@ PLACE_THEME_TAGS: dict[str, set[str]] = {
     "viewpoint": {"view_dep", "checkin", "peak"},
     "quiet": {"chill", "yen_tinh", "thu_gian"},
     "slow_walk": {"di_bo", "chill", "ngoai_troi", "yen_tinh"},
-    "crowded_landmark": {"hanoi_icon", "lang_bac", "checkin"},
+    "crowded_landmark": {"hanoi_icon", "lang_bac"},
     "heavy_history": {"history", "lich_su", "museum", "di_tich", "lang_bac"},
     "urban_landmark": {"hanoi_icon", "pho_co", "checkin"},
     "inland_landmark": {"hanoi_icon", "heritage", "pho_co"},
@@ -692,7 +710,9 @@ def _destination_suggestions(purpose: str | None) -> list[dict]:
             continue
         catalog_score = 0
         for place in PLACES:
-            if _haversine_km(destination.lat, destination.lng, place.lat, place.lng) > DESTINATION_RADIUS_KM:
+            if _haversine_km(destination.lat, destination.lng, place.lat, place.lng) > (
+                destination.radius_km or DESTINATION_RADIUS_KM
+            ):
                 continue
             catalog_score += _place_theme_score(place, spec)
         suggestions.append({
@@ -865,21 +885,45 @@ def _extract_duration_minutes(folded: str, has_window: bool) -> tuple[int | None
     return None, []
 
 
+# Beach-theme terms that mean the coast, not just seafood restaurants.
+_COASTAL_BEACH_TERMS = frozenset({
+    "bien",
+    "bai bien",
+    "dao",
+    "hoang hon bien",
+    "ngam hoang hon",
+    "san ho",
+    "beach",
+    "island",
+    "tam bien",
+    "di bien",
+    "nghi bien",
+    "ven bien",
+})
+
+
 def _extract_purpose(folded: str) -> str | None:
-    hits: list[tuple[int, int, str]] = []
+    hits: list[tuple[int, int, str, str]] = []
     for key in ("healing", "beach", "mountain", "cafe", "food", "general_travel"):
         spec = THEMES[key]
         for term in spec.terms:
             for start, end in _term_spans(folded, term):
-                hits.append((start, end, key))
+                hits.append((start, end, key, term))
     if not hits:
         return None
+    matched = {row[2] for row in hits}
+    # "thích biển và hải sản" must stay a beach trip. "hải sản" is also a food
+    # term and would otherwise win as the last hit, turning the plan into a
+    # restaurant crawl (often quán chay from OSM).
+    if "beach" in matched and "food" in matched:
+        if any(key == "beach" and term in _COASTAL_BEACH_TERMS for *_, key, term in hits):
+            return "beach"
     hits.sort(key=lambda row: (row[0], row[1]))
     return hits[-1][2]
 
 
 def _purpose_for_destination(destination: IntentDestination | None, purpose: str | None) -> str | None:
-    if destination and destination.name in LANDMARK_ALIASES and purpose == "beach":
+    if destination and destination.name in {"Yên Tử", "Chùa Hương"} and purpose == "beach":
         return "mountain"
     return purpose
 
@@ -922,7 +966,7 @@ def rule_structured_intent(context: str) -> dict:
         rules["days"], rules["minutes"], rules["window"]
     )
     return {
-        "destination": {"name": destination.name, "lat": destination.lat, "lng": destination.lng} if destination else None,
+        "destination": _destination_payload(destination) if destination else None,
         "trip_purpose": rules["purpose"],
         "planner_mode": planner_mode,
         "duration": duration,
@@ -1147,7 +1191,7 @@ def _build_intent_result(
 
     parsed_destination = None
     if destination:
-        parsed_destination = {"name": destination.name, "lat": destination.lat, "lng": destination.lng}
+        parsed_destination = _destination_payload(destination)
     return {
         "schema_version": "intent-parse-v2",
         "extraction_source": source,

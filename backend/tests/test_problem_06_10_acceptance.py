@@ -304,7 +304,10 @@ def test_problem_08_solver_output_respects_hours_uniqueness_budget_and_day_size(
 
 
 def test_problem_08_validator_rejects_budget_and_travel_constraint_violations():
-    request = base_request(nonce="acceptance-validator-negative-0001")
+    request = base_request(
+        context="du lịch Hà Nội cả ngày, văn hóa lịch sử, phố cổ, ăn ngon, ngân sách 1000000 đồng",
+        nonce="acceptance-validator-negative-0001",
+    )
     plan = build_plan(request)
     slots = all_slots(plan)
     trusted_ids = {slot["dia_diem_id"] for slot in slots}

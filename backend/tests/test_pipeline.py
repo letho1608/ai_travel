@@ -31,6 +31,7 @@ def test_plan_explains_input_understanding_and_candidate_data():
     )
 
     understood = plan["dau_vao_da_hieu"]
+    assert isinstance(plan.get("diem_den"), str) and plan["diem_den"].strip()
     assert understood["schema_version"] == "input-understanding-v1"
     assert understood["context_goc"].startswith("du lịch Hà Nội")
     assert understood["diem_den"]["gia_tri"]["ten"]
@@ -620,6 +621,122 @@ def test_yen_tu_plan_is_not_quang_ninh_beach():
     ]
     assert mountain_slots
     assert max(minutes(slot) for slot in mountain_slots) >= 150
+
+
+def test_cat_ba_plan_stays_on_the_island():
+    req = request().model_copy(
+        update={
+            "context": "hỏi lịch trình đi Cát Bà 2 ngày 2 người, thích biển",
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "nonce": "nonce-cat-ba-island-0001",
+        }
+    )
+    destination_lat, destination_lng, destination_label = planner._destination_context(req)
+    assert destination_label == "Cát Bà"
+    assert abs(destination_lat - 20.7278) < 0.05
+    assert abs(destination_lng - 107.0482) < 0.05
+    radius = planner._destination_radius_km(destination_label)
+    assert radius == 13.0
+
+    plan = build_plan(req)
+    slots = [slot for day in plan["ngay"] for slot in day["khoang_gio"]]
+    assert slots
+    names = {slot["ten_dia_diem"] for slot in slots}
+    folded = {planner._ascii_fold(name) for name in names}
+    assert any(
+        token in key
+        for key in folded
+        for token in ("cat ba", "cat co", "lan ha", "quan y", "cai beo", "than cong")
+    )
+    assert not any("do son" in key or "bai chay" in key or "sung sot" in key or "bai tho" in key for key in folded)
+    assert not any(key in {"hai phong", "nha hat lon hai phong", "vuon hoa cheo"} for key in folded)
+    for slot in slots:
+        assert planner.haversine_km(
+            destination_lat, destination_lng, slot["toa_do"]["lat"], slot["toa_do"]["lng"]
+        ) <= radius
+    assert "Cát Bà" in plan["tieu_de"]
+    assert "Hải Phòng" not in plan["tieu_de"]
+    assert plan.get("anh_bia") and str(plan["anh_bia"]).startswith("https://")
+    town = next((slot for slot in slots if "thị trấn" in slot["ten_dia_diem"].casefold()), None)
+    if town:
+        assert town.get("anh") and str(town["anh"]).startswith("https://")
+
+
+def test_cat_ba_multiday_has_lunch_dinner_and_famous_stops():
+    req = request().model_copy(
+        update={
+            "context": "lịch trình chữa lành Cát Bà 2 ngày 2 người, thích biển",
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "nonce": "nonce-cat-ba-meals-famous-0001",
+        }
+    )
+    plan = build_plan(req)
+    famous_tokens = ("cat co", "lan ha", "quan y", "than cong", "vuon quoc gia", "cai beo")
+    all_names = {
+        planner._ascii_fold(slot["ten_dia_diem"])
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+    }
+    assert any(token in name for name in all_names for token in famous_tokens)
+    by_id = {place.id: place for place in PLACES}
+    for day in plan["ngay"]:
+        meals = {slot.get("bua_an") for slot in day["khoang_gio"]}
+        assert "trua" in meals
+        assert "toi" in meals
+        assert "dem" in meals or any(
+            slot["bat_dau"] >= "19:00" and not slot.get("bua_an")
+            for slot in day["khoang_gio"]
+        )
+        for slot in day["khoang_gio"]:
+            place = by_id[slot["dia_diem_id"]]
+            open_hour, close_hour = planner._effective_hours(place)
+            assert slot["bat_dau"] >= f"{open_hour:02d}:00"
+            assert slot["ket_thuc"] <= f"{close_hour:02d}:00"
+
+
+def test_visit_is_clamped_inside_opening_hours():
+    place = replace(
+        PLACES[0],
+        id="closes-at-seventeen",
+        name="Closes at seventeen",
+        kind="dia_danh",
+        open_hour=8,
+        close_hour=17,
+        duration_min=180,
+        tags=("ngoai_troi", "view_dep"),
+    )
+    day_start = planner.datetime(2026, 8, 20, 8, 0)
+    bounds = planner._compute_slot_bounds(
+        place,
+        None,
+        day_start.replace(hour=15, minute=30),
+        day_start,
+        day_start.replace(hour=22),
+        request(),
+        relax=True,
+    )
+    assert bounds is not None
+    start, end, visit = bounds
+    assert start >= day_start.replace(hour=8)
+    assert end <= day_start.replace(hour=17)
+    assert visit >= 25
+
+
+def test_dinner_fits_restaurant_that_closes_before_21():
+    place = replace(
+        PLACES[0],
+        id="closes-at-twenty",
+        name="Cơm biển đóng cửa sớm",
+        kind="nha_hang",
+        open_hour=10,
+        close_hour=20,
+        duration_min=60,
+        tags=("am_thuc", "hai_san", "local"),
+    )
+    assert planner._open_for_meal(place, "trua")
+    assert planner._open_for_meal(place, "toi")
 
 
 def test_yen_tu_attraction_is_not_treated_as_bare_city():
@@ -1370,6 +1487,39 @@ def test_full_day_has_midday_rest_and_evening_after_dinner():
     assert "12:00" <= rest["bat_dau"] <= "14:30"
     after_dinner = [slot for slot in slots if slot["bat_dau"] >= dinner["ket_thuc"]]
     assert after_dinner, "expected at least one evening stop after dinner"
+
+
+def test_evening_picks_places_still_open_after_dinner():
+    lang_bac = next(place for place in PLACES if "lang bac" in planner._place_name_key(place) or "lang chu tich" in planner._place_name_key(place))
+    thi_tran = next(place for place in PLACES if place.id == "curated-thi-tran-cat-ba")
+    pho_di_bo = next(place for place in PLACES if place.id == "curated-pho-di-bo-cat-ba")
+    assert planner._still_open_in_evening(lang_bac) is False
+    assert planner._still_open_in_evening(thi_tran) is True
+    assert planner._is_evening_place(pho_di_bo) is True
+
+    req = request().model_copy(
+        update={
+            "context": "Cát Bà 2 ngày 2 người",
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "nonce": "nonce-cat-ba-evening-0001",
+        }
+    )
+    plan = build_plan(req)
+    evening = [
+        slot
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+        if slot.get("bua_an") == "dem"
+    ]
+    assert evening
+    by_id = {place.id: place for place in PLACES}
+    for slot in evening:
+        place = by_id[slot["dia_diem_id"]]
+        _, close_hour = planner._effective_hours(place)
+        assert slot["ket_thuc"] <= f"{close_hour:02d}:00"
+        assert close_hour >= 20
+
 
 
 def test_each_night_market_tag_has_hard_evening_floor_in_normal_and_relax():
@@ -2373,6 +2523,7 @@ def test_all_supported_locales_localize_copy_without_translating_names_or_source
         assert plan["tom_tat"] == COPY[locale][6].format(people=localized_request.so_nguoi)
         assert plan["ngay"][0]["nhan_de"] == COPY[locale][5].format(day=1)
         assert slot["ten_dia_diem"] == place.name
+        assert slot["khu_vuc"] == place.area
         assert slot["nguon"] == place.source
         assert slot["nguon_url"] == source_for(place)[0]
         assert "anh" in slot
@@ -2446,3 +2597,70 @@ def test_generated_visit_guidance_json_is_loaded():
     guidance = next(iter(visit_guidance.GENERATED_VISIT_GUIDANCE_BY_ID.values()))
     assert guidance.preferred[0] < guidance.preferred[2]
     assert guidance.source
+
+
+def test_da_nang_beach_seafood_plan_does_not_suggest_vegetarian_meals():
+    req = PlanRequest.model_validate(
+        {
+            "context": "Lịch trình du lịch Đà Nẵng 3 ngày 2 đêm cho 2 người thích biển và hải sản",
+            "location": {"lat": 16.0544, "lng": 108.2022},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "ngan_sach": 1_000_000,
+            "ma_phien": "test-session",
+            "nonce": "nonce-da-nang-seafood-meals-0001",
+            "intent_policy": {
+                "schema_version": "intent-parse-v2",
+                "primary_intent": "beach",
+                "allowed_place_themes": ["beach", "island", "seafood", "sunset", "coastal_view", "resort"],
+                "avoid_place_themes": ["urban_museum", "inland_landmark"],
+            },
+        }
+    )
+    plan = build_plan(req)
+    dining = [
+        slot
+        for day in plan["ngay"]
+        for slot in day["khoang_gio"]
+        if slot["loai"] in {"nha_hang", "quan_an"}
+    ]
+    assert dining
+    names = [slot["ten_dia_diem"] for slot in dining]
+    folded_names = [planner._ascii_fold(name) for name in names]
+    assert not any(
+        "chay" in folded or "vegan" in folded or "vegetarian" in folded
+        for folded in folded_names
+    )
+    assert any("hai san" in folded for folded in folded_names)
+    by_id = {place.id: place for place in PLACES}
+    assert any("hai_san" in by_id[slot["dia_diem_id"]].tags for slot in dining if slot["dia_diem_id"] in by_id)
+
+
+def test_unstated_budget_does_not_reject_plan():
+    req = PlanRequest.model_validate(
+        {
+            "context": "Lịch trình du lịch Đà Nẵng 3 ngày 2 đêm cho 2 người thích biển và hải sản",
+            "location": {"lat": 16.0544, "lng": 108.2022},
+            "thoi_luong": "nhieu_ngay",
+            "so_nguoi": 2,
+            "ngan_sach": 1_000_000,
+            "ma_phien": "test-session",
+            "nonce": "nonce-unstated-budget-0001",
+        }
+    )
+    plan = build_plan(req)
+    trusted = {slot["dia_diem_id"] for day in plan["ngay"] for slot in day["khoang_gio"]}
+    over = dict(plan)
+    over["chi_phi_moi_nguoi"] = 9_000_000
+    assert "Kế hoạch vượt ngân sách" not in validate_plan(over, trusted, req)
+
+
+def test_stated_budget_still_rejects_overage():
+    req = request().model_copy(
+        update={"context": "du lịch Hà Nội ngân sách 250000 đồng", "ngan_sach": 250_000}
+    )
+    plan = build_plan(req)
+    trusted = {slot["dia_diem_id"] for day in plan["ngay"] for slot in day["khoang_gio"]}
+    over = dict(plan)
+    over["chi_phi_moi_nguoi"] = 250_001
+    assert "Kế hoạch vượt ngân sách" in validate_plan(over, trusted, req)

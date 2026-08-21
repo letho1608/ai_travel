@@ -317,6 +317,22 @@ def test_named_landmark_wins_over_earlier_beach_and_feelings():
     assert province_is_not_ha_long["parsed"]["destination"]["name"] == "Yên Tử"
 
 
+def test_parse_intent_treats_cat_ba_as_its_own_island():
+    parsed = parse_intent("muốn đi cát bà 2 ngày 2 người", extractor=ai({}))
+    assert parsed["parsed"]["destination"]["name"] == "Cát Bà"
+    assert parsed["parsed"]["destination"]["radius_km"] == 13.0
+    assert "destination" not in parsed["missing_fields"]
+
+    groq_cannot_override = parse_intent(
+        "lịch trình đi Cát Bà 3 ngày",
+        extractor=ai({"destination_text": "Hải Phòng", "trip_purpose": "beach"}),
+    )
+    assert groq_cannot_override["parsed"]["destination"]["name"] == "Cát Bà"
+
+    hai_phong = parse_intent("đi hải phòng 2 ngày 2 người", extractor=ai({}))
+    assert hai_phong["parsed"]["destination"]["name"] == "Hải Phòng"
+
+
 def test_parse_intent_prefers_the_later_city():
     result = parse_intent("sài gòn thì đi đâu chơi\nnha trang 2 ngày", extractor=ai({}))
     assert result["parsed"]["destination"]["name"] == "Nha Trang"
@@ -355,3 +371,17 @@ def test_parse_intent_does_not_invent_people_from_day_count():
     assert result["parsed"]["people"] is None
     assert "people" in result["missing_fields"]
     assert result["status"] == "ask_user_missing_fields"
+
+
+def test_parse_intent_keeps_beach_when_user_also_likes_seafood():
+    result = parse_intent(
+        "Lịch trình du lịch Đà Nẵng 3 ngày 2 đêm cho 2 người thích biển và hải sản",
+        extractor=ai({}),
+    )
+    assert result["parsed"]["destination"]["name"] == "Đà Nẵng"
+    assert result["parsed"]["primary_intent"] == "beach"
+    assert "beach" in result["parsed"]["allowed_place_themes"]
+    assert "seafood" in result["parsed"]["allowed_place_themes"]
+
+    seafood_only = parse_intent("Đà Nẵng 2 ngày 2 người ăn hải sản", extractor=ai({}))
+    assert seafood_only["parsed"]["primary_intent"] == "food"

@@ -3,7 +3,7 @@ import re
 
 import httpx
 
-from app.data import DATA_DIR, PLACES, Place
+from app.data import DATA_DIR, PLACES, Place, place_match_key, place_name_key
 from app.pipeline.routing import haversine_km
 from app.text_utils import ascii_fold
 
@@ -26,6 +26,7 @@ ALLOWED_NOMINATIM_TYPES = {
     "beach",
     "cafe",
     "cape",
+    "coffee_shop",
     "fast_food",
     "food_court",
     "island",
@@ -38,6 +39,9 @@ ALLOWED_NOMINATIM_TYPES = {
     "peak",
     "place_of_worship",
     "protected_area",
+    "pub",
+    "bar",
+    "bakery",
     "restaurant",
     "theme_park",
     "viewpoint",
@@ -108,6 +112,8 @@ def _catalog_match(name: str, origin: tuple[float, float]) -> Place | None:
     needle = _fold(name)
     if not needle or _looks_like_non_travel_business(name):
         return None
+    needle_name = place_name_key(name)
+    needle_match = place_match_key(name)
     needle_tokens = _tokens(name)
     matches = [
         place
@@ -115,19 +121,32 @@ def _catalog_match(name: str, origin: tuple[float, float]) -> Place | None:
         if (place_needle := _fold(place.name))
         and (
             needle == place_needle
+            or needle_name == place_name_key(place.name)
             or (
-                len(needle_tokens.intersection(_tokens(place.name)))
-                >= max(2, min(len(needle_tokens), 3))
+                len(needle_name.split()) >= 2
+                and needle_match == place_match_key(place.name)
+            )
+            or needle in place_needle
+            or (
+                len(needle_tokens) >= 2
+                and needle_tokens <= _tokens(place.name)
             )
         )
     ]
     if not matches:
         return None
-    exact = [place for place in matches if _fold(place.name) == needle]
-    if len(exact) > 1 or (not exact and len(matches) > 1):
-        return None
-    matches = exact or matches
-    return min(matches, key=lambda place: haversine_km(origin[0], origin[1], place.lat, place.lng))
+    exact = [place for place in matches if place_name_key(place.name) == needle_name]
+    contained = [place for place in matches if needle in _fold(place.name)]
+    pool = exact or contained or matches
+    return min(
+        pool,
+        key=lambda place: (
+            0 if place_name_key(place.name) == needle_name else 1,
+            0 if place.source == "curated" else 1,
+            haversine_km(origin[0], origin[1], place.lat, place.lng),
+            place.id,
+        ),
+    )
 
 
 def _nominatim_class(row: dict) -> str:
@@ -163,7 +182,14 @@ def _nominatim_search(query: str, origin: tuple[float, float], *, bounded: bool)
     return rows if isinstance(rows, list) else []
 
 
-def _place_from_nominatim(name: str, origin: tuple[float, float], city: str | None, rows: list[dict]) -> Place | None:
+def _place_from_nominatim(
+    name: str,
+    origin: tuple[float, float],
+    city: str | None,
+    rows: list[dict],
+    *,
+    max_distance_km: float = VERIFY_RADIUS_KM,
+) -> Place | None:
     valid_rows = [
         row
         for row in rows
@@ -203,7 +229,7 @@ def _place_from_nominatim(name: str, origin: tuple[float, float], city: str | No
         return None
     if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
         return None
-    if haversine_km(origin[0], origin[1], lat, lng) > VERIFY_RADIUS_KM:
+    if haversine_km(origin[0], origin[1], lat, lng) > max_distance_km:
         return None
     osm_id, osm_type = row.get("osm_id"), str(row.get("osm_type", "")).casefold()
     if not isinstance(osm_id, int) or osm_type not in {"node", "way", "relation"}:
@@ -225,13 +251,22 @@ def _place_from_nominatim(name: str, origin: tuple[float, float], city: str | No
     )
 
 
-def verify_place_name(name: str, origin: tuple[float, float], city: str | None = None) -> Place | None:
+def verify_place_name(
+    name: str,
+    origin: tuple[float, float],
+    city: str | None = None,
+    *,
+    nationwide: bool = False,
+) -> Place | None:
     catalog = _catalog_match(name, origin)
     if catalog:
         return catalog
+    max_distance_km = 2500.0 if nationwide else VERIFY_RADIUS_KM
     city_key = _fold(city or "")
-    cache_keys = [_fold(f"{city_key}:{origin[0]:.2f}:{origin[1]:.2f}:{name}")]
-    if city_key in {"", "ha noi", "hanoi"} or haversine_km(origin[0], origin[1], 21.0285, 105.8542) <= 20:
+    cache_keys = [_fold(f"{'vn' if nationwide else city_key}:{origin[0]:.2f}:{origin[1]:.2f}:{name}")]
+    if not nationwide and (
+        city_key in {"", "ha noi", "hanoi"} or haversine_km(origin[0], origin[1], 21.0285, 105.8542) <= 20
+    ):
         cache_keys.append(_fold(f"hanoi:{name}"))
     cache = _load_cache()
     for cache_key in cache_keys:
@@ -246,16 +281,35 @@ def verify_place_name(name: str, origin: tuple[float, float], city: str | None =
                 and cached_place.source_url
                 and VIETNAM_LAT[0] <= cached_place.lat <= VIETNAM_LAT[1]
                 and VIETNAM_LNG[0] <= cached_place.lng <= VIETNAM_LNG[1]
-                and haversine_km(origin[0], origin[1], cached_place.lat, cached_place.lng) <= VERIFY_RADIUS_KM
+                and haversine_km(origin[0], origin[1], cached_place.lat, cached_place.lng) <= max_distance_km
             ):
                 return cached_place
         except (TypeError, ValueError):
             pass
-    query = f"{name}, {city}, Vietnam" if city else f"{name}, Vietnam"
-    rows = _nominatim_search(query, origin, bounded=True)
-    place = _place_from_nominatim(name, origin, city, rows)
-    if place is None:
-        place = _place_from_nominatim(name, origin, city, _nominatim_search(query, origin, bounded=False))
+    vietnam_query = f"{name}, Vietnam"
+    if nationwide:
+        rows = _nominatim_search(vietnam_query, origin, bounded=False)
+        place = _place_from_nominatim(name, origin, city, rows, max_distance_km=max_distance_km)
+        if place is None and city:
+            place = _place_from_nominatim(
+                name,
+                origin,
+                city,
+                _nominatim_search(f"{name}, {city}, Vietnam", origin, bounded=False),
+                max_distance_km=max_distance_km,
+            )
+    else:
+        city_query = f"{name}, {city}, Vietnam" if city else vietnam_query
+        rows = _nominatim_search(city_query, origin, bounded=True)
+        place = _place_from_nominatim(name, origin, city, rows, max_distance_km=max_distance_km)
+        if place is None:
+            place = _place_from_nominatim(
+                name,
+                origin,
+                city,
+                _nominatim_search(vietnam_query, origin, bounded=False),
+                max_distance_km=max_distance_km,
+            )
     if place is None:
         return None
     cache[cache_keys[0]] = place.__dict__

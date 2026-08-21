@@ -189,6 +189,19 @@ def _looks_like_itinerary(text: str) -> bool:
     return False
 
 
+def _drop_slot_ask_sentences(text: str) -> str:
+    chunks = re.split(r"(?<=[.!?…])\s+", (text or "").strip())
+    kept = []
+    for chunk in chunks:
+        folded = _fold_phrase(chunk)
+        if not folded:
+            continue
+        if _asks_people(folded) or _asks_duration(folded) or _asks_place_question_slot_followup(chunk):
+            continue
+        kept.append(chunk)
+    return " ".join(kept).strip()
+
+
 def _asks_two_slots(text: str) -> bool:
     folded = _fold_phrase(text)
     return _asks_duration(folded) and _asks_people(folded)
@@ -547,33 +560,36 @@ def _lock_destination_on_slot_fill(intent: dict, messages: list[dict]) -> dict:
         return intent
     parsed = dict(intent.get("parsed") or {})
     current = parsed.get("destination") if isinstance(parsed.get("destination"), dict) else None
+    committed = _committed_destination(messages)
+    if committed:
+        if current and current.get("name") == committed.name:
+            return intent
+        parsed["destination"] = {
+            "name": committed.name,
+            "lat": committed.lat,
+            "lng": committed.lng,
+            **({"radius_km": committed.radius_km} if committed.radius_km else {}),
+        }
+        missing = [field for field in (intent.get("missing_fields") or []) if field != "destination"]
+        updated = dict(intent)
+        updated["parsed"] = parsed
+        updated["missing_fields"] = missing
+        if missing:
+            updated["status"] = "ask_user_missing_fields"
+            if "duration" in missing:
+                updated["question"] = f"Mình hiểu bạn muốn đi {committed.name}. Bạn đi khoảng mấy ngày?"
+            elif "people" in missing:
+                updated["question"] = f"Đi {committed.name} thì bạn đi mấy người?"
+            else:
+                updated["question"] = None
+        else:
+            updated["status"] = "ready_to_plan"
+            updated["question"] = None
+        return updated
     user_dest = _find_destination(_fold(last_user)) if last_user else None
     if current and current.get("name") and (not user_dest or user_dest.name == current.get("name")):
         return intent
-    committed = _committed_destination(messages)
-    if not committed:
-        return intent
-    parsed = dict(intent.get("parsed") or {})
-    current = parsed.get("destination") if isinstance(parsed.get("destination"), dict) else None
-    if current and current.get("name") == committed.name:
-        return intent
-    parsed["destination"] = {"name": committed.name, "lat": committed.lat, "lng": committed.lng}
-    missing = [field for field in (intent.get("missing_fields") or []) if field != "destination"]
-    updated = dict(intent)
-    updated["parsed"] = parsed
-    updated["missing_fields"] = missing
-    if missing:
-        updated["status"] = "ask_user_missing_fields"
-        if "duration" in missing:
-            updated["question"] = f"Mình hiểu bạn muốn đi {committed.name}. Bạn đi khoảng mấy ngày?"
-        elif "people" in missing:
-            updated["question"] = f"Đi {committed.name} thì bạn đi mấy người?"
-        else:
-            updated["question"] = None
-    else:
-        updated["status"] = "ready_to_plan"
-        updated["question"] = None
-    return updated
+    return intent
 
 
 def _rejects_destination(text: str, dest_name: str) -> bool:
@@ -794,9 +810,17 @@ def _highlight_places(destination: dict | None, limit: int = 5, mode: str = "sig
     sight_kinds = {"dia_danh", "di_tich", "bao_tang", "cong_vien", "cho"}
     food_kinds = {"nha_hang", "quan_an", "cafe", "am_thuc"}
     ranked: list[tuple[int, float, str]] = []
+    radius = destination.get("radius_km")
+    try:
+        max_km = float(radius) if radius is not None else DESTINATION_RADIUS_KM
+    except (TypeError, ValueError):
+        max_km = DESTINATION_RADIUS_KM
+    name_key = _fold_phrase(str(destination.get("name") or ""))
+    if name_key == "cat ba":
+        max_km = min(max_km, 13.0)
     for place in PLACES:
         dist = _haversine_km(lat, lng, place.lat, place.lng)
-        if dist > DESTINATION_RADIUS_KM:
+        if dist > max_km:
             continue
         if mode == "food":
             if place.kind not in food_kinds and not {"am_thuc", "food", "an_uong"}.intersection(place.tags):
@@ -908,12 +932,50 @@ def _asks_place_question_slot_followup(text: str) -> bool:
     return bool(folded) and any(hint in folded for hint in _PLACE_SLOT_FOLLOWUP_HINTS)
 
 
+_KINSHIP_WORD_RE = re.compile(r"(?<!\w)(chị|anh|em)(?!\w)", re.IGNORECASE)
+_SELF_KINSHIP_RE = re.compile(
+    r"(^|(?<=[.!?…]\s))(?:chị|anh|em)(?=\s+(hiểu|nghĩ|nghe|biết|gợi ý))",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _neutral_chat_voice(text: str, locale: str = "vi") -> str:
+    if locale != "vi" or not text or not _KINSHIP_WORD_RE.search(text):
+        return text
+    rewritten = _SELF_KINSHIP_RE.sub("Mình", text)
+
+    def _swap(match: re.Match[str]) -> str:
+        token = match.group(0)
+        return "Bạn" if token[:1].isupper() else "bạn"
+
+    return _KINSHIP_WORD_RE.sub(_swap, rewritten)
+
+
+_AWKWARD_VI_REPLACEMENTS = (
+    ("bạn nghiêng khí trời nào", "bạn thích se lạnh, núi hay biển"),
+    ("Bạn nghiêng khí trời nào", "Bạn thích se lạnh, núi hay biển"),
+    ("nghiêng khí trời nào", "thích se lạnh, núi hay biển"),
+    ("Bạn nghiêng chỗ nào", "Bạn muốn đi đâu"),
+    ("bạn nghiêng chỗ nào", "bạn muốn đi đâu"),
+)
+
+
+def _clarify_awkward_vi(text: str, locale: str = "vi") -> str:
+    if locale != "vi" or not text:
+        return text
+    updated = text
+    for old, new in _AWKWARD_VI_REPLACEMENTS:
+        updated = updated.replace(old, new)
+    return updated
+
+
 def _looks_garbled_reply(text: str) -> bool:
     return bool(_GARBLE_RE.search(text or ""))
 
 
 def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str = "vi") -> str:
     text = _strip_cjk(" ".join(str(reply or "").split()).strip(), locale)
+    text = _clarify_awkward_vi(_neutral_chat_voice(text, locale), locale)
     if not text:
         return ""
     previous = _last_assistant_text(messages)
@@ -942,8 +1004,16 @@ def _sanitize_reply(reply: str, intent: dict, messages: list[dict], locale: str 
         "nhieu cho hay" in folded or "di bo trong pho" in folded or "walk in the city" in folded
     ):
         return ""
-    if intent.get("ask_topic") == "healing" and _asks_place_question_slot_followup(text):
-        return ""
+    if intent.get("ask_topic") == "healing":
+        text = _drop_slot_ask_sentences(text)
+        if not text:
+            return ""
+        folded = _fold_phrase(text)
+        if _looks_canned_healing(text):
+            text = _clarify_awkward_vi(text, locale)
+            folded = _fold_phrase(text)
+        if _looks_canned_healing(text):
+            return ""
     if _looks_like_itinerary(text):
         return ""
     if intent.get("status") != "ready_to_plan" and _asks_two_slots(text):
@@ -984,23 +1054,109 @@ _DESTINATION_BLURBS_EN = {
 }
 
 
-def _theme_place_blurbs(intent: dict, locale: str, topic: str, near: str | None = None) -> str:
+def _variant_index(seed: str, size: int) -> int:
+    if size <= 0:
+        return 0
+    total = len(seed or "")
+    for index, ch in enumerate(seed or "0"):
+        total = (total + (index + 1) * (ord(ch) + 17)) & 0xFFFFFFFF
+    return total % size
+
+
+def _join_place_names(names: list[str], locale: str = "vi") -> str:
+    cleaned = [name for name in names if name]
+    if not cleaned:
+        return "Đà Lạt" if locale == "vi" else "Da Lat"
+    if len(cleaned) == 1:
+        return cleaned[0]
+    joiner = " hay " if locale == "vi" else " or "
+    if len(cleaned) == 2:
+        return f"{cleaned[0]}{joiner}{cleaned[1]}"
+    return ", ".join(cleaned[:-1]) + joiner + cleaned[-1]
+
+
+def _healing_place_picks(intent: dict, seed: str, locale: str = "vi") -> str:
+    defaults = ["Đà Lạt", "Sa Pa", "Ninh Bình", "Phú Quốc"]
+    near = intent.get("theme_from") or ((intent.get("parsed") or {}).get("destination") or {}).get("name")
+    names = _theme_place_names(intent, "healing", near, limit=4)
+    for name in defaults:
+        if name not in names:
+            names.append(name)
+        if len(names) >= 4:
+            break
+    count = 2 + _variant_index(f"{seed}|count", 3)
+    return _join_place_names(names[:count], locale)
+
+
+def _theme_place_names(intent: dict, topic: str, near: str | None = None, limit: int = 2) -> list[str]:
     suggestions = intent.get("suggestions") or _theme_suggestions(
         topic if topic != "healing" else "healing",
         near,
     )
-    names = [
-        str(item.get("label") or item.get("name") or "").strip()
-        for item in suggestions
-        if isinstance(item, dict)
-    ]
-    names = [name for name in names if name][:4]
+    names: list[str] = []
+    for item in suggestions:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("label") or item.get("name") or "").strip()
+        if name and name not in names:
+            names.append(name)
+        if len(names) >= limit:
+            break
+    return names
+
+
+def _theme_place_blurbs(intent: dict, locale: str, topic: str, near: str | None = None) -> str:
+    names = _theme_place_names(intent, topic, near, limit=4)
     blurbs = _DESTINATION_BLURBS_VI if locale == "vi" else _DESTINATION_BLURBS_EN
     parts = []
     for name in names:
         note = blurbs.get(name)
         parts.append(f"{name} ({note})" if note else name)
     return ", ".join(parts)
+
+
+def _looks_canned_healing(text: str) -> bool:
+    folded = _fold_phrase(text)
+    if not folded:
+        return False
+    if "chua lanh minh hay nghi" in folded or "di chua lanh minh hay nghi" in folded:
+        return True
+    if "ban nghieng cho nao" in folded and "minh hay nghi" in folded:
+        return True
+    catalog_hits = sum(
+        1 for name in ("da lat", "sa pa", "ninh binh", "phu quoc") if name in folded
+    )
+    return catalog_hits >= 3 and (text or "").count("(") >= 3
+
+
+def _healing_comfort_fallback(intent: dict, locale: str) -> str:
+    destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
+    seed = f"{intent.get('last_user_message') or ''}|{intent.get('reply_seed') or ''}|{destination or ''}"
+    if locale == "vi":
+        if destination:
+            options = (
+                f"Mình nghe bạn mệt. {destination} vẫn đi chậm được — bạn muốn mình an ủi tiếp hay gợi ý nhịp khác?",
+                f"Nghe kiệt thật. Ở {destination} cứ đi chậm thôi. Bạn đang cần nghỉ im hay đổi gió nhẹ?",
+                f"Được, mình không thúc lịch. {destination} hợp nghỉ hơn là chạy tour. Bạn muốn kể thêm không?",
+            )
+        else:
+            options = (
+                "Mình nghe bạn mệt. Muốn mình gợi ý chỗ đi chậm, hay chỉ cần được nghe thôi?",
+                "Nặng vậy thì cứ nghỉ lời đã. Nếu muốn đi cho nhẹ đầu, nói mình biết bạn thích núi, biển hay se lạnh.",
+                "Mình hiểu. Không cần chốt lịch ngay — bạn đang cần được an ủi, hay muốn gợi ý chỗ yên?",
+            )
+        return options[_variant_index(seed, len(options))]
+    if destination:
+        options = (
+            f"I'm here with you — no itinerary yet. {destination} can stay slow. Comfort, or a different pace?",
+            f"Sounds exhausting. {destination} works if you keep it unhurried. Quiet rest, or a light change of scene?",
+        )
+        return options[_variant_index(seed, len(options))]
+    options = (
+        "Sounds like you need a reset. Want a slow-place idea, or just someone to hear you first?",
+        "No need to pick a trip yet. Mountains, sea, or just rest for now?",
+    )
+    return options[_variant_index(seed, len(options))]
 
 
 def _theme_fallback(intent: dict, locale: str) -> str | None:
@@ -1012,16 +1168,7 @@ def _theme_fallback(intent: dict, locale: str) -> str | None:
     names = _theme_place_blurbs(intent, locale, topic, from_city or destination)
     if locale == "vi":
         if topic == "healing":
-            if destination:
-                return (
-                    f"Mệt thì mình ở đây nghe bạn, không cần lên lịch ngay. "
-                    f"Nếu muốn đi cho nhẹ đầu thì {names or 'Đà Lạt (se lạnh, thông và sương), Ninh Bình (sông núi yên)'} cũng hợp hơn phố. "
-                    "Bạn muốn mình an ủi tiếp hay gợi ý chỗ khác?"
-                )
-            return (
-                f"Nghe bạn đang mệt. Đi chữa lành mình hay nghĩ {names}. "
-                "Bạn nghiêng chỗ nào cho nhẹ đầu?"
-            )
+            return _healing_comfort_fallback(intent, locale)
         if topic == "beach":
             if destination and _fits_theme(str(destination), "beach"):
                 return f"{destination} hợp đi biển. Bạn muốn đi khoảng mấy ngày để mình xếp lịch tắm biển cụ thể hơn?"
@@ -1037,13 +1184,7 @@ def _theme_fallback(intent: dict, locale: str) -> str | None:
             return f"Leo núi thì {from_city} không phải lựa chọn hợp. Mình gợi ý {names}. Bạn muốn đi núi ở đâu?"
         return f"Leo núi mình hay nghĩ {names}. Bạn muốn đi núi ở đâu?"
     if topic == "healing":
-        if destination:
-            return (
-                "I'm here with you — no need to plan a trip right now. "
-                f"If you do want a quiet reset, {names or 'Da Lat, Sa Pa'} might feel lighter. "
-                "Want comfort, or a different place?"
-            )
-        return f"Sounds like you need a reset. I'd start with {names}. Where would you like to go?"
+        return _healing_comfort_fallback(intent, locale)
     if topic == "beach":
         if destination and _fits_theme(str(destination), "beach"):
             return f"{destination} is great for the beach. How many days should I plan?"
@@ -1069,6 +1210,7 @@ _DESTINATION_INTROS_VI = {
     "Nha Trang": "Nha Trang biển trong, hợp tắm biển và nghỉ.",
     "Phú Quốc": "Phú Quốc đảo lớn, biển và sunset khá đã.",
     "Hà Nội": "Hà Nội phố cổ, hồ và nhịp sống riêng, hợp đi bộ khám phá.",
+    "Cát Bà": "Cát Bà là đảo đá vôi: biển Cát Cò, vườn quốc gia và vịnh Lan Hạ — lịch trình ở trên đảo, không phải nội thành Hải Phòng.",
     "Đà Nẵng": "Đà Nẵng biển và núi gần nhau, đi lại tiện.",
     "Huế": "Huế chậm, nhiều di tích và sông Hương.",
     "TP.HCM": "TP.HCM năng động, ăn uống và đi đêm khá vui.",
@@ -1159,10 +1301,10 @@ def _fallback_reply(intent: dict, locale: str) -> str:
             purpose = str((intent.get("parsed") or {}).get("primary_intent") or (intent.get("parsed") or {}).get("trip_purpose") or "")
             if names and purpose in {"healing", "beach", "mountain"}:
                 if purpose == "healing":
-                    return f"{names} đều hợp nghỉ cho nhẹ đầu — bạn nghiêng chỗ nào?"
+                    return _healing_comfort_fallback(intent, locale)
                 if purpose == "beach":
                     return f"Vậy mình gợi ý biển ở {names}. Bạn muốn đi đâu?"
-                return f"Leo núi thì {names} đáng thử. Bạn nghiêng chỗ nào?"
+                return f"Leo núi thì {names} đáng thử. Bạn muốn đi núi ở đâu?"
             if names:
                 return f"Bạn muốn đi đâu lần này? Nếu chưa nghĩ ra, mình có thể chọn giúp — ví dụ {names}."
             return "Bạn muốn đi đâu lần này?"
@@ -1204,13 +1346,19 @@ def _repeat_recovery_reply(intent: dict, locale: str) -> str:
     topic = intent.get("ask_topic") or ""
     last_user = str(intent.get("last_user_message") or "")
     if topic == "healing" or _asks_about_healing(last_user):
-        names = _theme_place_blurbs(intent, locale, "healing") or "Đà Lạt (se lạnh, thông và sương), Ninh Bình (sông núi yên)"
+        seed = f"recovery|{last_user}|{intent.get('reply_seed') or ''}"
         if locale == "vi":
-            return (
-                f"Mình nghe bạn mệt thật, không cần quyết ngay. "
-                f"Nếu muốn đi cho nhẹ đầu thì {names} cũng được. Bạn nghiêng chỗ nào?"
+            options = (
+                "Mình vẫn nghe đây. Không cần chọn chỗ ngay — núi, biển, hay chưa muốn nghĩ tới đi?",
+                "Mệt lặp lại vậy thì nghỉ lời cũng được. Bạn muốn mình im, hay gợi ý một chỗ đi chậm?",
+                "Ok, không hỏi lịch nữa. Bạn đang cần được an ủi, hay muốn một chỗ yên để trốn vài ngày?",
             )
-        return "I'm still here with you. No need to pick a trip yet — beach, mountain, or somewhere cooler?"
+            return options[_variant_index(seed, len(options))]
+        options = (
+            "I'm still here with you. No need to pick a trip yet — beach, mountain, or just rest?",
+            "Same tired feeling — we can wait. Want a slow-place idea later, or just this?",
+        )
+        return options[_variant_index(seed, len(options))]
     destination = ((intent.get("parsed") or {}).get("destination") or {}).get("name")
     missing = intent.get("missing_fields") or []
     if locale == "vi":
@@ -1236,7 +1384,7 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
             "suggestions": [],
             "parsed": {"destination": None},
         }
-        return {"reply": _fallback_reply(intent, locale), "intent": intent, "ready_to_plan": False}
+        return {"reply": _fallback_reply(intent, locale), "intent": intent, "ready_to_plan": False, "reply_source": "fallback"}
 
     intent = parse_intent(context, locale)
     missing = list(intent.get("missing_fields") or [])
@@ -1251,6 +1399,7 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
     last_user = _last_user_text(messages)
     intent = dict(intent)
     intent["last_user_message"] = last_user
+    intent["reply_seed"] = str(len(messages))
     dest_name = str(((intent.get("parsed") or {}).get("destination") or {}).get("name") or "")
     if dest_name and _rejects_destination(last_user, dest_name):
         intent = _clear_destination(intent)
@@ -1294,24 +1443,33 @@ def run_chat_turn(messages: list[dict], locale: str = "vi") -> dict:
         intent["ask_topic"] = "destination_intro"
 
     reply = ""
+    reply_source = "fallback"
     use_llm = not _is_slot_fill(last_user) and not _is_ack(last_user) and not _looks_confused(last_user)
     composer = getattr(ai_adapter, "compose_chat_reply", None)
     if use_llm and composer:
         try:
             reply = composer(messages=messages, intent=intent, locale=locale) or ""
-        except (RuntimeError, TypeError, ValueError) as exc:
+        except Exception as exc:
             logger.warning("compose_chat_reply failed: %s", exc)
             reply = ""
+    raw_llm = reply
     reply = _sanitize_reply(reply, intent, messages, locale)
+    if raw_llm and not reply:
+        logger.warning("compose_chat_reply sanitized away (%s chars)", len(raw_llm))
     if _looks_confused(last_user):
         reply = ""
+    if reply and raw_llm:
+        reply_source = "llm"
     if not reply:
         reply = _fallback_reply(intent, locale)
         previous = _last_assistant_text(messages)
         if previous and _fold_phrase(reply) == _fold_phrase(previous):
             reply = _repeat_recovery_reply(intent, locale)
+        reply_source = "fallback"
+        logger.warning("chat turn using fallback template ask_topic=%s", intent.get("ask_topic"))
     return {
         "reply": reply[:800],
         "intent": intent,
         "ready_to_plan": intent.get("status") == "ready_to_plan",
+        "reply_source": reply_source,
     }

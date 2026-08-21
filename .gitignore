@@ -12,6 +12,7 @@ frontend/start*.log
 plan_result.txt
 backend/data/*.backup-*.json
 backend/data/google_place_cache.json
+backend/data/place_image_cache.json
 backend/data/*.wikimedia-sample.json
 
 .pnpm-store/

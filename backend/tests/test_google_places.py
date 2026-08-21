@@ -64,6 +64,9 @@ def test_google_enrichment_applies_rating_review_to_slot_and_evidence():
 
     google_places._apply_enrichment(slot, enriched, "test-key")
 
+    assert slot["google_maps_url"] == "https://www.google.com/maps/place/?q=place_id:google-place-1"
+    assert "query_place_id=google-place-1" not in slot["google_maps_url"]
+    assert slot["google_review_url"] == slot["google_maps_url"]
     assert slot["thong_tin_danh_gia"] == {
         "rating": 4.6,
         "so_nhan_xet": 1234,
@@ -71,7 +74,6 @@ def test_google_enrichment_applies_rating_review_to_slot_and_evidence():
         "nguon_url": "https://maps.google.com/?cid=1",
         "lay_luc": "2026-08-15T00:00:00+00:00",
     }
-    assert slot["google_review_url"] == "https://maps.google.com/?cid=1"
     ranking = slot["bang_chung"]["xep_hang"]
     assert ranking["du_lieu_thuc_te"] == {"rating": 4.6, "so_nhan_xet": 1234}
     assert "rating" not in ranking["du_lieu_thieu"]
@@ -128,6 +130,119 @@ def test_search_named_place_returns_google_hit(monkeypatch, tmp_path):
     assert place.google_place_id == "ChIJtuanChau"
 
 
+def test_search_named_place_keeps_vietnam_hit_and_photo(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(google_places.settings, google_maps_api_key="test-key"),
+    )
+
+    def fake_urlopen(request, timeout=8):
+        return FakeUrlOpen(
+            {
+                "places": [
+                    {
+                        "id": "ChIJcauRong",
+                        "displayName": {"text": "Cầu Rồng"},
+                        "location": {"latitude": 16.0611, "longitude": 108.2272},
+                        "types": ["tourist_attraction"],
+                        "googleMapsUri": "https://maps.google.com/?cid=cau-rong",
+                        "photos": [{"name": "places/ChIJcauRong/photos/abc"}],
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    place = google_places.search_named_place("cầu rồng", (16.0544, 108.2022), "Đà Nẵng")
+    assert place is not None
+    assert place.name == "Cầu Rồng"
+    assert abs(place.lat - 16.0611) < 0.001
+    assert place.image_url
+    assert "places/ChIJcauRong/photos/abc/media" in place.image_url
+    assert place.image_credit == "Google Places"
+
+
+def test_search_named_place_rejects_hit_outside_plan_area(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(google_places.settings, google_maps_api_key="test-key"),
+    )
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout=8):
+        data = getattr(request, "data", None)
+        if data:
+            captured["body"] = json.loads(data.decode())
+        return FakeUrlOpen(
+            {
+                "places": [
+                    {
+                        "id": "ChIJgocDaLat",
+                        "displayName": {"text": "Góc Đà Lạt Coffee"},
+                        "formattedAddress": "Đà Lạt, Lâm Đồng, Việt Nam",
+                        "location": {"latitude": 11.9404, "longitude": 108.4583},
+                        "types": ["cafe", "coffee_shop"],
+                        "googleMapsUri": "https://maps.google.com/?cid=goc-da-lat",
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    place = google_places.search_named_place("Góc đà Lạt coffee", (21.0285, 105.8542), "Hà Nội")
+    assert place is None
+    assert "hà nội" in str(captured["body"]["textQuery"]).casefold()
+
+
+def test_search_named_place_falls_back_to_legacy_text_search(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(google_places.settings, google_maps_api_key="test-key"),
+    )
+
+    def fake_urlopen(request, timeout=8):
+        url = getattr(request, "full_url", str(request))
+        if "places.googleapis.com" in url:
+            raise urllib.error.HTTPError(
+                google_places.GOOGLE_TEXT_SEARCH_URL,
+                403,
+                "Forbidden",
+                {},
+                io.BytesIO(b'{"error":{"status":"PERMISSION_DENIED"}}'),
+            )
+        return FakeUrlOpen(
+            {
+                "status": "OK",
+                "results": [
+                    {
+                        "place_id": "ChIJgocDaLat",
+                        "name": "Góc đà Lạt coffee",
+                        "formatted_address": "Số 28 A19, Tây Mỗ, Hà Nội, Việt Nam",
+                        "geometry": {"location": {"lat": 21.008078, "lng": 105.7324507}},
+                        "types": ["cafe", "food", "point_of_interest"],
+                        "photos": [{"photo_reference": "photo-ref-1"}],
+                    }
+                ],
+            }
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    place = google_places.search_named_place("Góc đà Lạt coffee", (21.0285, 105.8542), "Hà Nội")
+    assert place is not None
+    assert place.name == "Góc đà Lạt coffee"
+    assert place.kind == "cafe"
+    assert abs(place.lat - 21.008078) < 0.001
+    assert place.image_url
+    assert "photo-ref-1" in place.image_url
+    assert "Hà Nội" in place.area
+
+
 def test_enrich_does_not_count_blocked_places_api(monkeypatch, tmp_path):
     monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
     monkeypatch.setattr(
@@ -175,3 +290,90 @@ def test_enrich_does_not_count_blocked_places_api(monkeypatch, tmp_path):
     assert enriched["google_places"]["text_search_requests_this_plan"] == 0
     assert enriched["google_places"]["text_search_daily_used"] == 0
     assert enriched["google_places"]["quota_blocked"] == 1
+
+
+def test_nearest_google_place_picks_closer_duplicate_name():
+    far = {
+        "id": "far-hoang-nhi",
+        "displayName": {"text": "QUÁN HOÀNG NHI"},
+        "location": {"latitude": 11.95, "longitude": 108.45},
+    }
+    near = {
+        "id": "near-hoang-nhi",
+        "displayName": {"text": "Ẩm thực chay Hoàng Nhi"},
+        "location": {"latitude": 11.9418, "longitude": 108.4339},
+    }
+    chosen = google_places._nearest_google_place([far, near], 11.94182, 108.43387)
+    assert chosen is not None
+    assert chosen["id"] == "near-hoang-nhi"
+
+
+def test_resolve_maps_place_url_uses_cached_place_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    cache = {
+        "metadata": {},
+        "places": {
+            "osm-cafe-1": {
+                "google_place_id": "ChIJ-an-cafe",
+                "display_name": "An Cafe",
+            }
+        },
+    }
+    google_places._save_cache(cache)
+    url = google_places.resolve_maps_place_url(
+        name="An Cafe",
+        lat=11.9418,
+        lng=108.4338,
+        city="Đà Lạt",
+        slot_id="osm-cafe-1",
+    )
+    assert "q=place_id:ChIJ-an-cafe" in url
+    assert "/maps/place/" in url
+
+
+def test_resolve_maps_place_url_uses_legacy_search_when_places_new_is_forbidden(monkeypatch, tmp_path):
+    monkeypatch.setattr(google_places, "CACHE_PATH", tmp_path / "google_place_cache.json")
+    monkeypatch.setattr(
+        google_places,
+        "settings",
+        replace(google_places.settings, google_maps_api_key="test-key"),
+    )
+
+    def fake_urlopen(request, timeout=8):
+        url = getattr(request, "full_url", str(request))
+        if "places.googleapis.com" in url:
+            raise urllib.error.HTTPError(
+                google_places.GOOGLE_NEARBY_SEARCH_URL,
+                403,
+                "Forbidden",
+                {},
+                io.BytesIO(b'{"error":{"status":"PERMISSION_DENIED"}}'),
+            )
+        return FakeUrlOpen(
+            {
+                "status": "OK",
+                "results": [
+                    {
+                        "place_id": "ChIJ-far-an",
+                        "name": "Cafe An - an coffee",
+                        "geometry": {"location": {"lat": 11.95004, "lng": 108.43258}},
+                    },
+                    {
+                        "place_id": "ChIJ-near-an-cafe",
+                        "name": "An Cafe",
+                        "geometry": {"location": {"lat": 11.9416988, "lng": 108.4338265}},
+                    },
+                ],
+            }
+        )
+
+    monkeypatch.setattr(google_places.urllib.request, "urlopen", fake_urlopen)
+    url = google_places.resolve_maps_place_url(
+        name="An Cafe",
+        lat=11.9418201,
+        lng=108.4338744,
+        city="Đà Lạt",
+        slot_id="osm-node-4206500720",
+    )
+    assert url == "https://www.google.com/maps/place/?q=place_id:ChIJ-near-an-cafe"
+    assert "query=" not in url

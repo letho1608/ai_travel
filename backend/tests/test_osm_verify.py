@@ -93,6 +93,12 @@ def test_verify_place_name_accepts_jsonv2_category_island_after_empty_viewbox(mo
     assert any("bounded" not in params for params in calls)
 
 
+def test_catalog_match_finds_cau_rong_from_hanoi_origin():
+    place = osm_verify._catalog_match("cầu rồng", (21.0285, 105.8542))
+    assert place is not None
+    assert place.name == "Cầu Rồng"
+
+
 def test_catalog_match_finds_tuan_chau():
     place = osm_verify._catalog_match("đảo tuần châu", (20.8589, 107.0803))
     assert place is not None
@@ -124,4 +130,64 @@ def test_verify_place_name_accepts_attraction_outside_hanoi(monkeypatch, tmp_pat
     assert place is not None
     assert place.area == "Đà Nẵng"
     assert abs(place.lat - 16.0035) < 0.001
+
+
+def test_verify_place_name_nationwide_finds_place_far_from_origin(monkeypatch, tmp_path):
+    monkeypatch.setattr(osm_verify, "CACHE_PATH", tmp_path / "osm_verify_cache.json")
+
+    def fake_get(*args, **kwargs):
+        return FakeResponse(
+            [
+                {
+                    "class": "tourism",
+                    "type": "attraction",
+                    "display_name": "Zzz Marble Tower, Ngũ Hành Sơn, Đà Nẵng, Việt Nam",
+                    "lat": "16.0035",
+                    "lon": "108.2633",
+                    "osm_type": "node",
+                    "osm_id": 987654321,
+                    "name": "Zzz Marble Tower",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(osm_verify.httpx, "get", fake_get)
+    nearby = osm_verify.verify_place_name("Zzz Marble Tower", (21.0285, 105.8542), "Hà Nội")
+    assert nearby is None
+    far = osm_verify.verify_place_name(
+        "Zzz Marble Tower", (21.0285, 105.8542), "Hà Nội", nationwide=True
+    )
+    assert far is not None
+    assert abs(far.lat - 16.0035) < 0.001
+
+
+def test_verify_place_name_nationwide_finds_cafe_without_plan_city(monkeypatch, tmp_path):
+    monkeypatch.setattr(osm_verify, "CACHE_PATH", tmp_path / "osm_verify_cache.json")
+    queries: list[str] = []
+
+    def fake_get(*args, **kwargs):
+        params = kwargs.get("params") or {}
+        queries.append(str(params.get("q") or ""))
+        return FakeResponse(
+            [
+                {
+                    "class": "amenity",
+                    "type": "cafe",
+                    "display_name": "Góc Đà Lạt Coffee, Đà Lạt, Lâm Đồng, Việt Nam",
+                    "lat": "11.9404",
+                    "lon": "108.4583",
+                    "osm_type": "node",
+                    "osm_id": 555,
+                    "name": "Góc Đà Lạt Coffee",
+                }
+            ]
+        )
+
+    monkeypatch.setattr(osm_verify.httpx, "get", fake_get)
+    cafe = osm_verify.verify_place_name(
+        "Góc đà Lạt coffee", (21.0285, 105.8542), "Hà Nội", nationwide=True
+    )
+    assert cafe is not None
+    assert cafe.name == "Góc Đà Lạt Coffee"
+    assert queries and "hà nội" not in queries[0].casefold()
 

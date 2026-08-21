@@ -31,6 +31,7 @@ class Place:
     review_count: int | None = None
     google_place_id: str | None = None
     google_maps_url: str | None = None
+    address: str | None = None
 
 
 def place_name_key(name: str) -> str:
@@ -147,7 +148,7 @@ PLACE_IMAGE_URLS: dict[str, str] = {
     # Đà Lạt
     "curated-thung-lung-tinh-yeu": "https://commons.wikimedia.org/wiki/Special:FilePath/Valley_of_Love_Dalat.jpg?width=800",
     "curated-langbiang": "https://commons.wikimedia.org/wiki/Special:FilePath/Langbiang_Peak_Dalat.jpg?width=800",
-    "curated-ho-xuan-huong": "https://commons.wikimedia.org/wiki/Special:FilePath/Xuan_Huong_Lake_Dalat.jpg?width=800",
+    "curated-ho-xuan-huong": "https://commons.wikimedia.org/wiki/Special:FilePath/Ho_Xuan_Huong_-_Huy_Phuong_3.jpg?width=800",
     "curated-chua-linh-phuoc": "https://commons.wikimedia.org/wiki/Special:FilePath/Linh_Phuoc_Pagoda_Dalat.jpg?width=800",
     "curated-dinh-bao-dai": "https://commons.wikimedia.org/wiki/Special:FilePath/Bao_Dai_Palace_Dalat.jpg?width=800",
     # Ninh Bình
@@ -171,6 +172,24 @@ PLACE_IMAGE_URLS: dict[str, str] = {
     "curated-bai-sao-phu-quoc": "https://commons.wikimedia.org/wiki/Special:FilePath/Sao_Beach_Phu_Quoc.jpg?width=800",
     "curated-vinwonders-phu-quoc": "https://commons.wikimedia.org/wiki/Special:FilePath/VinWonders_Phu_Quoc_Vietnam.jpg?width=800",
     "curated-sunset-sanato": "https://commons.wikimedia.org/wiki/Special:FilePath/Sunset_Sanato_Phu_Quoc.jpg?width=800",
+    "curated-vuon-quoc-gia-cat-ba": "https://commons.wikimedia.org/wiki/Special:FilePath/Ao_Ech,_Cat_Ba_National_Park,_Vietnam,_20240131_1030_4579.jpg?width=800",
+    "curated-bai-cat-co-1": "https://commons.wikimedia.org/wiki/Special:FilePath/Cat_Ba_Island_2.jpg?width=800",
+    "curated-bai-cat-co-3": "https://commons.wikimedia.org/wiki/Special:FilePath/Cat_Ba_Island_2.jpg?width=800",
+    "curated-hang-quan-y": "https://commons.wikimedia.org/wiki/Special:FilePath/Trung_Trang_Cave,_C%C3%A1t_B%C3%A0_Island,_Vietnam,_20240130_1142_4248.jpg?width=800",
+    "curated-phao-dai-than-cong": "https://commons.wikimedia.org/wiki/Special:FilePath/View_of_the_sea_from_Cannon_Fort_Park_on_Cat_Ba_Island,_Vietnam,_20240130_1618_4458.jpg?width=800",
+    "curated-vinh-lan-ha": "https://commons.wikimedia.org/wiki/Special:FilePath/Cat_Ba_Island_2.jpg?width=800",
+    "curated-lang-chai-cai-beo": "https://commons.wikimedia.org/wiki/Special:FilePath/Building_on_Cat_Ba_island.jpg?width=800",
+    "curated-thi-tran-cat-ba": "https://commons.wikimedia.org/wiki/Special:FilePath/Motorbike_taxi_drivers_in_Cat_Ba_town.JPG?width=800",
+    "curated-pho-di-bo-cat-ba": "https://commons.wikimedia.org/wiki/Special:FilePath/Motorbike_taxi_drivers_in_Cat_Ba_town.JPG?width=800",
+    "cover-hcm-duc-ba": "https://commons.wikimedia.org/wiki/Special:FilePath/Notre-Dame_Cathedral_Basilica_of_Saigon.jpg?width=800",
+    "cover-vung-tau": "https://commons.wikimedia.org/wiki/Special:FilePath/Christ_the_King_statue_of_Vung_Tau.jpg?width=800",
+    "cover-ha-giang": "https://commons.wikimedia.org/wiki/Special:FilePath/Ma_Pi_Leng_Pass.jpg?width=800",
+    "cover-yen-tu": "https://commons.wikimedia.org/wiki/Special:FilePath/Yen_Tu_pagoda.jpg?width=800",
+    "cover-phong-nha": "https://commons.wikimedia.org/wiki/Special:FilePath/Phong_Nha_cave.jpg?width=800",
+    "cover-mui-ne": "https://commons.wikimedia.org/wiki/Special:FilePath/Mui_Ne_sand_dunes.jpg?width=800",
+    "cover-ky-co": "https://commons.wikimedia.org/wiki/Special:FilePath/Ky_Co_beach_Quy_Nhon.jpg?width=800",
+    "cover-chua-huong": "https://commons.wikimedia.org/wiki/Special:FilePath/Perfume_Pagoda.jpg?width=800",
+    "cover-do-son": "https://commons.wikimedia.org/wiki/Special:FilePath/Do_Son_beach.jpg?width=800",
 }
 
 PLACE_IMAGE_CREDITS: dict[str, str] = {
@@ -213,7 +232,7 @@ PLACE_IMAGE_CREDITS: dict[str, str] = {
     "curated-lang-tu-duc": "Wikimedia Commons (Tu Duc Tomb Hue Vietnam.jpg)",
     "curated-thung-lung-tinh-yeu": "Wikimedia Commons (Valley of Love Dalat.jpg)",
     "curated-langbiang": "Wikimedia Commons (Langbiang Peak Dalat.jpg)",
-    "curated-ho-xuan-huong": "Wikimedia Commons (Xuan Huong Lake Dalat.jpg)",
+    "curated-ho-xuan-huong": "Wikimedia Commons (Ho Xuan Huong - Huy Phuong 3.jpg)",
     "curated-chua-linh-phuoc": "Wikimedia Commons (Linh Phuoc Pagoda Dalat.jpg)",
     "curated-dinh-bao-dai": "Wikimedia Commons (Bao Dai Palace Dalat.jpg)",
     "curated-trang-an": "Wikimedia Commons (Trang An Landscape Complex Ninh Binh.jpg)",
@@ -232,6 +251,24 @@ PLACE_IMAGE_CREDITS: dict[str, str] = {
     "curated-bai-sao-phu-quoc": "Wikimedia Commons (Sao Beach Phu Quoc.jpg)",
     "curated-vinwonders-phu-quoc": "Wikimedia Commons (VinWonders Phu Quoc Vietnam.jpg)",
     "curated-sunset-sanato": "Wikimedia Commons (Sunset Sanato Phu Quoc.jpg)",
+    "curated-vuon-quoc-gia-cat-ba": "Wikimedia Commons (Ao Ech, Cat Ba National Park.jpg)",
+    "curated-bai-cat-co-1": "Wikimedia Commons (Cat Ba Island 2.jpg)",
+    "curated-bai-cat-co-3": "Wikimedia Commons (Cat Ba Island 2.jpg)",
+    "curated-hang-quan-y": "Wikimedia Commons (Trung Trang Cave, Cát Bà Island.jpg)",
+    "curated-phao-dai-than-cong": "Wikimedia Commons (Cannon Fort Park, Cat Ba Island.jpg)",
+    "curated-vinh-lan-ha": "Wikimedia Commons (Cat Ba Island 2.jpg)",
+    "curated-lang-chai-cai-beo": "Wikimedia Commons (Building on Cat Ba island.jpg)",
+    "curated-thi-tran-cat-ba": "Wikimedia Commons (Motorbike taxi drivers in Cat Ba town.JPG)",
+    "curated-pho-di-bo-cat-ba": "Wikimedia Commons (Motorbike taxi drivers in Cat Ba town.JPG)",
+    "cover-hcm-duc-ba": "Wikimedia Commons (Notre-Dame Cathedral Basilica of Saigon.jpg)",
+    "cover-vung-tau": "Wikimedia Commons (Christ the King statue of Vung Tau.jpg)",
+    "cover-ha-giang": "Wikimedia Commons (Ma Pi Leng Pass.jpg)",
+    "cover-yen-tu": "Wikimedia Commons (Yen Tu pagoda.jpg)",
+    "cover-phong-nha": "Wikimedia Commons (Phong Nha cave.jpg)",
+    "cover-mui-ne": "Wikimedia Commons (Mui Ne sand dunes.jpg)",
+    "cover-ky-co": "Wikimedia Commons (Ky Co beach Quy Nhon.jpg)",
+    "cover-chua-huong": "Wikimedia Commons (Perfume Pagoda.jpg)",
+    "cover-do-son": "Wikimedia Commons (Do Son beach.jpg)",
 }
 
 
@@ -239,6 +276,86 @@ CURATED_SOURCE_URLS: dict[str, str] = {
     place_id: url
     for place_id, url in PLACE_IMAGE_URLS.items()
 }
+
+
+def _cover(place_id: str) -> tuple[str, str]:
+    return PLACE_IMAGE_URLS[place_id], PLACE_IMAGE_CREDITS[place_id]
+
+
+DESTINATION_COVER_URLS: dict[str, tuple[str, str]] = {
+    "ha noi": _cover("curated-ho-guom"),
+    "tp.hcm": _cover("cover-hcm-duc-ba"),
+    "da nang": _cover("curated-bai-bien-my-khe"),
+    "hoi an": _cover("curated-pho-co-hoi-an"),
+    "hue": _cover("curated-dai-noi-hue"),
+    "da lat": _cover("curated-ho-xuan-huong"),
+    "nha trang": _cover("curated-vinh-nha-trang"),
+    "ninh binh": _cover("curated-trang-an"),
+    "ha long": _cover("curated-vinh-ha-long"),
+    "sa pa": _cover("curated-fansipan-peak"),
+    "phu quoc": _cover("curated-bai-sao-phu-quoc"),
+    "can tho": _cover("curated-ben-ninh-kieu"),
+    "vung tau": _cover("cover-vung-tau"),
+    "quy nhon": _cover("cover-ky-co"),
+    "phan thiet": _cover("cover-mui-ne"),
+    "quang binh": _cover("cover-phong-nha"),
+    "ha giang": _cover("cover-ha-giang"),
+    "hai phong": _cover("cover-do-son"),
+    "cat ba": _cover("curated-vinh-lan-ha"),
+    "yen tu": _cover("cover-yen-tu"),
+    "chua huong": _cover("cover-chua-huong"),
+}
+
+
+def cover_for_destination(label: str | None) -> tuple[str | None, str | None]:
+    if not label:
+        return None, None
+    key = place_name_key(label)
+    if key in DESTINATION_COVER_URLS:
+        return DESTINATION_COVER_URLS[key]
+    compact = key.replace(" ", "").replace(".", "")
+    aliases = {
+        "tphcm": "tp.hcm",
+        "hochiminh": "tp.hcm",
+        "saigon": "tp.hcm",
+        "sapa": "sa pa",
+        "halong": "ha long",
+        "dalat": "da lat",
+        "phuquoc": "phu quoc",
+        "nhatrang": "nha trang",
+        "danang": "da nang",
+        "hoian": "hoi an",
+        "cantho": "can tho",
+        "vungtau": "vung tau",
+        "hagiang": "ha giang",
+        "haiphong": "hai phong",
+        "ninhbinh": "ninh binh",
+        "quynhon": "quy nhon",
+        "phanthiet": "phan thiet",
+        "quangbinh": "quang binh",
+        "muine": "phan thiet",
+        "yentu": "yen tu",
+        "catba": "cat ba",
+        "chuahuong": "chua huong",
+        "hanoi": "ha noi",
+    }
+    mapped = aliases.get(compact)
+    if mapped:
+        return DESTINATION_COVER_URLS.get(mapped, (None, None))
+    for dest_key, cover in DESTINATION_COVER_URLS.items():
+        if dest_key.replace(" ", "").replace(".", "") == compact:
+            return cover
+    return None, None
+
+
+def destination_cover_from_title(title: str | None) -> tuple[str | None, str | None]:
+    folded = place_name_key(title or "").replace(" ", "")
+    if not folded:
+        return None, None
+    for key, cover in DESTINATION_COVER_URLS.items():
+        if key.replace(" ", "") in folded:
+            return cover
+    return None, None
 
 
 def _curated_default_source_url(place_id: str) -> str:
@@ -255,6 +372,8 @@ def _curated_default_source_url(place_id: str) -> str:
         "curated-i-resort-nha-trang",
     }:
         return "https://en.wikivoyage.org/wiki/Nha_Trang"
+    if "cat-ba" in place_id or "lan-ha" in place_id or "cai-beo" in place_id or "cat-co" in place_id:
+        return "https://en.wikivoyage.org/wiki/Cat_Ba"
     return "https://en.wikivoyage.org/wiki/Hanoi/Hoan_Kiem"
 
 
@@ -341,6 +460,7 @@ def _load_imported_places() -> tuple[list[Place], dict]:
             review_count=_first_present(item, "google_user_rating_count", "review_count"),
             google_place_id=item.get("google_place_id"),
             google_maps_url=item.get("google_maps_url"),
+            address=item.get("address"),
         )
         for item in payload.get("places", [])
     ]
@@ -715,6 +835,9 @@ CURATED_OTHER_PROVINCE_ANCHORS = [
     Place("curated-ba-na-hills", "Bà Nà Hills", "giai_tri", "Đà Nẵng", 15.9989, 107.9961, 900_000, 240, ("da_nang_icon", "giai_tri", "view_dep", "checkin", "gia_dinh"), 8, 19, "curated", None, rating=4.7, review_count=35000),
     Place("curated-chua-linh-ung", "Chùa Linh Ứng Bán Đảo Sơn Trà", "den_chua", "Đà Nẵng", 16.1002, 108.2774, 0, 75, ("da_nang_icon", "den_chua", "van_hoa", "view_dep", "yen_tinh"), 6, 21, "curated", None, rating=4.8, review_count=18900),
     Place("curated-mi-quang-ba-mua", "Mì Quảng Bà Mua", "quan_an", "Đà Nẵng", 16.0645, 108.2198, 55_000, 45, ("am_thuc", "local", "dac_san", "mi_quang"), 6, 22, "curated", None, rating=4.4, review_count=3200),
+    Place("curated-hai-san-be-man", "Hải sản Bé Mặn", "nha_hang", "Đà Nẵng", 16.0544, 108.2472, 250_000, 60, ("am_thuc", "hai_san", "local", "bien"), 10, 22, "curated", None, rating=4.5, review_count=6800),
+    Place("curated-hai-san-ba-thi", "Hải sản Bà Thí", "nha_hang", "Đà Nẵng", 16.0618, 108.2455, 220_000, 60, ("am_thuc", "hai_san", "local", "bien"), 10, 22, "curated", None, rating=4.4, review_count=4100),
+    Place("curated-hai-san-nam-phuong", "Hải sản Nam Phương", "nha_hang", "Đà Nẵng", 16.0599, 108.2441, 200_000, 60, ("am_thuc", "hai_san", "local"), 10, 22, "curated", None, rating=4.3, review_count=2900),
     Place("curated-chua-cau-hoi-an", "Chùa Cầu Hội An", "di_tich", "Hội An", 15.8771, 108.3260, 0, 45, ("hoi_an_icon", "di_tich", "van_hoa", "lich_su", "checkin"), 7, 22, "curated", None, rating=4.7, review_count=14500),
     Place("curated-pho-co-hoi-an", "Phố cổ Hội An", "dia_danh", "Hội An", 15.8794, 108.3323, 0, 120, ("hoi_an_icon", "pho_co", "van_hoa", "am_thuc", "checkin", "chill"), 7, 23, "curated", None, rating=4.9, review_count=48000),
     Place("curated-com-ga-ba-buoi", "Cơm gà Bà Buội", "quan_an", "Hội An", 15.8785, 108.3299, 65_000, 45, ("am_thuc", "local", "dac_san", "com_ga"), 10, 21, "curated", None, rating=4.3, review_count=4100),
@@ -757,6 +880,19 @@ CURATED_OTHER_PROVINCE_ANCHORS = [
     Place("curated-yen-tu-thien-vien", "Thiền viện Trúc Lâm Yên Tử", "den_chua", "Quảng Ninh", 21.1369, 106.7383, 0, 120, ("heritage", "den_chua", "van_hoa", "yen_tinh", "nui"), 7, 18, "curated", None, rating=4.7, review_count=7200),
     Place("curated-yen-tu-cap-treo", "Cáp treo Yên Tử", "dia_danh", "Quảng Ninh", 21.1417, 106.7144, 250_000, 50, ("nui", "giai_tri", "view_dep", "checkin"), 7, 17, "curated", None, rating=4.6, review_count=5400),
     Place("curated-yen-tu-giai-oan", "Suối Giải Oan Yên Tử", "dia_danh", "Quảng Ninh", 21.1489, 106.7208, 0, 60, ("nui", "ngoai_troi", "yen_tinh", "chill"), 6, 18, "curated", None, rating=4.5, review_count=2100),
+    Place("curated-vuon-quoc-gia-cat-ba", "Vườn quốc gia Cát Bà", "dia_danh", "Cát Bà", 20.7967, 106.9994, 80_000, 180, ("cat_ba_icon", "nui", "ngoai_troi", "view_dep", "yen_tinh"), 7, 17, "curated", None, rating=4.7, review_count=9800),
+    Place("curated-bai-cat-co-1", "Bãi Cát Cò 1", "bai_bien", "Cát Bà", 20.7225, 107.0615, 0, 90, ("cat_ba_icon", "beach", "bien", "chill", "view_dep"), 6, 19, "curated", None, rating=4.6, review_count=7200),
+    Place("curated-bai-cat-co-3", "Bãi Cát Cò 3", "bai_bien", "Cát Bà", 20.7198, 107.0680, 0, 90, ("cat_ba_icon", "beach", "bien", "view_dep", "checkin"), 6, 19, "curated", None, rating=4.5, review_count=5400),
+    Place("curated-hang-quan-y", "Hang Quân Y", "hang_dong", "Cát Bà", 20.7433, 107.0378, 40_000, 60, ("cat_ba_icon", "hang_dong", "lich_su", "van_hoa"), 8, 17, "curated", None, rating=4.5, review_count=4100),
+    Place("curated-phao-dai-than-cong", "Pháo đài thần công Cát Bà", "dia_danh", "Cát Bà", 20.8011, 107.0606, 0, 75, ("cat_ba_icon", "view_dep", "checkin", "nui", "ngoai_troi"), 7, 18, "curated", None, rating=4.6, review_count=6300),
+    Place("curated-vinh-lan-ha", "Vịnh Lan Hạ", "dia_danh", "Cát Bà", 20.7330, 107.0730, 250_000, 180, ("cat_ba_icon", "bien", "view_dep", "ngoai_troi", "chill"), 7, 17, "curated", None, rating=4.8, review_count=11200),
+    Place("curated-lang-chai-cai-beo", "Làng chài Cái Bèo", "dia_danh", "Cát Bà", 20.7194, 107.0569, 0, 60, ("cat_ba_icon", "am_thuc", "hai_san", "local", "view_dep"), 8, 21, "curated", None, rating=4.4, review_count=2800),
+    Place("curated-thi-tran-cat-ba", "Thị trấn Cát Bà", "dia_danh", "Cát Bà", 20.7278, 107.0482, 0, 75, ("cat_ba_icon", "di_bo", "checkin", "chill", "bien"), 6, 22, "curated", None, rating=4.5, review_count=8600),
+    Place("curated-pho-di-bo-cat-ba", "Phố đi bộ Cát Bà", "dia_danh", "Cát Bà", 20.7284, 107.0491, 0, 60, ("cat_ba_icon", "di_bo", "nightlife", "chill", "bien"), 17, 23, "curated", None, rating=4.4, review_count=3200),
+    Place("curated-hai-san-be-beo", "Hải sản Bé Béo Cát Bà", "nha_hang", "Cát Bà", 20.7295, 107.0460, 220_000, 60, ("am_thuc", "hai_san", "local"), 10, 22, "curated", None, rating=4.4, review_count=1900),
+    Place("curated-hai-san-bien-dong-cat-ba", "Hải sản Biển Đông Cát Bà", "nha_hang", "Cát Bà", 20.7286, 107.0491, 200_000, 60, ("am_thuc", "hai_san", "local"), 10, 22, "curated", None, rating=4.3, review_count=1600),
+    Place("curated-quan-oc-cat-ba", "Quán ốc Cát Bà", "quan_an", "Cát Bà", 20.7269, 107.0474, 150_000, 50, ("am_thuc", "hai_san", "local"), 11, 21, "curated", None, rating=4.2, review_count=980),
+    Place("curated-nha-hang-gia-vien-cat-ba", "Nhà hàng Gia Viên Cát Bà", "nha_hang", "Cát Bà", 20.7308, 107.0452, 180_000, 60, ("am_thuc", "hai_san", "local"), 10, 21, "curated", None, rating=4.3, review_count=1200),
     Place("curated-hai-san-huong-duyen", "Hải sản Hương Duyên", "nha_hang", "Hạ Long", 20.9525, 107.0754, 250_000, 60, ("am_thuc", "hai_san", "local", "view_dep"), 9, 22, "curated", None, rating=4.4, review_count=3100),
     # Sa Pa
     Place("curated-fansipan-peak", "Đỉnh Fansipan Legend", "dia_danh", "Sa Pa", 22.3033, 103.7753, 850_000, 180, ("sa_pa_icon", "nui", "view_dep", "checkin", "giai_tri"), 7, 18, "curated", None, rating=4.9, review_count=29000),

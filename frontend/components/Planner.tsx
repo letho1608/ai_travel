@@ -722,7 +722,7 @@ export default function Planner() {
       allowed_place_themes: pendingIntentPolicy.current?.allowed_place_themes ?? [],
       avoid_place_themes: pendingIntentPolicy.current?.avoid_place_themes ?? [],
     };
-    const nganSach = inferBudget(composedContext) ?? inferBudget(requestContext) ?? 1000000;
+    const nganSach = inferBudget(composedContext) ?? inferBudget(requestContext);
     const tripStart = inferDateRange(composedContext)?.start ?? inferDateRange(requestContext)?.start;
     const ngayDi = tripStart
       ? `${tripStart.getFullYear()}-${String(tripStart.getMonth() + 1).padStart(2, "0")}-${String(tripStart.getDate()).padStart(2, "0")}`
@@ -766,7 +766,7 @@ export default function Planner() {
           location: pendingIntentLocation.current ?? destinationLocation(composedContext),
           thoi_luong: duration,
           so_nguoi: travelers,
-          ngan_sach: nganSach,
+          ...(nganSach != null ? { ngan_sach: nganSach } : {}),
           ...(ngayDi ? { ngay_di: ngayDi } : {}),
           ma_phien: session,
           ngon_ngu: locale,

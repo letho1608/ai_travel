@@ -32,18 +32,51 @@ _CJK_TERM_MAP = (
 )
 
 
+def _assistant_message_text(message: dict | None) -> str:
+    if not isinstance(message, dict):
+        return ""
+    chunks: list[str] = []
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        chunks.append(content.strip())
+    elif isinstance(content, list):
+        for part in content:
+            if isinstance(part, str) and part.strip():
+                chunks.append(part.strip())
+            elif isinstance(part, dict):
+                text = part.get("text") or part.get("content")
+                if isinstance(text, str) and text.strip():
+                    chunks.append(text.strip())
+    if not chunks:
+        for key in ("reasoning", "reasoning_content"):
+            extra = message.get(key)
+            if isinstance(extra, str) and extra.strip():
+                chunks.append(extra.strip())
+                break
+    return "\n".join(chunks).strip()
+
+
+def _chat_models() -> list[str]:
+    models: list[str] = []
+    for name in (settings.ai_chat_model, settings.ai_model):
+        label = str(name or "").strip()
+        if label and label not in models:
+            models.append(label)
+    return models
+
+
 def _chat_reply_payload(model: str, messages: list[dict]) -> dict:
     payload = {
         "model": model,
         "messages": messages,
-        "temperature": 0.7,
-        "max_tokens": 320,
+        "temperature": 0.95,
+        "max_tokens": 420,
     }
     if "qwen" in model.lower():
         payload["reasoning_effort"] = "none"
         payload["reasoning_format"] = "hidden"
-        payload["top_p"] = 0.8
-        payload["presence_penalty"] = 1.5
+        payload["top_p"] = 0.9
+        payload["presence_penalty"] = 0.4
     return payload
 
 
@@ -51,9 +84,19 @@ def _strip_chat_reasoning(content: str) -> str:
     text = _THINK_BLOCK_RE.sub(" ", content or "")
     text = _THINK_TAG_RE.sub(" ", text)
     text = " ".join(text.replace("```", "").split())
-    if _REASONING_LEAK_RE.search(text):
-        return ""
-    return text
+    if not _REASONING_LEAK_RE.search(text):
+        return text
+    kept = []
+    for part in re.split(r"(?<=[.!?…])\s+", text):
+        chunk = part.strip()
+        if not chunk:
+            continue
+        if _REASONING_LEAK_RE.search(chunk):
+            continue
+        if "CATALOG" in chunk or "allowed_place_names" in chunk:
+            continue
+        kept.append(chunk)
+    return " ".join(kept).strip()
 
 
 def _strip_cjk(content: str, locale: str = "vi") -> str:
@@ -365,8 +408,6 @@ class OpenAICompatibleAIAdapter:
         raise RuntimeError(f"AI không chuẩn hóa được yêu cầu an toàn: {last_error}") from last_error
 
     def compose_chat_reply(self, messages: list[dict], intent: dict, locale: str = "vi") -> str:
-        if not breaker.allow():
-            raise RuntimeError("Cầu dao AI đang mở")
         language = {
             "vi": "Vietnamese", "en": "English", "ar": "Arabic", "bg": "Bulgarian",
             "de": "German", "es": "Spanish", "fr": "French", "he": "Hebrew",
@@ -378,6 +419,11 @@ class OpenAICompatibleAIAdapter:
         destination = parsed.get("destination") if isinstance(parsed.get("destination"), dict) else None
         missing = intent.get("missing_fields") or []
         last_user = str(intent.get("last_user_message") or "").strip()
+        previous_assistant = ""
+        for item in reversed(messages or []):
+            if item.get("role") == "assistant":
+                previous_assistant = str(item.get("content") or "")[:280]
+                break
         catalog = {
             "destination": (destination or {}).get("name"),
             "duration": parsed.get("duration"),
@@ -389,6 +435,7 @@ class OpenAICompatibleAIAdapter:
             "ask_topic": intent.get("ask_topic") or "general",
             "season_note": intent.get("season_note"),
             "theme_from": intent.get("theme_from"),
+            "previous_assistant": previous_assistant,
             "allowed_place_names": [
                 name
                 for name in (
@@ -423,6 +470,8 @@ class OpenAICompatibleAIAdapter:
         if intent.get("user_goal") == "edit_plan":
             system = (
                 f"You are a Vietnam travel friend chatting in {language}. "
+                "When Vietnamese: refer to yourself as tôi or mình, and call the user bạn. "
+                "Never address them as chị, anh, em, cô, chú, or bác. "
                 "An itinerary already exists. Help the user edit or understand it. "
                 "Answer the latest user message first, like a friend, in 2 short sentences. "
                 "Do not ask destination, days, or people — those are already known. "
@@ -442,10 +491,15 @@ class OpenAICompatibleAIAdapter:
         else:
             system = (
                 f"You are a Vietnam travel friend chatting in {language}. "
+                "When Vietnamese: refer to yourself as tôi or mình, and call the user bạn. "
+                "Never address them as chị, anh, em, cô, chú, or bác. "
                 "Answer the latest user message first, like a friend. "
                 "If they ask for comfort or share a feeling, comfort them. Do not ask how many days or people. "
-                "If CATALOG.ask_topic is healing: comfort first, then name up to 4 catalog places "
-                "each with a short vibe in parentheses. Do not ask days or people. "
+                "If CATALOG.ask_topic is healing or they sound tired/stressed: answer freely like a friend. "
+                "Do not follow a template, do not copy CATALOG.previous_assistant, and do not use stock lines "
+                "such as 'Nghe bạn đang mệt', 'Chưa thúc bạn chọn', 'Đi chữa lành mình hay nghĩ', or 'nghiêng khí trời'. "
+                "Write original wording. Mention 0-4 names from CATALOG.allowed_place_names only if it helps. "
+                "Do not ask days or people. Do not write an itinerary. "
                 "If CATALOG.ask_topic is beach or mountain and they have not picked a city: name up to 4 places "
                 "with a short vibe each, then ask which they prefer. Do not say xếp lịch. "
                 "Do not repeat the previous assistant message. "
@@ -475,46 +529,57 @@ class OpenAICompatibleAIAdapter:
                 f"CATALOG: {facts}"
             )
         payload_messages = [{"role": "system", "content": system}, *history]
-        chat_model = settings.ai_chat_model or settings.ai_model
-        payload = _chat_reply_payload(chat_model, payload_messages)
         last_error: Exception | None = None
-        for _attempt in range(2):
-            try:
-                response = self.client.post("chat/completions", json=payload)
-                response.raise_for_status()
-                body = response.json()
-                choice = body["choices"][0]
-                message = choice.get("message") or {}
-                content = message.get("content")
-                if not isinstance(content, str) or not content.strip():
-                    raise ValueError("AI returned empty chat reply")
-                content = _strip_cjk(_strip_chat_reasoning(content), locale)
-                if not content:
-                    raise ValueError("AI returned empty chat reply")
-                usage = body.get("usage", {})
-                input_tokens = int(usage.get("prompt_tokens", 0))
-                output_tokens = int(usage.get("completion_tokens", 0))
-                amount = (
-                    input_tokens * settings.ai_input_usd_per_million
-                    + output_tokens * settings.ai_output_usd_per_million
-                ) / 1_000_000
-                store.record_ai_usage(
-                    getattr(self, "provider", settings.ai_mode), chat_model,
-                    input_tokens, output_tokens, amount,
-                    settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
-                )
-                breaker.record_success()
-                return content[:800]
-            except httpx.HTTPStatusError as exc:
-                last_error = exc
-                breaker.record_failure(_error_kind(exc))
-                if exc.response.status_code == 400 and "reasoning_effort" in payload:
-                    payload.pop("reasoning_effort", None)
-                    payload.pop("reasoning_format", None)
-                    continue
-            except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-                last_error = exc
-                breaker.record_failure(_error_kind(exc))
+        for chat_model in _chat_models():
+            payload = _chat_reply_payload(chat_model, payload_messages)
+            for _attempt in range(2):
+                try:
+                    response = self.client.post("chat/completions", json=payload)
+                    response.raise_for_status()
+                    body = response.json()
+                    choice = body["choices"][0]
+                    message = choice.get("message") or {}
+                    content = _assistant_message_text(message)
+                    if not content:
+                        raise ValueError("AI returned empty chat reply")
+                    content = _strip_cjk(_strip_chat_reasoning(content), locale)
+                    if not content:
+                        raise ValueError("AI returned empty chat reply")
+                    usage = body.get("usage", {})
+                    input_tokens = int(usage.get("prompt_tokens", 0))
+                    output_tokens = int(usage.get("completion_tokens", 0))
+                    amount = (
+                        input_tokens * settings.ai_input_usd_per_million
+                        + output_tokens * settings.ai_output_usd_per_million
+                    ) / 1_000_000
+                    store.record_ai_usage(
+                        getattr(self, "provider", settings.ai_mode), chat_model,
+                        input_tokens, output_tokens, amount,
+                        settings.daily_ai_budget_usd, settings.monthly_ai_budget_usd,
+                    )
+                    breaker.record_success()
+                    return content[:800]
+                except httpx.HTTPStatusError as exc:
+                    last_error = exc
+                    logger.warning(
+                        "compose_chat_reply HTTP %s model=%s: %s",
+                        exc.response.status_code,
+                        chat_model,
+                        (exc.response.text or "")[:300],
+                    )
+                    if exc.response.status_code == 400 and "reasoning_effort" in payload:
+                        payload.pop("reasoning_effort", None)
+                        payload.pop("reasoning_format", None)
+                        continue
+                    break
+                except (httpx.HTTPError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                    last_error = exc
+                    logger.warning("compose_chat_reply failed model=%s: %s", chat_model, exc)
+                    if isinstance(exc, ValueError):
+                        continue
+                    break
+        if last_error is not None:
+            breaker.record_failure(_error_kind(last_error))
         raise RuntimeError(f"AI không soạn được câu trả lời: {last_error}") from last_error
 
     def propose_place_ids(
@@ -543,7 +608,8 @@ class OpenAICompatibleAIAdapter:
                 f"but return JSON only. Prefer iconic, well-known tourist attractions that first-time visitors "
                 f"to {city} actually go to when those candidates exist. Avoid obscure shops, unnamed parks, "
                 "street corners, and generic OSM POIs. Balance landmarks, food/cafe, and rest stops. "
-                "Never invent ids; choose only from candidates. If a candidate is a spelling twin of another "
+                "Never invent ids; choose only from candidates. Prefer candidates marked famous/iconic "
+                "or with a lower famous_priority number. If a candidate is a spelling twin of another "
                 "(for example Titop / Ti Tốp), keep only one."
             ),
             "ngu_canh_nguoi_dung": context,

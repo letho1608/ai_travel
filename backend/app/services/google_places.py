@@ -17,10 +17,24 @@ from typing import Any
 
 from app.config import settings
 from app.data import DATA_DIR
+from app.services.place_images import ensure_plan_cover
+from app.text_utils import ascii_fold
 
 GOOGLE_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+GOOGLE_NEARBY_SEARCH_URL = "https://places.googleapis.com/v1/places:searchNearby"
 GOOGLE_PHOTO_MEDIA_URL = "https://places.googleapis.com/v1/{photo_name}/media"
+GOOGLE_LEGACY_TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+GOOGLE_LEGACY_PHOTO_URL = "https://maps.googleapis.com/maps/api/place/photo"
 CACHE_PATH = DATA_DIR / "google_place_cache.json"
+VIETNAM_LAT = (8.0, 24.5)
+VIETNAM_LNG = (102.0, 110.5)
+MAP_SEARCH_RADIUS_M = 50_000.0
+MAP_SEARCH_RADIUS_KM = 55.0
+
+
+def _slot_has_image(slot: dict[str, Any]) -> bool:
+    url = slot.get("anh")
+    return isinstance(url, str) and url.startswith("http")
 
 
 def google_places_readiness() -> dict[str, Any]:
@@ -117,6 +131,16 @@ def _places_http_blocked(exc: BaseException) -> bool:
     return isinstance(exc, urllib.error.HTTPError) and exc.code in {401, 403}
 
 
+def _legacy_photo_url(photo_reference: str, api_key: str) -> str:
+    return (
+        GOOGLE_LEGACY_PHOTO_URL
+        + "?"
+        + urllib.parse.urlencode(
+            {"maxwidth": 800, "photo_reference": photo_reference, "key": api_key}
+        )
+    )
+
+
 def _photo_url(photo_name: str, api_key: str) -> str:
     return (
         GOOGLE_PHOTO_MEDIA_URL.format(photo_name=photo_name)
@@ -151,6 +175,131 @@ def _opening_hours_fields(google: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def _place_id_value(place_id: str | None) -> str:
+    raw = str(place_id or "").strip()
+    if raw.startswith("places/"):
+        raw = raw.split("/", 1)[1]
+    return raw
+
+
+def _named_maps_url(name: str, place_id: str | None) -> str:
+    pid = _place_id_value(place_id)
+    if pid:
+        return f"https://www.google.com/maps/place/?q=place_id:{urllib.parse.quote(pid, safe='')}"
+    query = urllib.parse.quote_plus(" ".join(str(name or "").split()))
+    return f"https://www.google.com/maps/search/?api=1&query={query}"
+
+
+def _coord_pin_url(lat: float, lng: float) -> str:
+    return f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
+
+
+def _legacy_slot_lookup(slot: dict[str, Any], api_key: str) -> dict[str, Any] | None:
+    """Find the Google place nearest the itinerary pin via the legacy Text Search API."""
+    from app.pipeline.routing import haversine_km
+
+    name = str(slot.get("ten_dia_diem") or "").strip()
+    coordinates = slot.get("toa_do") if isinstance(slot.get("toa_do"), dict) else {}
+    lat = coordinates.get("lat")
+    lng = coordinates.get("lng")
+    if not name or not isinstance(lat, int | float) or not isinstance(lng, int | float):
+        return None
+    city = str(slot.get("khu_vuc") or "").strip()
+    query = " ".join(part for part in (name, city) if part)
+    params = {
+        "query": query,
+        "language": "vi",
+        "region": "vn",
+        "location": f"{float(lat)},{float(lng)}",
+        "radius": 500,
+        "key": api_key,
+    }
+    url = GOOGLE_LEGACY_TEXT_SEARCH_URL + "?" + urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(url, timeout=8) as response:
+            payload = json.load(response)
+    except (OSError, TimeoutError, ValueError, TypeError, urllib.error.HTTPError):
+        return None
+    if str(payload.get("status") or "") not in {"OK", "ZERO_RESULTS"}:
+        return None
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for row in payload.get("results") or []:
+        if not isinstance(row, dict):
+            continue
+        location = ((row.get("geometry") or {}).get("location") if isinstance(row.get("geometry"), dict) else {}) or {}
+        try:
+            hit_lat = float(location["lat"])
+            hit_lng = float(location["lng"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        ranked.append((haversine_km(float(lat), float(lng), hit_lat, hit_lng), row))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: item[0])
+    row = ranked[0][1]
+    place_id = _place_id_value(row.get("place_id"))
+    label = str(row.get("name") or name).strip()
+    if not place_id or not label:
+        return None
+    return {
+        "google_place_id": place_id,
+        "display_name": label,
+        "google_maps_url": _named_maps_url(label, place_id),
+        "dia_chi_google": row.get("formatted_address"),
+        "google_rating": row.get("rating"),
+        "google_user_rating_count": row.get("user_ratings_total"),
+        "google_updated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def _places_post(url: str, payload: dict[str, Any], api_key: str, field_mask: str) -> list[Any]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": field_mask,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            places = json.load(response).get("places", [])
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403}:
+            raise
+        return []
+    except (TimeoutError, urllib.error.URLError, json.JSONDecodeError, OSError):
+        return []
+    return places if isinstance(places, list) else []
+
+
+def _google_place_coords(row: dict[str, Any]) -> tuple[float, float] | None:
+    location = row.get("location") if isinstance(row.get("location"), dict) else {}
+    try:
+        return float(location["latitude"]), float(location["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _nearest_google_place(places: list[Any], lat: float, lng: float) -> dict[str, Any] | None:
+    from app.pipeline.routing import haversine_km
+
+    ranked: list[tuple[float, dict[str, Any]]] = []
+    for row in places:
+        if not isinstance(row, dict):
+            continue
+        coords = _google_place_coords(row)
+        if coords is None:
+            continue
+        ranked.append((haversine_km(lat, lng, coords[0], coords[1]), row))
+    if ranked:
+        ranked.sort(key=lambda item: item[0])
+        return ranked[0][1]
+    first = places[0] if places else None
+    return first if isinstance(first, dict) else None
+
+
 def _fetch_google_slot(
     slot: dict[str, Any],
     api_key: str,
@@ -164,52 +313,57 @@ def _fetch_google_slot(
     name = str(slot.get("ten_dia_diem") or "").strip()
     if not name or not isinstance(lat, int | float) or not isinstance(lng, int | float):
         return None
-    query_text = f"{name} Việt Nam"
-    body = json.dumps(
-        {
-            "textQuery": query_text,
-            "languageCode": "vi",
-            "regionCode": "VN",
-            "locationBias": {
-                "circle": {
-                    "center": {"latitude": float(lat), "longitude": float(lng)},
-                    "radius": 1200.0,
-                }
-            },
-            "pageSize": 1,
-        }
-    ).encode()
+    city = str(slot.get("khu_vuc") or "").strip()
+    query_text = " ".join(part for part in (name, city) if part) or name
     field_mask = (
-        "places.id,places.displayName,places.formattedAddress,"
+        "places.id,places.displayName,places.formattedAddress,places.location,"
         "places.googleMapsUri,places.rating,places.userRatingCount"
     )
     if include_photos:
         field_mask += ",places.photos"
     if include_hours:
         field_mask += ",places.currentOpeningHours,places.regularOpeningHours,places.businessStatus"
-    request = urllib.request.Request(
-        GOOGLE_TEXT_SEARCH_URL,
-        data=body,
-        headers={
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": api_key,
-            "X-Goog-FieldMask": field_mask,
-        },
-    )
-    with urllib.request.urlopen(request, timeout=8) as response:
-        places = json.load(response).get("places", [])
+    center = {"latitude": float(lat), "longitude": float(lng)}
+    nearby_payload = {
+        "languageCode": "vi",
+        "regionCode": "VN",
+        "maxResultCount": 5,
+        "rankPreference": "DISTANCE",
+        "includedTypes": [
+            "restaurant", "cafe", "coffee_shop", "bakery", "bar",
+            "tourist_attraction", "park", "museum", "church", "hindu_temple",
+            "lodging", "market", "shopping_mall", "point_of_interest",
+        ],
+        "locationRestriction": {"circle": {"center": center, "radius": 150.0}},
+    }
+    places = _places_post(GOOGLE_NEARBY_SEARCH_URL, nearby_payload, api_key, field_mask)
+    if not places:
+        text_payload = {
+            "textQuery": query_text,
+            "languageCode": "vi",
+            "regionCode": "VN",
+            "pageSize": 5,
+            "locationBias": {"circle": {"center": center, "radius": 800.0}},
+        }
+        places = _places_post(GOOGLE_TEXT_SEARCH_URL, text_payload, api_key, field_mask)
     if not places:
         return None
-    google = places[0]
+    google = _nearest_google_place(places, float(lat), float(lng))
+    if not google:
+        return None
     photos = google.get("photos") or []
     photo_name = (
         photos[0].get("name")
         if include_photos and photos and isinstance(photos[0], dict)
         else None
     )
+    display = google.get("displayName") if isinstance(google.get("displayName"), dict) else {}
+    label = str(display.get("text") or name).strip()
+    place_id = _place_id_value(google.get("id")) or None
     enriched = {
-        "google_place_id": google.get("id"),
-        "google_maps_url": google.get("googleMapsUri"),
+        "google_place_id": place_id,
+        "display_name": label,
+        "google_maps_url": _named_maps_url(label, place_id),
         "google_rating": google.get("rating"),
         "google_user_rating_count": google.get("userRatingCount"),
         "dia_chi_google": google.get("formattedAddress"),
@@ -229,6 +383,11 @@ def _apply_enrichment(slot: dict[str, Any], enriched: dict[str, Any], api_key: s
             slot[key] = value
     if enriched.get("google_maps_url"):
         slot["google_review_url"] = enriched["google_maps_url"]
+    place_id = slot.get("google_place_id")
+    label = str(slot.get("ten_dia_diem") or "").strip()
+    if place_id and label:
+        slot["google_maps_url"] = _named_maps_url(label, str(place_id))
+        slot["google_review_url"] = slot["google_maps_url"]
     rating = enriched.get("google_rating")
     review_count = enriched.get("google_user_rating_count")
     if rating is not None or review_count is not None:
@@ -261,9 +420,59 @@ def _apply_enrichment(slot: dict[str, Any], enriched: dict[str, Any], api_key: s
                         item for item in missing if item not in {"rating", "so_review"}
                     ]
     photo_name = enriched.get("google_photo_name")
-    if settings.google_places_runtime_photos and photo_name:
+    if photo_name and not _slot_has_image(slot):
         slot["anh"] = _photo_url(str(photo_name), api_key)
         slot["anh_nguon"] = "Google Places"
+
+
+def resolve_maps_place_url(
+    *,
+    name: str,
+    lat: float,
+    lng: float,
+    city: str = "",
+    slot_id: str = "",
+) -> str:
+    """Return a Google Maps URL that opens one named place, not a search list."""
+    label = " ".join(part for part in (str(name or "").strip(), str(city or "").strip()) if part)
+    cache = _load_cache()
+    cache_places = cache.setdefault("places", {})
+    if slot_id:
+        cached = cache_places.get(slot_id)
+        if isinstance(cached, dict) and not cached.get("negative"):
+            place_id = str(cached.get("google_place_id") or "").strip()
+            if place_id:
+                cached_name = str(cached.get("display_name") or name or label).strip()
+                return _named_maps_url(cached_name, place_id)
+    api_key = settings.google_maps_api_key
+    if not api_key:
+        return _coord_pin_url(lat, lng)
+    text_daily_cap = max(0, settings.google_places_text_search_daily_cap)
+    text_monthly_cap = max(0, settings.google_places_text_search_monthly_cap)
+    if not _quota_available(cache, "text_search", text_daily_cap, text_monthly_cap):
+        return _coord_pin_url(lat, lng)
+    slot = {
+        "ten_dia_diem": str(name or "").strip(),
+        "toa_do": {"lat": float(lat), "lng": float(lng)},
+        "khu_vuc": str(city or "").strip(),
+    }
+    try:
+        enriched = _fetch_google_slot(slot, api_key)
+    except Exception:
+        enriched = None
+    if not (isinstance(enriched, dict) and enriched.get("google_place_id")):
+        enriched = _legacy_slot_lookup(slot, api_key)
+    _record_request(cache, "text_search")
+    if enriched and enriched.get("google_place_id"):
+        if slot_id:
+            cache_places[slot_id] = dict(enriched)
+        _save_cache(cache)
+        maps_url = str(enriched.get("google_maps_url") or "").strip()
+        if maps_url.startswith("https://www.google.com/maps/place/?q=place_id:"):
+            return maps_url
+        return _named_maps_url(str(enriched.get("display_name") or name or label), str(enriched["google_place_id"]))
+    _save_cache(cache)
+    return _coord_pin_url(lat, lng)
 
 
 def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
@@ -300,7 +509,7 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
             slot_id = str(slot.get("dia_diem_id") or "")
             if not slot_id:
                 continue
-            wants_photo = settings.google_places_runtime_photos
+            wants_photo = not _slot_has_image(slot)
             wants_hours = settings.google_places_runtime_hours
             cached = cache_places.get(slot_id)
             if isinstance(cached, dict):
@@ -401,6 +610,7 @@ def enrich_plan_with_google(plan: dict[str, Any]) -> dict[str, Any]:
         "photo_quota_blocked": photo_quota_blocked,
         "hours_quota_blocked": hours_quota_blocked,
     }
+    ensure_plan_cover(result)
     return result
 
 
@@ -432,6 +642,117 @@ def _kind_from_google_types(types: list[str] | None) -> str:
     return "dia_danh"
 
 
+def _area_from_google_address(address: str, fallback: str | None) -> str:
+    parts = [part.strip() for part in str(address or "").split(",") if part.strip()]
+    parts = [part for part in parts if ascii_fold(part) not in {"viet nam", "vietnam"}]
+    return parts[-1] if parts else (fallback or "Việt Nam")
+
+
+def _google_name_rank(folded_query: str, folded_label: str) -> int:
+    if not folded_query or not folded_label:
+        return 2
+    if folded_query == folded_label or folded_query in folded_label or folded_label in folded_query:
+        return 0
+    query_tokens = {token for token in folded_query.split() if len(token) >= 3}
+    label_tokens = set(folded_label.split())
+    if query_tokens and query_tokens <= label_tokens:
+        return 0
+    if query_tokens and len(query_tokens & label_tokens) >= min(2, len(query_tokens)):
+        return 1
+    return 2
+
+
+def _search_named_place_legacy(
+    query: str,
+    origin: tuple[float, float],
+    city: str | None,
+    cache: dict[str, Any],
+    include_photos: bool,
+) -> Any | None:
+    from app.data import Place
+    from app.pipeline.routing import haversine_km
+
+    api_key = settings.google_maps_api_key
+    if not api_key:
+        return None
+    params = {
+        "query": f"{query} {city} Việt Nam" if city else f"{query} Việt Nam",
+        "language": "vi",
+        "region": "vn",
+        "location": f"{origin[0]},{origin[1]}",
+        "radius": int(MAP_SEARCH_RADIUS_M),
+        "key": api_key,
+    }
+    url = GOOGLE_LEGACY_TEXT_SEARCH_URL + "?" + urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(url, timeout=8) as response:
+            payload = json.load(response)
+    except (OSError, TimeoutError, ValueError, TypeError):
+        return None
+    if str(payload.get("status") or "") not in {"OK", "ZERO_RESULTS"}:
+        return None
+    _record_request(cache, "text_search")
+    folded_query = ascii_fold(query)
+    scored: list[tuple[int, float, dict]] = []
+    for row in payload.get("results") or []:
+        if not isinstance(row, dict):
+            continue
+        location = ((row.get("geometry") or {}).get("location") if isinstance(row.get("geometry"), dict) else {}) or {}
+        try:
+            lat = float(location.get("lat"))
+            lng = float(location.get("lng"))
+        except (TypeError, ValueError):
+            continue
+        if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
+            continue
+        if haversine_km(origin[0], origin[1], lat, lng) > MAP_SEARCH_RADIUS_KM:
+            continue
+        label = str(row.get("name") or "").strip()
+        name_rank = _google_name_rank(folded_query, ascii_fold(label))
+        if name_rank > 1:
+            continue
+        scored.append((name_rank, haversine_km(origin[0], origin[1], lat, lng), row))
+    if not scored:
+        return None
+    row = min(scored, key=lambda item: (item[0], item[1]))[2]
+    location = ((row.get("geometry") or {}).get("location") if isinstance(row.get("geometry"), dict) else {}) or {}
+    lat = float(location["lat"])
+    lng = float(location["lng"])
+    label = str(row.get("name") or query).strip()
+    place_id = str(row.get("place_id") or "").strip()
+    if not place_id or not label:
+        return None
+    maps_url = _named_maps_url(label, place_id)
+    photos = row.get("photos") or []
+    photo_ref = photos[0].get("photo_reference") if include_photos and photos and isinstance(photos[0], dict) else None
+    image_url = _legacy_photo_url(str(photo_ref), api_key) if photo_ref else None
+    if photo_ref:
+        _record_request(cache, "photo")
+    rating = row.get("rating")
+    reviews = row.get("user_ratings_total")
+    return Place(
+        id=f"google-{place_id}",
+        name=label,
+        kind=_kind_from_google_types(row.get("types") if isinstance(row.get("types"), list) else None),
+        area=_area_from_google_address(str(row.get("formatted_address") or ""), city),
+        lat=lat,
+        lng=lng,
+        cost=0,
+        duration_min=75,
+        tags=("map_verified", "google_verified"),
+        open_hour=7,
+        close_hour=22,
+        source="Google Places",
+        source_url=maps_url,
+        image_url=image_url,
+        image_credit="Google Places" if image_url else None,
+        rating=float(rating) if isinstance(rating, int | float) else None,
+        review_count=int(reviews) if isinstance(reviews, int | float) else None,
+        google_place_id=place_id,
+        google_maps_url=maps_url,
+    )
+
+
 def search_named_place(
     name: str,
     origin: tuple[float, float],
@@ -445,7 +766,7 @@ def search_named_place(
     if not query or not settings.google_maps_api_key:
         return None
     cache = _load_cache()
-    lookup_key = f"{query.casefold()}|{city or ''}|{origin[0]:.2f}|{origin[1]:.2f}"
+    lookup_key = f"{ascii_fold(query)}|{ascii_fold(city or '')}|{origin[0]:.2f}|{origin[1]:.2f}|area"
     lookups = cache.setdefault("lookups", {})
     cached = lookups.get(lookup_key)
     if isinstance(cached, dict):
@@ -465,7 +786,19 @@ def search_named_place(
         settings.google_places_text_search_monthly_cap,
     ):
         return None
+    include_photos = _quota_available(
+        cache,
+        "photo",
+        settings.google_places_photo_daily_cap,
+        settings.google_places_photo_monthly_cap,
+    )
     query_text = f"{query} {city} Việt Nam" if city else f"{query} Việt Nam"
+    field_mask = (
+        "places.id,places.displayName,places.formattedAddress,places.location,"
+        "places.types,places.googleMapsUri,places.rating,places.userRatingCount"
+    )
+    if include_photos:
+        field_mask += ",places.photos"
     body = json.dumps(
         {
             "textQuery": query_text,
@@ -474,10 +807,10 @@ def search_named_place(
             "locationBias": {
                 "circle": {
                     "center": {"latitude": float(origin[0]), "longitude": float(origin[1])},
-                    "radius": 45000.0,
+                    "radius": MAP_SEARCH_RADIUS_M,
                 }
             },
-            "pageSize": 3,
+            "pageSize": 5,
         }
     ).encode()
     request = urllib.request.Request(
@@ -486,19 +819,24 @@ def search_named_place(
         headers={
             "Content-Type": "application/json",
             "X-Goog-Api-Key": settings.google_maps_api_key,
-            "X-Goog-FieldMask": (
-                "places.id,places.displayName,places.formattedAddress,places.location,"
-                "places.types,places.googleMapsUri,places.rating,places.userRatingCount"
-            ),
+            "X-Goog-FieldMask": field_mask,
         },
     )
+    rows: list[dict] = []
     try:
         with urllib.request.urlopen(request, timeout=8) as response:
             rows = json.load(response).get("places") or []
+        _record_request(cache, "text_search")
+    except urllib.error.HTTPError as exc:
+        if not _places_http_blocked(exc):
+            lookups[lookup_key] = {"negative": True}
+            _save_cache(cache)
+            return None
+        rows = []
     except (OSError, TimeoutError, ValueError, TypeError):
-        return None
-    _record_request(cache, "text_search")
-    chosen = None
+        rows = []
+    folded_query = ascii_fold(query)
+    scored: list[tuple[int, float, dict]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -508,36 +846,58 @@ def search_named_place(
             lng = float(location.get("longitude"))
         except (TypeError, ValueError):
             continue
-        if haversine_km(origin[0], origin[1], lat, lng) > 55:
+        if not (VIETNAM_LAT[0] <= lat <= VIETNAM_LAT[1] and VIETNAM_LNG[0] <= lng <= VIETNAM_LNG[1]):
             continue
+        if haversine_km(origin[0], origin[1], lat, lng) > MAP_SEARCH_RADIUS_KM:
+            continue
+        display = row.get("displayName") if isinstance(row.get("displayName"), dict) else {}
+        label = str(display.get("text") or "").strip()
+        folded_label = ascii_fold(label)
+        name_rank = _google_name_rank(folded_query, folded_label)
+        if name_rank > 1:
+            continue
+        scored.append((name_rank, haversine_km(origin[0], origin[1], lat, lng), row))
+    chosen = None
+    if scored:
+        row = min(scored, key=lambda item: (item[0], item[1]))[2]
+        location = row.get("location") if isinstance(row.get("location"), dict) else {}
+        lat = float(location["latitude"])
+        lng = float(location["longitude"])
         display = row.get("displayName") if isinstance(row.get("displayName"), dict) else {}
         label = str(display.get("text") or query).strip()
         place_id = str(row.get("id") or "").strip()
-        if not place_id or not label:
-            continue
-        maps_url = row.get("googleMapsUri") or f"https://www.google.com/maps/search/?api=1&query_place_id={place_id}"
-        rating = row.get("rating")
-        reviews = row.get("userRatingCount")
-        chosen = Place(
-            id=f"google-{place_id}",
-            name=label,
-            kind=_kind_from_google_types(row.get("types") if isinstance(row.get("types"), list) else None),
-            area=city or "Việt Nam",
-            lat=lat,
-            lng=lng,
-            cost=0,
-            duration_min=75,
-            tags=("map_verified", "google_verified"),
-            open_hour=7,
-            close_hour=22,
-            source="Google Places",
-            source_url=str(maps_url),
-            rating=float(rating) if isinstance(rating, int | float) else None,
-            review_count=int(reviews) if isinstance(reviews, int | float) else None,
-            google_place_id=place_id,
-            google_maps_url=str(maps_url),
-        )
-        break
+        if place_id and label:
+            maps_url = _named_maps_url(label, place_id)
+            rating = row.get("rating")
+            reviews = row.get("userRatingCount")
+            photos = row.get("photos") or []
+            photo_name = photos[0].get("name") if include_photos and photos and isinstance(photos[0], dict) else None
+            image_url = _photo_url(str(photo_name), settings.google_maps_api_key) if photo_name else None
+            if photo_name:
+                _record_request(cache, "photo")
+            chosen = Place(
+                id=f"google-{place_id}",
+                name=label,
+                kind=_kind_from_google_types(row.get("types") if isinstance(row.get("types"), list) else None),
+                area=_area_from_google_address(str(row.get("formattedAddress") or ""), city),
+                lat=lat,
+                lng=lng,
+                cost=0,
+                duration_min=75,
+                tags=("map_verified", "google_verified"),
+                open_hour=7,
+                close_hour=22,
+                source="Google Places",
+                source_url=str(maps_url),
+                image_url=image_url,
+                image_credit="Google Places" if image_url else None,
+                rating=float(rating) if isinstance(rating, int | float) else None,
+                review_count=int(reviews) if isinstance(reviews, int | float) else None,
+                google_place_id=place_id,
+                google_maps_url=str(maps_url),
+            )
+    if chosen is None:
+        chosen = _search_named_place_legacy(query, origin, city, cache, include_photos)
     if chosen:
         cached_place = {key: getattr(chosen, key) for key in chosen.__dataclass_fields__}
         cached_place["tags"] = list(chosen.tags)

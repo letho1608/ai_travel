@@ -133,7 +133,12 @@ def test_create_ai_adapter_raises_outside_local_without_key(monkeypatch):
 
 
 def test_qwen_chat_payload_disables_thinking():
-    from app.services.ai import _chat_reply_payload, _strip_cjk, _strip_chat_reasoning
+    from app.services.ai import (
+        _assistant_message_text,
+        _chat_reply_payload,
+        _strip_cjk,
+        _strip_chat_reasoning,
+    )
 
     payload = _chat_reply_payload("qwen/qwen3.6-27b", [{"role": "user", "content": "hi"}])
     assert payload["reasoning_effort"] == "none"
@@ -147,6 +152,8 @@ def test_qwen_chat_payload_disables_thinking():
     stripped = _strip_cjk("Đà Lạt là nơi tuyệt vời để bạn ,  。", "vi")
     assert "。" not in stripped
     assert " , " not in stripped
+    assert _assistant_message_text({"content": "", "reasoning": "Mình nghe bạn mệt."}) == "Mình nghe bạn mệt."
+    assert _assistant_message_text({"content": [{"type": "text", "text": "Xin chào"}]}) == "Xin chào"
 
 
 def test_offline_adapter_estimates_visit_durations_from_catalog():

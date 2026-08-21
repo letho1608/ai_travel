@@ -92,15 +92,35 @@ def test_chat_turn_answers_stress_with_healing_places(monkeypatch):
     assert "destination" in result["intent"]["missing_fields"]
     assert result["ready_to_plan"] is False
     folded = result["reply"].casefold()
-    assert "đà lạt" in folded
-    assert "sa pa" in folded
-    assert "ninh bình" in folded
-    assert "phú quốc" in folded
-    assert "thông" in folded or "sương" in folded or "núi mây" in folded
     assert "chưa hiểu rõ" not in folded
     assert "số ngày" not in folded
     assert "số người" not in folded
     assert "vài giờ" not in folded
+    assert "mấy ngày" not in folded
+    assert "mấy người" not in folded
+    assert "chưa thúc bạn chọn" not in folded
+
+
+def test_chat_turn_healing_replies_are_not_one_template(monkeypatch):
+    _silence(monkeypatch)
+    first = run_chat_turn(
+        [{"role": "user", "content": "tôi mệt quá, tôi cần đi chữa lành"}],
+        "vi",
+    )
+    assert first["intent"]["ask_topic"] == "healing"
+    replies = {
+        first["reply"],
+        *(
+            run_chat_turn([{"role": "user", "content": text}], "vi")["reply"]
+            for text in ("tôi stress quá", "hôm nay tôi kiệt sức muốn đi chữa lành")
+        ),
+    }
+    assert len(replies) >= 2
+    canned = "đi chữa lành mình hay nghĩ"
+    for reply in replies:
+        assert canned not in reply.casefold()
+        assert "mấy ngày" not in reply.casefold()
+        assert "mấy người" not in reply.casefold()
 
 
 def test_chat_turn_repeated_tired_does_not_ask_people(monkeypatch):
@@ -123,6 +143,11 @@ def test_chat_turn_repeated_tired_does_not_ask_people(monkeypatch):
     assert "mấy người" not in folded
     assert "hỏi lại cho rõ" not in folded
     assert "mệt" in folded or "nhẹ" in folded or "đà lạt" in folded or "ninh bình" in folded
+    assert "mình hay nghĩ" not in folded
+    assert result["reply"] != (
+        "Nghe bạn đang mệt. Đi chữa lành thì Đà Lạt, Ninh Bình thường yên. "
+        "Bạn muốn se lạnh, núi, hay biển?"
+    )
 
 
 def test_chat_turn_uses_llm_for_stress(monkeypatch):
@@ -139,8 +164,72 @@ def test_chat_turn_uses_llm_for_stress(monkeypatch):
     monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
     monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
     result = run_chat_turn([{"role": "user", "content": "tôi stress quá"}], "vi")
-    assert result["reply"].startswith("Nghe mệt quá")
-    assert "Đà Lạt" in result["reply"]
+    folded = result["reply"].casefold()
+    assert "đà lạt" in folded
+    assert "mấy ngày" not in folded
+    assert "mấy người" not in folded
+
+
+def test_chat_turn_keeps_flexible_healing_llm(monkeypatch):
+    class LiveAI:
+        def extract_planning_intent(self, _context, _locale="vi"):
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            return (
+                "Nghe mệt vậy thì mình ngồi đây với bạn trước. "
+                "Nếu sau này muốn trốn phố, Đà Lạt hoặc Ninh Bình đi chậm cũng được. "
+                "Bạn muốn mình kể thêm chỗ, hay cứ nghỉ đã?"
+            )
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
+    monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
+    result = run_chat_turn([{"role": "user", "content": "tôi mệt quá"}], "vi")
+    assert result["reply"].startswith("Nghe mệt vậy")
+    assert result["reply_source"] == "llm"
+    assert "Chưa thúc bạn chọn" not in result["reply"]
+    assert "Đà Lạt, Sa Pa, Ninh Bình hay Phú Quốc" not in result["reply"]
+
+
+def test_chat_turn_rewrites_chi_to_minh_ban(monkeypatch):
+    class LiveAI:
+        def extract_planning_intent(self, _context, _locale="vi"):
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            return (
+                "Chị hiểu cảm giác ấy. Có thể chị sẽ thấy Đà Lạt hay Sa Pa hợp để tĩnh tâm. "
+                "Chị đang thiên về không khí núi rừng mát lạnh hay cảnh quan xanh mát gần hơn?"
+            )
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
+    monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
+    result = run_chat_turn([{"role": "user", "content": "tôi muốn đi chữa lành"}], "vi")
+    folded = result["reply"].casefold()
+    assert "chị" not in folded
+    assert folded.startswith("mình hiểu")
+    assert "bạn sẽ thấy" in folded
+    assert "bạn đang thiên" in folded
+    assert "đà lạt" in folded
+
+
+def test_chat_turn_clarifies_khi_troi_question(monkeypatch):
+    class LiveAI:
+        def extract_planning_intent(self, _context, _locale="vi"):
+            return {}
+
+        def compose_chat_reply(self, messages, intent, locale="vi") -> str:
+            return (
+                "Mình hiểu cảm giác kiệt đó. Nếu đi cho nhẹ đầu thì Đà Lạt hay Ninh Bình — "
+                "bạn nghiêng khí trời nào?"
+            )
+
+    monkeypatch.setattr(chat_turn, "ai_adapter", LiveAI())
+    monkeypatch.setattr(intent_parse, "ai_adapter", LiveAI())
+    result = run_chat_turn([{"role": "user", "content": "tôi mệt quá"}], "vi")
+    folded = result["reply"].casefold()
+    assert "nghiêng khí trời" not in folded
+    assert "se lạnh" in folded or "núi" in folded or "biển" in folded
 
 
 def test_chat_turn_comforts_instead_of_asking_days(monkeypatch):

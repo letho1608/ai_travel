@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
-from app.data import Place
+from app.data import PLACES, Place
 from app.main import app
 from app.pipeline.planner import AI_FALLBACK_NOTE
 from app.routers import plans as plans_router
@@ -577,6 +577,8 @@ def test_free_text_replacement_accepts_map_verified_place(monkeypatch):
         "https://maps.google.com/?cid=tuan-chau",
         google_place_id="tuan-chau",
         google_maps_url="https://maps.google.com/?cid=tuan-chau",
+        image_url="https://places.googleapis.com/v1/places/tuan-chau/photos/1/media?maxWidthPx=800&key=test",
+        image_credit="Google Places",
     )
     monkeypatch.setattr(plans_router, "_resolve_named_place", lambda name, origin, city=None: external)
     response = client.patch(
@@ -596,6 +598,8 @@ def test_free_text_replacement_accepts_map_verified_place(monkeypatch):
     assert replacement["nguon"] == "Google Places"
     assert replacement["nguon_url"]
     assert replacement["toa_do"]["lat"] == target["toa_do"]["lat"]
+    assert replacement["anh"] == external.image_url
+    assert replacement["anh_nguon"] == "Google Places"
 
 
 def test_free_text_replacement_reports_missing_map_place(monkeypatch):
@@ -614,6 +618,57 @@ def test_free_text_replacement_reports_missing_map_place(monkeypatch):
     )
     assert response.status_code == 404
     assert "không tồn tại" in response.json()["detail"].casefold()
+
+
+def test_replacement_search_finds_catalog_cau_rong():
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+    search = client.get(
+        f"/api/plans/{result['token']}/replacement-candidates",
+        params={"diem_bi_loai": target, "q": "cầu rồng"},
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+    )
+    assert search.status_code == 200
+    suggestions = search.json()["goi_y"]
+    assert all(item["id"] not in {"curated-cau-rong", "osm-way-694831926"} for item in suggestions)
+
+
+def test_replacement_search_ho_tay_ranks_the_lake_not_tay_ninh_markets():
+    result = _generated_plan()
+    target = result["plan"]["ngay"][0]["khoang_gio"][0]["dia_diem_id"]
+    search = client.get(
+        f"/api/plans/{result['token']}/replacement-candidates",
+        params={"diem_bi_loai": target, "q": "hồ tây"},
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+    )
+    assert search.status_code == 200
+    suggestions = search.json()["goi_y"]
+    assert suggestions
+    assert suggestions[0]["ten"] == "Hồ Tây"
+    assert all("Tây Ninh" not in item["khu_vuc"] for item in suggestions)
+
+
+def test_explicit_ho_tay_replacement_is_accepted():
+    result = _generated_plan()
+    lake = next(place for place in PLACES if place.name == "Hồ Tây")
+    slots = [slot for day in result["plan"]["ngay"] for slot in day["khoang_gio"]]
+    used = {slot["dia_diem_id"] for slot in slots}
+    target = next(slot for slot in slots if slot["dia_diem_id"] != lake.id)
+    if lake.id in used:
+        return
+    response = client.patch(
+        f"/api/plans/{result['token']}/swipe",
+        headers={"X-Session-Id": PAYLOAD["ma_phien"]},
+        json={
+            "diem_bi_loai": target["dia_diem_id"],
+            "ten_dia_diem_thay_the": "hồ tây",
+            "phien_ban": 1,
+            "ma_phien": PAYLOAD["ma_phien"],
+        },
+    )
+    assert response.status_code == 200, response.json()
+    replaced = [slot for day in response.json()["ke_hoach_moi"]["ngay"] for slot in day["khoang_gio"]]
+    assert any(slot["ten_dia_diem"] == "Hồ Tây" for slot in replaced)
 
 
 def test_replacement_candidates_include_map_hit_when_catalog_misses(monkeypatch):

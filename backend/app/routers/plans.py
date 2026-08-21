@@ -6,10 +6,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
 from app.config import settings
-from app.data import PLACES, Place, image_for
+from app.data import PLACES, Place, image_for, place_match_key
 from app.pipeline.chat_turn import run_chat_turn
 from app.pipeline.intent_parse import parse_intent
 from app.pipeline.plan_chat import (
@@ -30,11 +30,13 @@ from app.pipeline.planner import (
     _effective_hours,
     _request_understanding,
     _trip_timing,
+    budget_cap,
     build_plan,
     missing_required_inputs,
     travel_minutes,
     validate_plan,
 )
+from app.pipeline.routing import haversine_km
 from app.routers.auth import resolve_user
 from app.schemas import (
     ChatTurnRequest,
@@ -50,7 +52,8 @@ from app.schemas import (
     SwipeRequest,
     TripFeedbackRequest,
 )
-from app.services.google_places import enrich_plan_with_google, search_named_place
+from app.services.google_places import enrich_plan_with_google, resolve_maps_place_url, search_named_place
+from app.services.place_images import enrich_plan_images
 from app.services.osm_verify import _catalog_match, verify_place_name
 from app.services.pdf_export import build_itinerary_pdf
 from app.services.rate_limit import limiter
@@ -62,6 +65,26 @@ logger = logging.getLogger(__name__)
 GENERATE_NONCE_SCOPE = "00000000-0000-0000-0000-000000000000"
 _MAP_PLACE_CACHE: dict[str, Place] = {}
 _MAP_SOURCES = {"Google Places", "Nominatim"}
+
+
+@router.get("/maps/place")
+def redirect_google_place(
+    name: str = Query(min_length=1, max_length=200),
+    lat: float = Query(ge=-90, le=90),
+    lng: float = Query(ge=-180, le=180),
+    city: str = Query("", max_length=80),
+    dia_diem_id: str = Query("", max_length=120),
+):
+    url = resolve_maps_place_url(
+        name=name.strip(),
+        lat=lat,
+        lng=lng,
+        city=city.strip(),
+        slot_id=dia_diem_id.strip(),
+    )
+    if not url.startswith("https://www.google.com/maps"):
+        raise HTTPException(502, "Không mở được Google Maps cho địa điểm này")
+    return RedirectResponse(url, status_code=302)
 
 
 def _generate_nonce_key(session_id: str, nonce: str) -> str:
@@ -208,6 +231,10 @@ async def generate(payload: PlanRequest, request: Request):
             async for chunk in _keepalive_until(build_task):
                 yield chunk
             plan = build_task.result()
+            wiki_task = asyncio.create_task(to_thread(enrich_plan_images, plan))
+            async for chunk in _keepalive_until(wiki_task):
+                yield chunk
+            plan = wiki_task.result()
             enrich_task = asyncio.create_task(to_thread(enrich_plan_with_google, plan))
             async for chunk in _keepalive_until(enrich_task):
                 yield chunk
@@ -440,6 +467,28 @@ def list_plans(
     return {"ds_ke_hoach": items}
 
 
+MAP_SEARCH_RADIUS_KM = 55.0
+
+
+def _in_trip_area(lat: float, lng: float, origin: tuple[float, float]) -> bool:
+    return haversine_km(origin[0], origin[1], lat, lng) <= MAP_SEARCH_RADIUS_KM
+
+
+def _query_matches_place(query: str, place: Place) -> bool:
+    if not query:
+        return True
+    folded_name = ascii_fold(place.name)
+    padded = f" {folded_name} "
+    if query == folded_name or f" {query} " in padded:
+        return True
+    query_tokens = [token for token in query.split() if token]
+    name_tokens = folded_name.split()
+    if query_tokens and all(token in name_tokens for token in query_tokens):
+        return True
+    compact = query.replace(" ", "")
+    return len(compact) >= 5 and compact == place_match_key(place.name)
+
+
 def _remember_map_place(place: Place | None) -> Place | None:
     if place and place.id not in {item.id for item in PLACES}:
         _MAP_PLACE_CACHE[place.id] = place
@@ -459,7 +508,7 @@ def _slot_origin(slot: dict, request: PlanRequest) -> tuple[tuple[float, float],
 
 def _resolve_named_place(name: str, origin: tuple[float, float], city: str | None = None) -> Place | None:
     catalog = _catalog_match(name, origin)
-    if catalog:
+    if catalog and _in_trip_area(catalog.lat, catalog.lng, origin):
         return catalog
     google = search_named_place(name, origin, city)
     if google:
@@ -562,7 +611,7 @@ def _replacement_candidates(item, rejected_id: str, *, same_kind: bool = False, 
             if following and minutes(next_slot["bat_dau"]) - minutes(target["ket_thuc"]) < travel_minutes(candidate, following):
                 return False
         next_total = item.plan.get("tong_chi_phi", 0) - target.get("chi_phi", 0) + candidate.cost * request.so_nguoi
-        return next_total // request.so_nguoi <= request.ngan_sach
+        return next_total // request.so_nguoi <= budget_cap(request)
 
     return target, rejected, [place for place in plan_places if eligible(place)]
 
@@ -606,6 +655,8 @@ def swipe(
             raise HTTPException(404, "Địa điểm không tồn tại")
     elif payload.dia_diem_thay_the:
         requested_place = _MAP_PLACE_CACHE.get(payload.dia_diem_thay_the)
+        if not requested_place:
+            requested_place = next((place for place in PLACES if place.id == payload.dia_diem_thay_the), None)
     catalog_ids = {place.id for place in PLACES}
     external = (requested_place,) if requested_place and requested_place.id not in catalog_ids else ()
     explicit = bool(payload.dia_diem_thay_the or payload.ten_dia_diem_thay_the)
@@ -626,7 +677,10 @@ def swipe(
         if preferred:
             candidates = preferred
     if payload.dia_diem_thay_the or requested_place:
-        replacement = next((p for p in candidates if p.id == (payload.dia_diem_thay_the or requested_place.id)), None)
+        wanted_id = payload.dia_diem_thay_the or requested_place.id
+        replacement = next((p for p in candidates if p.id == wanted_id), None)
+        if not replacement and requested_place and requested_place.id == wanted_id:
+            replacement = requested_place
         if not replacement:
             raise HTTPException(422, "Địa điểm thay thế không phù hợp với khung giờ hoặc lịch trình")
     else:
@@ -651,6 +705,10 @@ def swipe(
             "dia_diem_id": replacement.id,
             "ten_dia_diem": replacement.name,
             "loai": replacement.kind,
+            "khu_vuc": replacement.area,
+            "dia_chi": replacement.address,
+            "google_place_id": replacement.google_place_id,
+            "google_maps_url": replacement.google_maps_url,
             "mo_ta": localized_copy[3].format(place=replacement.name, area=replacement.area),
             "ghi_chu": localized_copy[4],
             "chi_phi": replacement.cost * plan_request.so_nguoi,
@@ -664,24 +722,32 @@ def swipe(
     if replacement.id in catalog_ids:
         for stale_key in ("gio_mo_cua_uoc_tinh", "gio_dong_cua_uoc_tinh", "chi_phi_moi_nguoi", "google_place_id", "google_maps_url"):
             new_target.pop(stale_key, None)
+        swap_image_url, swap_image_credit = image_for(replacement)
     else:
         new_target["gio_mo_cua_uoc_tinh"] = replacement.open_hour
         new_target["gio_dong_cua_uoc_tinh"] = replacement.close_hour
         new_target["chi_phi_moi_nguoi"] = replacement.cost
-        if replacement.google_place_id:
-            new_target["google_place_id"] = replacement.google_place_id
-        if replacement.google_maps_url:
-            new_target["google_maps_url"] = replacement.google_maps_url
-    swap_image_url, swap_image_credit = image_for(replacement)
+        swap_image_url, swap_image_credit = replacement.image_url, replacement.image_credit
+    if replacement.google_place_id:
+        new_target["google_place_id"] = replacement.google_place_id
+    if replacement.google_maps_url:
+        new_target["google_maps_url"] = replacement.google_maps_url
     new_target["anh"] = swap_image_url
     new_target["anh_nguon"] = swap_image_credit
     plan["tong_chi_phi"] += new_target["chi_phi"] - old_cost
     plan["chi_phi_moi_nguoi"] = plan["tong_chi_phi"] // plan_request.so_nguoi
     try:
         trusted_external = _plan_external_places(plan)
-        errors = validate_plan(plan, {p.id for p in (*PLACES, *trusted_external)}, plan_request, trusted_places=trusted_external)
+        errors = validate_plan(
+            plan,
+            {p.id for p in (*PLACES, *trusted_external)},
+            plan_request,
+            trusted_places=trusted_external,
+            user_requested_ids={replacement.id} if explicit else set(),
+        )
         if errors:
             raise PipelineUnavailable("; ".join(errors))
+        plan = enrich_plan_images(plan)
         plan = enrich_plan_with_google(plan)
         if message:
             dest_name = _destination_context(plan_request)[2]
@@ -733,15 +799,33 @@ def replacement_candidates(
     owner(item, x_session_id, authorization)
     if not limiter.check(f"candidate-search:{item.session_id}", 60):
         raise HTTPException(429, "Bạn đã tìm kiếm quá nhiều lần")
-    target, _, eligible = _replacement_candidates(item, diem_bi_loai)
+    target, _, eligible = _replacement_candidates(item, diem_bi_loai, strict_travel=not bool(q.strip()))
+    plan_request = PlanRequest.model_validate(item.request)
+    origin, city = _slot_origin(target, plan_request)
     query = ascii_fold(q.strip()).lower()
-    candidates = [
-        place for place in eligible
-        if not query or query in ascii_fold(f"{place.name} {place.kind} {place.area}").lower()
-    ]
+    used_ids = {
+        slot.get("dia_diem_id")
+        for day in item.plan.get("ngay", [])
+        for slot in day.get("khoang_gio", [])
+    }
+    ranked: dict[str, Place] = {}
+    if query:
+        for place in PLACES:
+            if _query_matches_place(query, place) and _in_trip_area(place.lat, place.lng, origin):
+                ranked[place.id] = place
+    for place in eligible:
+        if _query_matches_place(query, place) and _in_trip_area(place.lat, place.lng, origin):
+            ranked.setdefault(place.id, place)
+    candidates = list(ranked.values())
+    if query:
+        candidates.sort(
+            key=lambda place: (
+                ascii_fold(place.name) != query,
+                not ascii_fold(place.name).startswith(query),
+                place.id,
+            )
+        )
     if q.strip() and len(q.strip()) >= 3:
-        plan_request = PlanRequest.model_validate(item.request)
-        origin, city = _slot_origin(target, plan_request)
         mapped = _resolve_named_place(q.strip(), origin, city)
         used_ids = {
             slot.get("dia_diem_id")
@@ -821,6 +905,7 @@ def regenerate(
             if slot.get("dia_diem_id")
         }
         plan = build_plan(PlanRequest.model_validate(item.request), excluded)
+        plan = enrich_plan_images(plan)
         plan = enrich_plan_with_google(plan)
         regenerated_ids = {
             slot["dia_diem_id"]
@@ -936,6 +1021,7 @@ def refine(
                 plan = build_plan(refined, None)
             else:
                 raise
+        plan = enrich_plan_images(plan)
         plan = enrich_plan_with_google(plan)
         plan["hoi_thoai"] = [*previous, *plan.get("hoi_thoai", [])][-50:]
         reply = compose_plan_chat_reply(
